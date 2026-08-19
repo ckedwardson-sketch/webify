@@ -29,6 +29,7 @@ export function RecipeCardNode({
 }: {
   data: {
     label: string;
+    imageData?: string;
     isFrozen?: boolean;
     isHomegrown?: boolean;
     isFavorite?: boolean;
@@ -36,22 +37,20 @@ export function RecipeCardNode({
     onIterationClick?: (e: React.MouseEvent) => void;
   };
 }) {
-  const isProven = data.isProven ?? true;
+  const isProven = data.isProven ?? false;
   const isFavorite = data.isFavorite ?? false;
+  const hasImage = !!data.imageData;
 
   const cardStyle: React.CSSProperties = {
-    position: "relative",
-    width: "160px",
-    height: "110px",
+    width: "210px",
+    height: "144px",
     borderRadius: "10px",
-    backgroundColor: isProven ? "#15803d" : "#4b5563", // Green for proven, Gray for unproven
-    border: isFavorite ? "3px solid #facc15" : "2px solid rgba(255,255,255,0.2)", // Gold lining for favorite
-    boxShadow: isFavorite ? "0 0 12px rgba(250, 204, 21, 0.5)" : "0 4px 10px rgba(0,0,0,0.3)",
-    padding: "8px",
-    boxSizing: "border-box",
+    overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
+    backgroundColor: isProven ? "#15803d" : "#4b5563", // Green proven / gray unproven
+    border: isFavorite ? "3px solid #facc15" : "2px solid rgba(255,255,255,0.2)", // Gold lining for favorite
+    boxShadow: isFavorite ? "0 0 12px rgba(250, 204, 21, 0.5)" : "0 4px 10px rgba(0,0,0,0.3)",
     color: "#ffffff",
   };
 
@@ -59,15 +58,28 @@ export function RecipeCardNode({
     <div style={cardStyle}>
       <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
 
-      {/* Top Header Row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        {/* Top-Left Badges (Frozen / Homegrown) */}
-        <div style={{ display: "flex", gap: "4px", fontSize: "14px" }}>
-          {data.isFrozen && <span title="Frozen">❄️</span>}
-          {data.isHomegrown && <span title="Homegrown">🌱</span>}
-        </div>
-
-        {/* Top-Right Iteration Button */}
+      {/* Header row: recipe name left, iteration button top-right */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "5px 6px",
+          gap: "6px",
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            fontWeight: "bold",
+            fontSize: "12px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {data.label}
+        </span>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -75,39 +87,73 @@ export function RecipeCardNode({
           }}
           title="Toggle Iterations"
           style={{
-            background: "rgba(255, 255, 255, 0.2)",
-            border: "none",
+            flexShrink: 0,
+            width: "22px",
+            height: "22px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.35)",
             borderRadius: "4px",
             color: "#fff",
             cursor: "pointer",
-            fontSize: "11px",
-            padding: "2px 5px",
+            fontSize: "12px",
+            padding: 0,
           }}
         >
-          🌱 Iter
+          🌱
         </button>
       </div>
 
-      {/* Center Recipe Title */}
-      <div style={{ fontWeight: "bold", fontSize: "13px", textAlign: "center", margin: "4px 0" }}>
-        {data.label}
-      </div>
-
-      {/* Image Placeholder Box (Matching Sketch Layout) */}
+      {/* Body row: frozen/homegrown icon sidebar left, image box right */}
       <div
         style={{
-          width: "100%",
-          height: "36px",
-          backgroundColor: "rgba(0, 0, 0, 0.25)",
-          borderRadius: "4px",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "10px",
-          color: "#d1d5db",
+          flex: 1,
+          padding: "0 6px 6px",
+          gap: "6px",
+          minHeight: 0,
         }}
       >
-        [ Image ]
+        <div
+          style={{
+            width: "22px",
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "6px",
+            paddingTop: "4px",
+            fontSize: "14px",
+          }}
+        >
+          {data.isFrozen && <span title="Frozen">❄️</span>}
+          {data.isHomegrown && <span title="Homegrown">🌱</span>}
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            borderRadius: "6px",
+            border: "1px solid rgba(255,255,255,0.3)",
+            overflow: "hidden",
+            backgroundColor: "rgba(0,0,0,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {hasImage ? (
+            <img
+              src={data.imageData}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)" }}>Image</span>
+          )}
+        </div>
       </div>
 
       <Handle type="source" position={Position.Top} style={{ opacity: 0 }} />
@@ -119,19 +165,42 @@ export function IterationNode({ data }: { data: { label: string; difference: str
   return (
     <div
       style={{
-        padding: "8px 12px",
+        width: "144px",
+        minHeight: "68px",
+        boxSizing: "border-box",
+        padding: "8px 10px",
         borderRadius: "6px",
         background: "#0284c7",
         color: "#ffffff",
         fontSize: "11px",
-        maxWidth: "140px",
         border: "1px dashed #38bdf8",
         boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
       }}
     >
       <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
-      <div style={{ fontWeight: "bold", marginBottom: "2px" }}>{data.label}</div>
-      <div style={{ fontStyle: "italic", opacity: 0.9 }}>{data.difference || "Iteration diff"}</div>
+      <div
+        style={{
+          fontWeight: "bold",
+          marginBottom: "4px",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {data.label}
+      </div>
+      <div
+        style={{
+          fontStyle: "italic",
+          opacity: 0.9,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {data.difference || "Iteration diff"}
+      </div>
     </div>
   );
 }

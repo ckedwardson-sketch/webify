@@ -5,6 +5,7 @@ export interface Recipe {
   name: string;
   instructions?: string;
   sortOrder?: number;
+  imageData?: string; // base64 data URL for the cover image
   isFrozen?: boolean;
   isHomegrown?: boolean;
   isFavorite?: boolean;

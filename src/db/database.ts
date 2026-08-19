@@ -31,19 +31,36 @@ export async function getDb(): Promise<Database> {
       category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       instructions TEXT NOT NULL DEFAULT '',
-      sort_order INTEGER NOT NULL DEFAULT 0
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      image_data TEXT,
+      is_frozen INTEGER NOT NULL DEFAULT 0,
+      is_homegrown INTEGER NOT NULL DEFAULT 0,
+      is_favorite INTEGER NOT NULL DEFAULT 0,
+      is_proven INTEGER NOT NULL DEFAULT 0,
+      parent_recipe_id INTEGER,
+      iteration_difference TEXT
     )
   `);
 
-  // Migration for anyone who already had a recipes table from before
-  // sort_order existed. SQLite has no "ADD COLUMN IF NOT EXISTS", so we
-  // just try it and ignore the error if the column is already there.
-  try {
-    await db.execute(
-      "ALTER TABLE recipes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
-    );
-  } catch {
-    // Column already exists — nothing to do.
+  // Migrations for anyone with a recipes table from before these
+  // columns existed. SQLite has no "ADD COLUMN IF NOT EXISTS", so each
+  // one is just attempted and the "already exists" error is ignored.
+  const recipeColumnMigrations = [
+    "ALTER TABLE recipes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN image_data TEXT",
+    "ALTER TABLE recipes ADD COLUMN is_frozen INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN is_homegrown INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN is_proven INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN parent_recipe_id INTEGER",
+    "ALTER TABLE recipes ADD COLUMN iteration_difference TEXT",
+  ];
+  for (const sql of recipeColumnMigrations) {
+    try {
+      await db.execute(sql);
+    } catch {
+      // Column already exists — nothing to do.
+    }
   }
 
   // Seed the four default categories the first time the DB is empty.

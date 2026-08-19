@@ -66,34 +66,63 @@ export function RecipesGraphPage({
       const computedNodes: Node[] = [];
       const computedEdges: Edge[] = [];
 
-      filteredCategories.forEach((cat, cIdx) => {
-        const catNodeId = `cat-${cat.id}`;
-        const catX = cIdx * 340;
-        const catY = 500; // Bottom level ("closer to viewer")
+      // Layout constants. Category width now scales with how many
+      // recipes it actually has, so categories don't bleed into each
+      // other. Each column tracks its own vertical cursor, so an
+      // expanded iteration reserves real space instead of just
+      // floating at a fixed offset on top of whatever's already there.
+      const CARD_WIDTH = 210;
+      const CARD_HEIGHT = 144;
+      const COLUMN_GAP = 24;
+      const ROW_GAP = 50;
+      const CATEGORY_GAP = 100;
+      const TOP_MARGIN = 220;
+      const ITER_WIDTH = 150;
+      const ITER_COL_GAP = 16;
+      const ITER_HEIGHT = 80;
+      const ITER_GAP = 24;
+      const CAT_Y = 700;
 
-        computedNodes.push({
-          id: catNodeId,
-          type: "categoryNode",
-          position: { x: catX, y: catY },
-          data: { label: cat.name, id: cat.id },
-        });
+      let cursorX = 0;
 
-        // Top-level recipes under this category
+      filteredCategories.forEach((cat) => {
         const catRecipes = recipes.filter(
           (r) => r.categoryId === cat.id && !r.parentRecipeId && matchesFilter(r)
         );
 
-        catRecipes.forEach((rec, rIdx) => {
-          const recNodeId = `rec-${rec.id}`;
-          const recX = catX + (rIdx % 2) * 180 - 40;
-          const recY = catY - 180 - Math.floor(rIdx / 2) * 160; // Moving upwards
+        // Roughly-square grid: more recipes -> more columns, so a big
+        // category grows both wider and taller instead of just taller.
+        const columns = Math.max(1, Math.ceil(Math.sqrt(catRecipes.length || 1)));
+        const clusterWidth = columns * CARD_WIDTH + (columns - 1) * COLUMN_GAP;
+        const clusterLeft = cursorX;
+        const catX = clusterLeft + clusterWidth / 2;
 
+        const catNodeId = `cat-${cat.id}`;
+        computedNodes.push({
+          id: catNodeId,
+          type: "categoryNode",
+          position: { x: catX, y: CAT_Y },
+          data: { label: cat.name, id: cat.id },
+        });
+
+        // One running "how far up have we placed things" cursor per
+        // column, instead of a fixed formula per row.
+        const columnCursors = new Array(columns).fill(CAT_Y - TOP_MARGIN);
+
+        catRecipes.forEach((rec, rIdx) => {
+          const col = rIdx % columns;
+          const recX = clusterLeft + col * (CARD_WIDTH + COLUMN_GAP);
+          const recY = columnCursors[col];
+          columnCursors[col] -= CARD_HEIGHT + ROW_GAP;
+
+          const recNodeId = `rec-${rec.id}`;
           computedNodes.push({
             id: recNodeId,
             type: "recipeCardNode",
             position: { x: recX, y: recY },
             data: {
               label: rec.name,
+              imageData: rec.imageData,
               isFrozen: rec.isFrozen,
               isHomegrown: rec.isHomegrown,
               isFavorite: rec.isFavorite,
@@ -113,36 +142,55 @@ export function RecipesGraphPage({
             style: { stroke: "#64748b", strokeWidth: 2 },
           });
 
-          // Iterations branch floating directly above the parent recipe card
+          // Iterations arranged 2-wide directly above their parent
+          // card. Space is reserved per ROW of two (not per item) in
+          // this column's cursor, and IterationNode has a fixed,
+          // clamped size now — so what gets reserved always matches
+          // what actually renders, and nothing above gets covered.
           if (expandedIterations[rec.id]) {
             const iterations = recipes.filter((sub) => sub.parentRecipeId === rec.id);
-            iterations.forEach((iter, iIdx) => {
-              const iterNodeId = `iter-${iter.id}`;
-              const iterX = recX + iIdx * 150 - 20;
-              const iterY = recY - 120;
+            const iterColumns = 2;
+            const iterClusterWidth =
+              iterColumns * ITER_WIDTH + (iterColumns - 1) * ITER_COL_GAP;
+            const iterClusterLeft = recX + CARD_WIDTH / 2 - iterClusterWidth / 2;
+            const iterRows = Math.ceil(iterations.length / iterColumns);
 
-              computedNodes.push({
-                id: iterNodeId,
-                type: "iterationNode",
-                position: { x: iterX, y: iterY },
-                data: {
-                  label: iter.name,
-                  difference: iter.iterationDifference || "Modified ingredient ratios",
-                  recipeId: iter.id,
-                  categoryId: cat.id,
-                  categoryName: cat.name,
-                },
-              });
+            for (let row = 0; row < iterRows; row++) {
+              const rowY = columnCursors[col];
+              columnCursors[col] -= ITER_HEIGHT + ITER_GAP;
 
-              computedEdges.push({
-                id: `e-${recNodeId}-${iterNodeId}`,
-                source: recNodeId,
-                target: iterNodeId,
-                style: { stroke: "#38bdf8", strokeDasharray: "5,5" },
-              });
-            });
+              for (let c = 0; c < iterColumns; c++) {
+                const idx = row * iterColumns + c;
+                if (idx >= iterations.length) break;
+                const iter = iterations[idx];
+                const iterX = iterClusterLeft + c * (ITER_WIDTH + ITER_COL_GAP);
+
+                const iterNodeId = `iter-${iter.id}`;
+                computedNodes.push({
+                  id: iterNodeId,
+                  type: "iterationNode",
+                  position: { x: iterX, y: rowY },
+                  data: {
+                    label: iter.name,
+                    difference: iter.iterationDifference || "Modified ingredient ratios",
+                    recipeId: iter.id,
+                    categoryId: cat.id,
+                    categoryName: cat.name,
+                  },
+                });
+
+                computedEdges.push({
+                  id: `e-${recNodeId}-${iterNodeId}`,
+                  source: recNodeId,
+                  target: iterNodeId,
+                  style: { stroke: "#38bdf8", strokeDasharray: "5,5" },
+                });
+              }
+            }
           }
         });
+
+        cursorX += clusterWidth + CATEGORY_GAP;
       });
 
       setNodes(computedNodes);
