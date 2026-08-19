@@ -1,0 +1,41 @@
+import { sidebarItems } from "../data/appData";
+import { View } from "../types/nav";
+import "./Sidebar.css";
+
+interface SidebarProps {
+  view: View;
+  onNavigate: (view: View) => void;
+}
+
+export function Sidebar({ view, onNavigate }: SidebarProps) {
+  const isActive = (label: string) => {
+    if (label === "Home") return view.type === "home";
+    if (label === "Recipes") return view.type.startsWith("recipe");
+    if (view.type === "placeholder") return view.label === label;
+    return false;
+  };
+
+  const handleClick = (label: string, isPlaceholder: boolean) => {
+    if (label === "Home") return onNavigate({ type: "home" });
+    if (label === "Recipes") return onNavigate({ type: "recipes-home" });
+    if (isPlaceholder) return onNavigate({ type: "placeholder", label });
+  };
+
+  return (
+    <nav className="sidebar">
+      <div className="sidebar-title">My System</div>
+      <ul className="sidebar-list">
+        {sidebarItems.map((item) => (
+          <li key={item.label}>
+            <button
+              className={`sidebar-item ${isActive(item.label) ? "active" : ""}`}
+              onClick={() => handleClick(item.label, item.isPlaceholder)}
+            >
+              {item.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
