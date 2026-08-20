@@ -23,9 +23,12 @@ export function RecipesGraphPage({
   categoryName?: string;
   onNavigate: (view: View) => void;
 }) {
+  const [rawData, setRawData] = useState<{
+    categories: Array<{ id: number; name: string }>;
+    recipes: GraphRecipeNode[];
+  } | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [expandedIterations, setExpandedIterations] = useState<Record<number, boolean>>({});
 
@@ -42,9 +45,19 @@ export function RecipesGraphPage({
     setExpandedIterations((prev) => ({ ...prev, [recipeId]: !prev[recipeId] }));
   };
 
+  // Fetch once when the web is opened — not on every filter/toggle
+  // change. This is the expensive part: recipe rows carry full base64
+  // cover images, so re-running this on every click was the source of
+  // the multi-second lag.
   useEffect(() => {
-    async function loadGraph() {
-      const { categories, recipes } = await fetchAllGraphData();
+    fetchAllGraphData().then(setRawData);
+  }, []);
+
+  // Layout is pure, synchronous, in-memory work — recomputing it on
+  // every filter/expand change is effectively free. No DB, no IPC.
+  useEffect(() => {
+    if (!rawData) return;
+    const { categories, recipes } = rawData;
 
       // Filter categories if single category view is selected
       const filteredCategories = categoryId
@@ -73,14 +86,14 @@ export function RecipesGraphPage({
       // floating at a fixed offset on top of whatever's already there.
       const CARD_WIDTH = 210;
       const CARD_HEIGHT = 144;
-      const COLUMN_GAP = 24;
+      const COLUMN_GAP = 90; // wide enough that a 2-wide iteration cluster (which overhangs its own card by ~53px per side) can't reach the next column
       const ROW_GAP = 50;
       const CATEGORY_GAP = 100;
       const TOP_MARGIN = 220;
       const ITER_WIDTH = 150;
       const ITER_COL_GAP = 16;
       const ITER_HEIGHT = 80;
-      const ITER_GAP = 24;
+      const ITER_GAP = 50; // was tighter than ROW_GAP, leaving too little clearance to the next card above
       const CAT_Y = 700;
 
       let cursorX = 0;
@@ -195,11 +208,7 @@ export function RecipesGraphPage({
 
       setNodes(computedNodes);
       setEdges(computedEdges);
-      setLoading(false);
-    }
-
-    loadGraph();
-  }, [categoryId, filters, expandedIterations]);
+  }, [rawData, categoryId, filters, expandedIterations]);
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     if (node.type === "recipeCardNode" || node.type === "iterationNode") {
@@ -212,7 +221,7 @@ export function RecipesGraphPage({
     }
   };
 
-  if (loading) {
+  if (!rawData) {
     return (
       <div className="page">
         <p className="page-text">Loading Graph…</p>

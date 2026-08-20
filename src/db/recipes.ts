@@ -161,6 +161,26 @@ export async function updateRecipeImage(
   ]);
 }
 
+export interface RecipeLinkTarget {
+  id: number;
+  name: string;
+  categoryId: number;
+  categoryName: string;
+}
+
+// For the editor's "link to a recipe" picker — every recipe across
+// every category, so you can link to anything, not just siblings in
+// the current category.
+export async function fetchAllRecipesFlat(): Promise<RecipeLinkTarget[]> {
+  const db = await getDb();
+  return db.select<RecipeLinkTarget[]>(`
+    SELECT r.id, r.name, r.category_id as categoryId, c.name as categoryName
+    FROM recipes r
+    JOIN categories c ON c.id = r.category_id
+    ORDER BY c.sort_order, r.sort_order
+  `);
+}
+
 const FLAG_COLUMNS = {
   isFrozen: "is_frozen",
   isHomegrown: "is_homegrown",

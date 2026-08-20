@@ -10,6 +10,8 @@ import {
   updateIterationDifference,
   renameRecipe,
 } from "../db/recipes";
+import { fetchCategories } from "../db/categories";
+import { RecipeEditor } from "../editor/RecipeEditor";
 import { Recipe } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
@@ -57,10 +59,17 @@ export function RecipeDetailPage({
     load();
   }, [recipeId]);
 
-  const handleSaveInstructions = async () => {
-    if (recipe) {
-      await updateRecipeInstructions(recipe.id, instructions);
-    }
+  const handleOpenRecipeLink = async (targetRecipeId: number) => {
+    const target = await fetchRecipe(targetRecipeId);
+    if (!target) return;
+    const categories = await fetchCategories();
+    const targetCategory = categories.find((c) => c.id === target.categoryId);
+    onNavigate({
+      type: "recipe-detail",
+      categoryId: target.categoryId,
+      categoryName: targetCategory?.name ?? "",
+      recipeId: target.id,
+    });
   };
 
   const handleSaveIterationDiff = async () => {
@@ -323,13 +332,14 @@ export function RecipeDetailPage({
         </label>
       )}
 
-      <textarea
-        className="instructions-textarea"
-        value={instructions}
-        onChange={(e) => setInstructions(e.target.value)}
-        onBlur={handleSaveInstructions}
-        placeholder="Add recipe instructions, ingredients, or notes..."
-        rows={12}
+      <RecipeEditor
+        key={recipe.id}
+        content={instructions}
+        onChange={(html) => {
+          setInstructions(html);
+          updateRecipeInstructions(recipe.id, html);
+        }}
+        onOpenRecipeLink={handleOpenRecipeLink}
       />
     </div>
   );
