@@ -27,6 +27,7 @@ export function RecipesGraphPage({
     categories: Array<{ id: number; name: string }>;
     recipes: GraphRecipeNode[];
   } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -50,7 +51,9 @@ export function RecipesGraphPage({
   // cover images, so re-running this on every click was the source of
   // the multi-second lag.
   useEffect(() => {
-    fetchAllGraphData().then(setRawData);
+    fetchAllGraphData()
+      .then(setRawData)
+      .catch((err) => setLoadError(String(err)));
   }, []);
 
   // Layout is pure, synchronous, in-memory work — recomputing it on
@@ -220,6 +223,16 @@ export function RecipesGraphPage({
       });
     }
   };
+
+  if (loadError) {
+    return (
+      <div className="page">
+        <p className="page-text" style={{ color: "#c00" }}>
+          Failed to load the graph: {loadError}
+        </p>
+      </div>
+    );
+  }
 
   if (!rawData) {
     return (

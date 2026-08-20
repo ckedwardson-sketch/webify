@@ -4,9 +4,131 @@ const DB_URL = "sqlite:webify.db";
 
 let dbInstance: Database | null = null;
 
-// Loads (or reuses) the single SQLite connection and makes sure the
-// tables we need exist. Safe to call repeatedly — CREATE TABLE IF NOT
-// EXISTS is a no-op once the tables are already there.
+// ---- Migration bookkeeping ----------------------------------------
+
+async function isMigrationApplied(db: Database, name: string): Promise<boolean> {
+  const rows = await db.select<{ name: string }[]>(
+    "SELECT name FROM schema_migrations WHERE name = $1",
+    [name]
+  );
+  return rows.length > 0;
+}
+
+async function markMigrationApplied(db: Database, name: string): Promise<void> {
+  await db.execute("INSERT OR IGNORE INTO schema_migrations (name) VALUES ($1)", [name]);
+}
+
+async function columnExists(db: Database, table: string, column: string): Promise<boolean> {
+  const columns = await db.select<{ name: string }[]>(`PRAGMA table_info(${table})`);
+  return columns.some((c) => c.name === column);
+}
+
+// A column-adding migration that's safe regardless of how the database
+// got here: an old database that already has this column from the
+// previous blind try/catch system, a brand-new database whose
+// CREATE TABLE already included it, or a genuinely old database that
+// needs it added for the first time. It checks the real schema, not
+// just the migration log, before deciding whether to run.
+async function ensureColumn(
+  db: Database,
+  name: string,
+  table: string,
+  column: string,
+  definition: string
+): Promise<void> {
+  if (await isMigrationApplied(db, name)) return;
+  if (!(await columnExists(db, table, column))) {
+    await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+  await markMigrationApplied(db, name);
+}
+
+// Generates a 5-digit, zero-padded, unique recipe display id. Checks
+// the database rather than trusting randomness alone.
+export async function generateUniqueDisplayId(db: Database): Promise<string> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const candidate = String(Math.floor(Math.random() * 100000)).padStart(5, "0");
+    const existing = await db.select<{ count: number }[]>(
+      "SELECT COUNT(*) as count FROM recipes WHERE display_id = $1",
+      [candidate]
+    );
+    if (existing[0].count === 0) return candidate;
+  }
+  throw new Error("Could not generate a unique 5-digit recipe display id after 50 attempts");
+}
+
+async function runMigrations(db: Database): Promise<void> {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Columns from the old, pre-migration-system era. ensureColumn
+  // checks real column presence first, so this is safe whether an
+  // existing database already has them or not.
+  await ensureColumn(db, "add_recipes_sort_order", "recipes", "sort_order", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_recipes_image_data", "recipes", "image_data", "TEXT");
+  await ensureColumn(db, "add_recipes_is_frozen", "recipes", "is_frozen", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_recipes_is_homegrown", "recipes", "is_homegrown", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_recipes_is_favorite", "recipes", "is_favorite", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_recipes_is_proven", "recipes", "is_proven", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_recipes_parent_recipe_id", "recipes", "parent_recipe_id", "INTEGER");
+  await ensureColumn(db, "add_recipes_iteration_difference", "recipes", "iteration_difference", "TEXT");
+
+  // Timestamps. SQLite's ALTER TABLE ADD COLUMN refuses a non-constant
+  // default like CURRENT_TIMESTAMP (only CREATE TABLE allows that) —
+  // so these are added as plain nullable columns instead, existing
+  // rows are backfilled once below, and every INSERT going forward
+  // writes CURRENT_TIMESTAMP explicitly as a literal (see db/recipes.ts).
+  await ensureColumn(db, "add_recipes_created_at", "recipes", "created_at", "TEXT");
+  await ensureColumn(db, "add_recipes_updated_at", "recipes", "updated_at", "TEXT");
+
+  if (!(await isMigrationApplied(db, "backfill_recipes_timestamps"))) {
+    await db.execute(
+      "UPDATE recipes SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+    );
+    await db.execute(
+      "UPDATE recipes SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"
+    );
+    await markMigrationApplied(db, "backfill_recipes_timestamps");
+  }
+
+  // 5-digit human-facing display id. No meaningful column DEFAULT for
+  // this (needs a uniqueness check), so existing rows are backfilled
+  // explicitly below, and new rows get one assigned at insert time in
+  // db/recipes.ts.
+  await ensureColumn(db, "add_recipes_display_id", "recipes", "display_id", "TEXT");
+
+  if (!(await isMigrationApplied(db, "backfill_recipes_display_id"))) {
+    const rows = await db.select<{ id: number }[]>("SELECT id FROM recipes WHERE display_id IS NULL");
+    for (const row of rows) {
+      const displayId = await generateUniqueDisplayId(db);
+      await db.execute("UPDATE recipes SET display_id = $1 WHERE id = $2", [displayId, row.id]);
+    }
+    await markMigrationApplied(db, "backfill_recipes_display_id");
+  }
+
+  // updated_at trigger. Only watches columns that represent an actual
+  // content edit — sort_order (drag reorder) and display_id
+  // (immutable after creation) are deliberately left out.
+  if (!(await isMigrationApplied(db, "add_recipes_updated_at_trigger"))) {
+    await db.execute(`
+      CREATE TRIGGER IF NOT EXISTS trg_recipes_updated_at
+      AFTER UPDATE OF name, instructions, image_data, is_frozen, is_homegrown, is_favorite, is_proven, iteration_difference, category_id
+      ON recipes
+      FOR EACH ROW
+      BEGIN
+        UPDATE recipes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+      END;
+    `);
+    await markMigrationApplied(db, "add_recipes_updated_at_trigger");
+  }
+}
+
+// ---- Connection + schema setup -------------------------------------
+
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
 
@@ -38,30 +160,14 @@ export async function getDb(): Promise<Database> {
       is_favorite INTEGER NOT NULL DEFAULT 0,
       is_proven INTEGER NOT NULL DEFAULT 0,
       parent_recipe_id INTEGER,
-      iteration_difference TEXT
+      iteration_difference TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      display_id TEXT
     )
   `);
 
-  // Migrations for anyone with a recipes table from before these
-  // columns existed. SQLite has no "ADD COLUMN IF NOT EXISTS", so each
-  // one is just attempted and the "already exists" error is ignored.
-  const recipeColumnMigrations = [
-    "ALTER TABLE recipes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE recipes ADD COLUMN image_data TEXT",
-    "ALTER TABLE recipes ADD COLUMN is_frozen INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE recipes ADD COLUMN is_homegrown INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE recipes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE recipes ADD COLUMN is_proven INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE recipes ADD COLUMN parent_recipe_id INTEGER",
-    "ALTER TABLE recipes ADD COLUMN iteration_difference TEXT",
-  ];
-  for (const sql of recipeColumnMigrations) {
-    try {
-      await db.execute(sql);
-    } catch {
-      // Column already exists — nothing to do.
-    }
-  }
+  await runMigrations(db);
 
   // Seed the four default categories the first time the DB is empty.
   // After this, categories are just normal rows the user can add to.

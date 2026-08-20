@@ -12,6 +12,9 @@ export interface Recipe {
   isProven?: boolean; // true = proven (green), false = unproven (gray)
   parentRecipeId?: number; // for iterations
   iterationDifference?: string;
+  displayId?: string; // 5-digit human-facing id, immutable after creation
+  createdAt?: string;
+  updatedAt?: string; // auto-maintained by a DB trigger on content edits, not sort_order
 }
 
 export interface FilterState {

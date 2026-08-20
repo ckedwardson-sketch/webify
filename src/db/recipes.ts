@@ -1,5 +1,5 @@
 // src/db/recipes.ts
-import { getDb } from "./database";
+import { getDb, generateUniqueDisplayId } from "./database";
 import { Recipe } from "../types/models";
 
 export interface GraphRecipeNode {
@@ -40,9 +40,23 @@ type RawRecipeRow = {
   isProven: number;
   parentRecipeId?: number | null;
   iterationDifference?: string | null;
+  displayId?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 function mapRecipeRow(row: RawRecipeRow): Recipe {
+  // Safety net: every recipe should get created_at/updated_at from the
+  // column DEFAULT automatically. If one shows up without them (e.g. a
+  // row inserted by hand outside the app), warn rather than silently
+  // carrying a recipe with no creation date.
+  if (!row.createdAt || !row.updatedAt) {
+    console.warn(
+      `Recipe "${row.name}" (id ${row.id}) is missing created_at/updated_at.`,
+      row
+    );
+  }
+
   return {
     ...row,
     imageData: row.imageData ?? undefined,
@@ -52,6 +66,9 @@ function mapRecipeRow(row: RawRecipeRow): Recipe {
     isProven: toBool(row.isProven),
     parentRecipeId: row.parentRecipeId ?? undefined,
     iterationDifference: row.iterationDifference ?? undefined,
+    displayId: row.displayId ?? undefined,
+    createdAt: row.createdAt ?? undefined,
+    updatedAt: row.updatedAt ?? undefined,
   };
 }
 
@@ -67,7 +84,10 @@ const RECIPE_COLUMNS = `
   is_favorite as isFavorite,
   is_proven as isProven,
   parent_recipe_id as parentRecipeId,
-  iteration_difference as iterationDifference
+  iteration_difference as iterationDifference,
+  display_id as displayId,
+  created_at as createdAt,
+  updated_at as updatedAt
 `;
 
 export async function fetchAllGraphData(): Promise<GraphData> {
@@ -106,9 +126,10 @@ export async function addRecipe(categoryId: number, name: string): Promise<numbe
     [categoryId]
   );
   const nextOrder = (existing[0].maxOrder ?? -1) + 1;
+  const displayId = await generateUniqueDisplayId(db);
   const result = await db.execute(
-    "INSERT INTO recipes (category_id, name, instructions, sort_order) VALUES ($1, $2, '', $3)",
-    [categoryId, name, nextOrder]
+    "INSERT INTO recipes (category_id, name, instructions, sort_order, display_id, created_at, updated_at) VALUES ($1, $2, '', $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+    [categoryId, name, nextOrder, displayId]
   );
   return result.lastInsertId as number;
 }
@@ -221,11 +242,12 @@ export async function createIteration(recipeId: number): Promise<number> {
     [source.categoryId]
   );
   const nextOrder = (existingOrder[0].maxOrder ?? -1) + 1;
+  const displayId = await generateUniqueDisplayId(db);
 
   const result = await db.execute(
     `INSERT INTO recipes
-      (category_id, name, instructions, sort_order, image_data, is_frozen, is_homegrown, is_favorite, is_proven, parent_recipe_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      (category_id, name, instructions, sort_order, image_data, is_frozen, is_homegrown, is_favorite, is_proven, parent_recipe_id, display_id, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     [
       source.categoryId,
       newName,
@@ -237,6 +259,7 @@ export async function createIteration(recipeId: number): Promise<number> {
       source.isFavorite ? 1 : 0,
       source.isProven ? 1 : 0,
       recipeId,
+      displayId,
     ]
   );
   return result.lastInsertId as number;
