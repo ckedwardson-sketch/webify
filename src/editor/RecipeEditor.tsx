@@ -10,6 +10,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ResizableImage } from "./extensions/ResizableImage";
 import { toggleExtensions, insertToggle } from "./extensions/Toggle";
 import { fetchAllRecipesFlat, RecipeLinkTarget } from "../db/recipes";
+import { Icon } from "../icons/Icon";
+import { TextElement } from "../icons/TextElement";
 import "./RecipeEditor.css";
 
 // Old recipes had plain-text instructions. If the content doesn't
@@ -140,35 +142,35 @@ export function RecipeEditor({
             onClick={() => editor.chain().focus().toggleBold().run()}
             title="Bold"
           >
-            B
+            <TextElement elementKey="bold-button" />
           </button>
           <button
             className={editor.isActive("italic") ? "active" : ""}
             onClick={() => editor.chain().focus().toggleItalic().run()}
             title="Italic"
           >
-            I
+            <TextElement elementKey="italic-button" />
           </button>
           <button
             className={editor.isActive("underline") ? "active" : ""}
             onClick={() => editor.chain().focus().toggleUnderline().run()}
             title="Underline"
           >
-            U
+            <TextElement elementKey="underline-button" />
           </button>
           <button
             className={editor.isActive("strike") ? "active" : ""}
             onClick={() => editor.chain().focus().toggleStrike().run()}
             title="Strikethrough"
           >
-            S
+            <TextElement elementKey="strike-button" />
           </button>
           <button
             className={editor.isActive("code") ? "active" : ""}
             onClick={() => editor.chain().focus().toggleCode().run()}
             title="Inline code"
           >
-            {"</>"}
+            <TextElement elementKey="code-button" />
           </button>
         </div>
 
@@ -178,21 +180,21 @@ export function RecipeEditor({
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             title="Heading 1"
           >
-            H<sup>1</sup>
+            <TextElement elementKey="heading1-button" />
           </button>
           <button
             className={editor.isActive("heading", { level: 2 }) ? "active" : ""}
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             title="Heading 2"
           >
-            H<sup>2</sup>
+            <TextElement elementKey="heading2-button" />
           </button>
           <button
             className={editor.isActive("heading", { level: 3 }) ? "active" : ""}
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
             title="Heading 3"
           >
-            H<sup>3</sup>
+            <TextElement elementKey="heading3-button" />
           </button>
         </div>
 
@@ -205,7 +207,7 @@ export function RecipeEditor({
               }}
               title="Lists"
             >
-              ☰
+              <Icon iconKey="list" size={15} />
             </button>
             {showListMenu && (
               <>
@@ -253,14 +255,14 @@ export function RecipeEditor({
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             title="Quote"
           >
-            "
+            <TextElement elementKey="quote-button" />
           </button>
         </div>
 
         <div className="toolbar-group">
           <div className="toolbar-popover-wrapper">
             <button onClick={openLinkMenu} title="Link">
-              🔗
+              <Icon iconKey="link" size={15} />
             </button>
             {showLinkMenu && (
               <>
@@ -335,11 +337,11 @@ export function RecipeEditor({
             onChange={handleImageSelected}
           />
           <button onClick={() => imageInputRef.current?.click()} title="Image">
-            🖼
+            <Icon iconKey="image" size={15} />
           </button>
 
           <button onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider">
-            —
+            <Icon iconKey="divider" size={15} />
           </button>
         </div>
       </div>

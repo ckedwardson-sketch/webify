@@ -6,11 +6,11 @@
 .page-title {
   font-size: 1.6rem;
   margin: 0 0 20px;
-  color: #1a1a1a;
+  color: var(--color-text);
 }
 
 .page-text {
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.95rem;
 }
 

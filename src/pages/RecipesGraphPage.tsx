@@ -6,6 +6,8 @@ import { fetchAllGraphData, GraphRecipeNode } from "../db/recipes";
 import { CategoryNode, RecipeCardNode, IterationNode } from "../components/GraphNodes";
 import { FilterState } from "../types/models";
 import { View } from "../types/nav";
+import { StyledButton } from "../icons/StyledButton";
+import { useTheme } from "../theme/ThemeContext";
 import "./Page.css";
 
 const nodeTypes = {
@@ -27,11 +29,11 @@ export function RecipesGraphPage({
     categories: Array<{ id: number; name: string }>;
     recipes: GraphRecipeNode[];
   } | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [expandedIterations, setExpandedIterations] = useState<Record<number, boolean>>({});
+  const { theme } = useTheme();
 
   const [filters, setFilters] = useState<FilterState>({
     frozen: false,
@@ -51,9 +53,7 @@ export function RecipesGraphPage({
   // cover images, so re-running this on every click was the source of
   // the multi-second lag.
   useEffect(() => {
-    fetchAllGraphData()
-      .then(setRawData)
-      .catch((err) => setLoadError(String(err)));
+    fetchAllGraphData().then(setRawData);
   }, []);
 
   // Layout is pure, synchronous, in-memory work — recomputing it on
@@ -224,16 +224,6 @@ export function RecipesGraphPage({
     }
   };
 
-  if (loadError) {
-    return (
-      <div className="page">
-        <p className="page-text" style={{ color: "#c00" }}>
-          Failed to load the graph: {loadError}
-        </p>
-      </div>
-    );
-  }
-
   if (!rawData) {
     return (
       <div className="page">
@@ -261,20 +251,11 @@ export function RecipesGraphPage({
 
         {/* Top Right Filter Toggle */}
         <div style={{ position: "relative" }}>
-          <button
+          <StyledButton
+            buttonKey="web-filter-toggle"
+            iconKey="filter"
             onClick={() => setShowFilterMenu(!showFilterMenu)}
-            style={{
-              padding: "8px 14px",
-              borderRadius: "6px",
-              background: "#3b82f6",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: "bold",
-            }}
-          >
-            🔽 Filter
-          </button>
+          />
 
           {/* Filter Dropdown Menu (Matches Left Sketch Layout) */}
           {showFilterMenu && (
@@ -357,22 +338,14 @@ export function RecipesGraphPage({
         >
           {/* Zoom Out & Reset Controls embedded inside Canvas Top-Left */}
           <Panel position="top-left">
-            <button
+            <StyledButton
+              buttonKey="web-zoom-back"
+              iconKey="back"
               onClick={() => onNavigate({ type: "recipes-home" })}
-              style={{
-                padding: "6px 12px",
-                background: "#0f172a",
-                color: "#fff",
-                border: "1px solid #475569",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
-            >
-              🔍 Zoom Out / Back
-            </button>
+            />
           </Panel>
 
-          <Background color="#1e293b" gap={16} />
+          <Background color="#64748b" bgColor={theme.webBackground} gap={16} />
           <Controls />
         </ReactFlow>
       </div>

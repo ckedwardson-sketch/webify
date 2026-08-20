@@ -2,8 +2,8 @@
   width: 220px;
   min-width: 220px;
   height: 100vh;
-  background: #fafafa;
-  border-right: 1px solid #e5e5e5;
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-border);
   padding: 16px 8px;
   box-sizing: border-box;
 }
@@ -12,7 +12,7 @@
   font-weight: 700;
   font-size: 0.95rem;
   padding: 4px 10px 16px;
-  color: #333;
+  color: var(--color-sidebar-text);
 }
 
 .sidebar-list {
@@ -32,17 +32,17 @@
   padding: 7px 10px;
   border-radius: 6px;
   font-size: 0.9rem;
-  color: #444;
+  color: var(--color-sidebar-text);
   cursor: pointer;
   font: inherit;
 }
 
 .sidebar-item:hover {
-  background: #eee;
+  background: var(--color-sidebar-hover-bg);
 }
 
 .sidebar-item.active {
-  background: #e8e8e8;
-  color: #000;
+  background: var(--color-sidebar-active-bg);
+  color: var(--color-sidebar-text-active);
   font-weight: 600;
 }

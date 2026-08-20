@@ -1,0 +1,131 @@
+.icon-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+}
+
+.icon-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.icon-settings-preview {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  font-size: 1.2rem;
+}
+
+.icon-settings-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-settings-label {
+  font-size: 0.9rem;
+  color: #222;
+}
+
+.icon-settings-key {
+  font-size: 0.75rem;
+  color: #999;
+  font-family: monospace;
+}
+
+.icon-settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.text-settings-fields {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.text-settings-text {
+  width: 60px;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.text-settings-size {
+  width: 55px;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.text-settings-color {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.button-settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.button-settings-preview {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  padding: 8px;
+}
+
+.button-settings-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.button-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.button-settings-field input {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  width: 120px;
+}
+
+.button-settings-field.narrow input {
+  width: 70px;
+}
+
+.button-settings-field input[type="color"] {
+  width: 70px;
+  height: 28px;
+  padding: 0;
+  cursor: pointer;
+}

@@ -10,4 +10,9 @@ export type View =
       categoryId: number;
       categoryName: string;
       recipeId: number;
-    };
+    }
+  | { type: "settings-home" }
+  | { type: "settings-icons" }
+  | { type: "settings-text" }
+  | { type: "settings-buttons" }
+  | { type: "settings-theme" };

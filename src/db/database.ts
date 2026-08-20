@@ -125,6 +125,70 @@ async function runMigrations(db: Database): Promise<void> {
     `);
     await markMigrationApplied(db, "add_recipes_updated_at_trigger");
   }
+
+  // Icon overrides — key/image pairs set from Settings > Icons.
+  // Absence of a row for a given key just means "use the default".
+  if (!(await isMigrationApplied(db, "create_icon_overrides_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS icon_overrides (
+        icon_key TEXT PRIMARY KEY,
+        image_data TEXT NOT NULL
+      )
+    `);
+    await markMigrationApplied(db, "create_icon_overrides_table");
+  }
+
+  // Text element overrides — customizable text/size/color for the
+  // letter-based toolbar controls (B, I, H¹, etc). Each field is
+  // independently nullable, so you can change just the color and
+  // leave the text/size at their defaults.
+  if (!(await isMigrationApplied(db, "create_text_element_overrides_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS text_element_overrides (
+        element_key TEXT PRIMARY KEY,
+        text TEXT,
+        size INTEGER,
+        color TEXT
+      )
+    `);
+    await markMigrationApplied(db, "create_text_element_overrides_table");
+  }
+
+  // Button style overrides — customizable text/font/colors/box size for
+  // whole buttons (not just their icon or a single text glyph), e.g. the
+  // recipe web's Filter and Zoom Out / Back buttons. Every field is
+  // independently nullable, same convention as text_element_overrides.
+  if (!(await isMigrationApplied(db, "create_button_style_overrides_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS button_style_overrides (
+        button_key TEXT PRIMARY KEY,
+        text TEXT,
+        font_family TEXT,
+        font_size INTEGER,
+        text_color TEXT,
+        background_color TEXT,
+        border_color TEXT,
+        padding_x INTEGER,
+        padding_y INTEGER,
+        border_radius INTEGER
+      )
+    `);
+    await markMigrationApplied(db, "create_button_style_overrides_table");
+  }
+
+  // Theme settings — a small generic key/value store (not a per-element
+  // registry like the tables above) for the handful of app-wide/web-wide
+  // color choices: light/dark mode plus the recipe web's background and
+  // node colors. Absence of a key just means "use the default".
+  if (!(await isMigrationApplied(db, "create_theme_settings_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS theme_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+    await markMigrationApplied(db, "create_theme_settings_table");
+  }
 }
 
 // ---- Connection + schema setup -------------------------------------

@@ -11,6 +11,7 @@ export function Sidebar({ view, onNavigate }: SidebarProps) {
   const isActive = (label: string) => {
     if (label === "Home") return view.type === "home";
     if (label === "Recipes") return view.type.startsWith("recipe");
+    if (label === "Settings") return view.type.startsWith("settings");
     if (view.type === "placeholder") return view.label === label;
     return false;
   };
@@ -18,6 +19,7 @@ export function Sidebar({ view, onNavigate }: SidebarProps) {
   const handleClick = (label: string, isPlaceholder: boolean) => {
     if (label === "Home") return onNavigate({ type: "home" });
     if (label === "Recipes") return onNavigate({ type: "recipes-home" });
+    if (label === "Settings") return onNavigate({ type: "settings-home" });
     if (isPlaceholder) return onNavigate({ type: "placeholder", label });
   };
 

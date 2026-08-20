@@ -1,5 +1,7 @@
 // src/components/ManagedListRow.tsx
 import React, { useState } from "react";
+import { Icon } from "../icons/Icon";
+import { TextElement } from "../icons/TextElement";
 
 interface ManagedListRowProps {
   label: string;
@@ -74,7 +76,7 @@ export function ManagedListRow({
       {/* Primary Row: Drag Handle, Name, Add Image, Edit, Delete */}
       <div style={{ display: "flex", alignItems: "center", width: "100%", gap: "10px" }}>
         <span className="drag-handle" style={{ cursor: "grab", userSelect: "none", color: "#64748b" }}>
-          ⋮⋮
+          <TextElement elementKey="drag-handle" />
         </span>
 
         {editing ? (
@@ -115,9 +117,12 @@ export function ManagedListRow({
               fontWeight: "500",
               color: "#334155",
               whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
             }}
           >
-            📷 {imageUrl ? "Change Image" : "Add Image"}
+            <Icon iconKey="add-image" size={13} /> {imageUrl ? "Change Image" : "Add Image"}
             <input
               type="file"
               accept="image/*"
@@ -128,10 +133,10 @@ export function ManagedListRow({
         )}
 
         <button className="icon-button" onClick={() => setEditing(true)} title="Rename">
-          ✏️
+          <Icon iconKey="rename" size={14} />
         </button>
         <button className="icon-button danger" onClick={onDelete} title="Delete">
-          🗑️
+          <Icon iconKey="delete" size={14} />
         </button>
       </div>
 

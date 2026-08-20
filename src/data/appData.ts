@@ -3,8 +3,9 @@ export interface SidebarItem {
   isPlaceholder: boolean;
 }
 
-// Everything except Recipes is a stub for now — clicking it shows a
-// "coming soon" page. Add real sections here as they get built out.
+// Everything except Recipes and Settings is a stub for now — clicking
+// it shows a "coming soon" page. Add real sections here as they get
+// built out.
 export const sidebarItems: SidebarItem[] = [
   { label: "Home", isPlaceholder: false },
   { label: "Goals", isPlaceholder: true },
@@ -14,4 +15,5 @@ export const sidebarItems: SidebarItem[] = [
   { label: "Responsibilities", isPlaceholder: true },
   { label: "Inventory", isPlaceholder: true },
   { label: "Notes", isPlaceholder: true },
+  { label: "Settings", isPlaceholder: false },
 ];

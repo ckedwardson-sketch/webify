@@ -12,6 +12,7 @@ import {
 } from "../db/recipes";
 import { fetchCategories } from "../db/categories";
 import { RecipeEditor } from "../editor/RecipeEditor";
+import { Icon } from "../icons/Icon";
 import { Recipe } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
@@ -187,7 +188,7 @@ export function RecipeDetailPage({
             onClick={() => onNavigate({ type: "recipes-graph", categoryId, categoryName })}
             title="Open Web View"
           >
-            🕸️
+            <Icon iconKey="web-view" size={16} />
           </button>
           <div className="iterations-menu-wrapper">
             <button

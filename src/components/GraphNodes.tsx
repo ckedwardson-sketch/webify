@@ -1,6 +1,8 @@
 // src/components/GraphNodes.tsx
 import React from "react";
 import { Handle, Position } from "@xyflow/react";
+import { Icon } from "../icons/Icon";
+import { useTheme } from "../theme/ThemeContext";
 
 export function CategoryNode({ data }: { data: { label: string } }) {
   return (
@@ -40,6 +42,7 @@ export function RecipeCardNode({
   const isProven = data.isProven ?? false;
   const isFavorite = data.isFavorite ?? false;
   const hasImage = !!data.imageData;
+  const { theme } = useTheme();
 
   const cardStyle: React.CSSProperties = {
     width: "210px",
@@ -48,8 +51,8 @@ export function RecipeCardNode({
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: isProven ? "#15803d" : "#4b5563", // Green proven / gray unproven
-    border: isFavorite ? "3px solid #facc15" : "2px solid rgba(255,255,255,0.2)", // Gold lining for favorite
+    backgroundColor: isProven ? theme.webNodeProvenBackground : theme.webNodeUnprovenBackground,
+    border: isFavorite ? "3px solid #facc15" : `2px solid ${theme.webNodeOutlineColor}`, // Gold lining for favorite
     boxShadow: isFavorite ? "0 0 12px rgba(250, 204, 21, 0.5)" : "0 4px 10px rgba(0,0,0,0.3)",
     color: "#ffffff",
   };
@@ -102,7 +105,7 @@ export function RecipeCardNode({
             padding: 0,
           }}
         >
-          🌱
+          <Icon iconKey="iteration" size={12} />
         </button>
       </div>
 
@@ -128,8 +131,16 @@ export function RecipeCardNode({
             fontSize: "14px",
           }}
         >
-          {data.isFrozen && <span title="Frozen">❄️</span>}
-          {data.isHomegrown && <span title="Homegrown">🌱</span>}
+          {data.isFrozen && (
+            <span title="Frozen">
+              <Icon iconKey="frozen" size={14} />
+            </span>
+          )}
+          {data.isHomegrown && (
+            <span title="Homegrown">
+              <Icon iconKey="homegrown" size={14} />
+            </span>
+          )}
         </div>
 
         <div
