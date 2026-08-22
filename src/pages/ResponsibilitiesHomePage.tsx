@@ -105,22 +105,24 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
                 {h}
               </div>
             ))}
-            {daily.map((r) => {
-              const sched = r.schedule as { suggestedTime: string };
-              const pct = (minutesFromTimeString(sched.suggestedTime) / 1440) * 100;
-              const done = isCompletedForCurrentPeriod(r, completions);
-              return (
-                <button
-                  key={r.id}
-                  className={`resp-hourly-marker ${done ? "done" : ""}`}
-                  style={{ left: `${pct}%` }}
-                  title={`${r.name} — ${sched.suggestedTime}`}
-                  onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
-                >
-                  {r.icon}
-                </button>
-              );
-            })}
+            {daily
+              .filter((r) => (r.schedule as { activeDays: number[] }).activeDays.includes(now.getDay()))
+              .map((r) => {
+                const sched = r.schedule as { suggestedTime: string };
+                const pct = (minutesFromTimeString(sched.suggestedTime) / 1440) * 100;
+                const done = isCompletedForCurrentPeriod(r, completions);
+                return (
+                  <button
+                    key={r.id}
+                    className={`resp-hourly-marker ${done ? "done" : ""}`}
+                    style={{ left: `${pct}%` }}
+                    title={`${r.name} — ${sched.suggestedTime}`}
+                    onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
+                  >
+                    {r.icon}
+                  </button>
+                );
+              })}
           </div>
         </div>
 

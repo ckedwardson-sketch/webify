@@ -327,6 +327,14 @@ async function runMigrations(db: Database): Promise<void> {
     await markMigrationApplied(db, "create_responsibilities_table");
   }
 
+  await ensureColumn(
+    db,
+    "add_responsibilities_pending_lead_time",
+    "responsibilities",
+    "pending_lead_time_hours",
+    "REAL NOT NULL DEFAULT 0"
+  );
+
   // One row per date a responsibility was actually marked done. Due-ness
   // and "completed for the current period" are both computed live from
   // this + the schedule, rather than pre-generating occurrence rows —

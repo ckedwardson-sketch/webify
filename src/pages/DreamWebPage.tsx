@@ -21,13 +21,13 @@ import {
   addDream,
   deleteDream,
   updateDreamPosition,
-  updateDreamPositionY,
+  updateDreamPositionX,
   addDreamLink,
   removeDreamLink,
   putDreamToBed,
 } from "../db/dreams";
 import { Dream, DreamPriority } from "../types/models";
-import { DreamNode, DREAM_BASE_WIDTH, DREAM_BASE_HEIGHT } from "../components/DreamGraphNodes";
+import { DreamNode, DREAM_BASE_WIDTH, DREAM_BASE_HEIGHT, zoomCompensation } from "../components/DreamGraphNodes";
 import { View } from "../types/nav";
 import { StyledButton } from "../icons/StyledButton";
 import { useTheme } from "../theme/ThemeContext";
@@ -41,59 +41,58 @@ const parseDreamNodeId = (nodeId: string) => Number(nodeId.slice(2));
 const linkEdgeId = (id: number) => `link-${id}`;
 const parseLinkEdgeId = (edgeId: string) => Number(edgeId.slice(5));
 
-// ---- Date <-> canvas-X mapping --------------------------------------
-// The canvas has one fixed timeline: an epoch 5 years back through 10
-// years out, at a constant pixels-per-day. Every dated dream's X comes
-// from this — it isn't something you can drag around.
+// ---- Date <-> canvas-Y mapping ---------------------------------------
+// Vertical timeline: today sits at y=0, the future runs up (negative
+// y), the past runs down (positive y). A dated dream's y always comes
+// from this — it isn't something you can drag around; only x is free.
 
 const TODAY = new Date();
 const EPOCH_YEAR = TODAY.getFullYear() - 5;
 const END_YEAR = TODAY.getFullYear() + 10;
-const EPOCH_MS = new Date(EPOCH_YEAR, 0, 1).getTime();
-const PIXELS_PER_DAY = 4;
+const TODAY_MS = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()).getTime();
+const PIXELS_PER_DAY = 1;
 const DAY_MS = 86400000;
-const MONTH_ZOOM_THRESHOLD = 0.5;
-const UNDATED_LANE_Y = 700;
+const MONTH_ZOOM_THRESHOLD = 0.6;
+const UNDATED_LANE_X = -650;
 
-function isoToX(iso: string): number {
+function isoToY(iso: string): number {
   const t = new Date(`${iso}T00:00:00`).getTime();
-  return ((t - EPOCH_MS) / DAY_MS) * PIXELS_PER_DAY;
+  return -((t - TODAY_MS) / DAY_MS) * PIXELS_PER_DAY;
 }
 
-function rangeMidX(start: string, end?: string): number {
-  const s = isoToX(start);
-  const e = end ? isoToX(end) : s;
+function rangeMidY(start: string, end?: string): number {
+  const s = isoToY(start);
+  const e = end ? isoToY(end) : s;
   return (s + e) / 2;
 }
 
-function todayIso(): string {
-  return TODAY.toISOString().slice(0, 10);
-}
-
 interface GridLine {
-  x: number;
+  y: number;
   label: string;
   isYear: boolean;
+  isCurrentYear: boolean;
 }
 
 function buildGridLines(): GridLine[] {
   const lines: GridLine[] = [];
+  const currentYear = TODAY.getFullYear();
   for (let y = EPOCH_YEAR; y <= END_YEAR; y++) {
-    lines.push({ x: isoToX(`${y}-01-01`), label: String(y), isYear: true });
+    lines.push({ y: isoToY(`${y}-01-01`), label: String(y), isYear: true, isCurrentYear: y === currentYear });
     for (let m = 2; m <= 12; m++) {
       const mm = String(m).padStart(2, "0");
       lines.push({
-        x: isoToX(`${y}-${mm}-01`),
+        y: isoToY(`${y}-${mm}-01`),
         label: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short" }),
         isYear: false,
+        isCurrentYear: false,
       });
     }
   }
   return lines;
 }
 
-function nodeSizeFor(priority: DreamPriority): { width: number; height: number } {
-  const scale = priority === "high" ? 1.3 : priority === "low" ? 0.8 : 1;
+function nodeSizeFor(priority: DreamPriority, zoom: number): { width: number; height: number } {
+  const scale = (priority === "high" ? 1.3 : priority === "low" ? 0.8 : 1) * zoomCompensation(zoom);
   return { width: DREAM_BASE_WIDTH * scale, height: DREAM_BASE_HEIGHT * scale };
 }
 
@@ -119,12 +118,6 @@ function timelineSort(a: Dream, b: Dream) {
   return a.expectedDateStart.localeCompare(b.expectedDateStart);
 }
 
-interface PriorityFilter {
-  low: boolean;
-  medium: boolean;
-  high: boolean;
-}
-
 function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const { theme } = useTheme();
   const { zoom } = useViewport();
@@ -133,14 +126,6 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>({
-    low: true,
-    medium: true,
-    high: true,
-  });
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
 
   const gridLines = useMemo(buildGridLines, []);
 
@@ -178,36 +163,23 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     load();
   };
 
-  const passesFilter = (dream: Dream) => {
-    if (!priorityFilter[dream.priority]) return false;
-    if (dateFrom || dateTo) {
-      if (!dream.expectedDateStart) return false;
-      const start = dream.expectedDateStart;
-      const end = dream.expectedDateEnd || dream.expectedDateStart;
-      if (dateFrom && end < dateFrom) return false;
-      if (dateTo && start > dateTo) return false;
-    }
-    return true;
-  };
-
   const activeDreams = useMemo(() => dreams.filter((d) => !d.isAsleep), [dreams]);
   const sleepingDreams = useMemo(() => dreams.filter((d) => d.isAsleep), [dreams]);
-  const filteredDreams = useMemo(() => activeDreams.filter(passesFilter), [activeDreams, priorityFilter, dateFrom, dateTo]);
 
   const positionFor = (dream: Dream): { x: number; y: number } => {
     if (dream.expectedDateStart) {
-      return { x: rangeMidX(dream.expectedDateStart, dream.expectedDateEnd), y: dream.posY };
+      return { x: dream.posX, y: rangeMidY(dream.expectedDateStart, dream.expectedDateEnd) };
     }
     return { x: dream.posX, y: dream.posY };
   };
 
-  // Nodes are rebuilt from `filteredDreams` whenever the underlying data
-  // or filters change. A dated dream's x always comes from its date —
-  // dragging can only ever move y (see onNodesChange) — so there's no
-  // "live drag position" for x to preserve here.
+  // Nodes are rebuilt from `activeDreams` whenever the underlying data
+  // changes. A dated dream's y always comes from its date — dragging
+  // can only ever move x (see onNodesChange) — so there's no "live drag
+  // position" for y to preserve here.
   useEffect(() => {
     setNodes(
-      filteredDreams.map((dream) => ({
+      activeDreams.map((dream) => ({
         id: dreamNodeId(dream.id),
         type: "dreamNode",
         position: positionFor(dream),
@@ -222,10 +194,10 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       }))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredDreams]);
+  }, [activeDreams]);
 
   const edges: Edge[] = useMemo(() => {
-    const activeIds = new Set(filteredDreams.map((d) => d.id));
+    const activeIds = new Set(activeDreams.map((d) => d.id));
     return links
       .filter((l) => activeIds.has(l.sourceDreamId) && activeIds.has(l.targetDreamId))
       .map((link) => ({
@@ -234,7 +206,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         target: dreamNodeId(link.targetDreamId),
         style: { stroke: theme.dreamLinkColor, strokeWidth: 2 },
       }));
-  }, [links, filteredDreams, theme.dreamLinkColor]);
+  }, [links, activeDreams, theme.dreamLinkColor]);
 
   const onNodesChange = (changes: NodeChange[]) => {
     const adjusted = changes
@@ -243,10 +215,10 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         if (c.type !== "position" || !c.position) return c;
         const dream = dreamById.get(parseDreamNodeId(c.id));
         if (!dream?.expectedDateStart) return c;
-        // Dated dreams can only move vertically — x snaps back to the
+        // Dated dreams can only move horizontally — y snaps back to the
         // date-derived position every change, not just on drop, so the
-        // node visually tracks a straight vertical line while dragging.
-        return { ...c, position: { x: rangeMidX(dream.expectedDateStart, dream.expectedDateEnd), y: c.position.y } };
+        // node visually tracks a straight horizontal line while dragging.
+        return { ...c, position: { x: c.position.x, y: rangeMidY(dream.expectedDateStart, dream.expectedDateEnd) } };
       });
     setNodes((nds) => applyNodeChanges(adjusted, nds));
   };
@@ -257,7 +229,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     if (!dream) return;
     const { x, y } = node.position;
     if (dream.expectedDateStart) {
-      updateDreamPositionY(id, y);
+      updateDreamPositionX(id, x);
     } else {
       updateDreamPosition(id, x, y);
     }
@@ -286,8 +258,8 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     setCreating(true);
     try {
       const undatedCount = dreams.filter((d) => !d.expectedDateStart && !d.isAsleep).length;
-      const x = isoToX(todayIso()) + (undatedCount % 6) * 180;
-      const y = UNDATED_LANE_Y + Math.floor(undatedCount / 6) * 120;
+      const x = UNDATED_LANE_X - Math.floor(undatedCount / 5) * 160;
+      const y = (undatedCount % 5) * 110 - 220;
       const id = await addDream("New Dream", x, y);
       onNavigate({ type: "dream-detail", dreamId: id });
     } finally {
@@ -295,7 +267,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     }
   };
 
-  const timeline = [...filteredDreams].sort(timelineSort);
+  const timeline = [...activeDreams].sort(timelineSort);
   const showMonthLines = zoom >= MONTH_ZOOM_THRESHOLD;
 
   const priorityColorFor = (p: DreamPriority) =>
@@ -318,7 +290,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
             {creating ? "Adding…" : "+ Dream"}
           </button>
         </div>
-        {timeline.length === 0 && <p className="page-text">No dreams match.</p>}
+        {timeline.length === 0 && <p className="page-text">No dreams yet.</p>}
         <ul className="dream-timeline-list">
           {timeline.map((dream) => (
             <li key={dream.id}>
@@ -361,43 +333,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       <div className="dream-canvas-area">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
           <h1 style={{ margin: 0, fontSize: "22px" }}>Dream Web</h1>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <div style={{ position: "relative" }}>
-              <StyledButton
-                buttonKey="web-filter-toggle"
-                iconKey="filter"
-                onClick={() => setShowFilters((v) => !v)}
-              />
-              {showFilters && (
-                <div className="dream-filter-dropdown">
-                  <div className="dream-filter-section">
-                    {(["high", "medium", "low"] as DreamPriority[]).map((p) => (
-                      <label key={p} className="dream-filter-checkbox">
-                        <span style={{ textTransform: "capitalize" }}>{p}</span>
-                        <input
-                          type="checkbox"
-                          checked={priorityFilter[p]}
-                          onChange={(e) => setPriorityFilter({ ...priorityFilter, [p]: e.target.checked })}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <hr />
-                  <div className="dream-filter-section">
-                    <label className="dream-filter-date">
-                      From
-                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                    </label>
-                    <label className="dream-filter-date">
-                      To
-                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-            <StyledButton buttonKey="web-zoom-back" iconKey="back" onClick={() => onNavigate({ type: "home" })} />
-          </div>
+          <StyledButton buttonKey="web-zoom-back" iconKey="back" onClick={() => onNavigate({ type: "home" })} />
         </div>
 
         <div
@@ -428,22 +364,27 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                       key={i}
                       style={{
                         position: "absolute",
-                        left: l.x,
-                        top: -4000,
-                        width: l.isYear ? 2 : 1,
-                        height: 9000,
-                        background: l.isYear ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)",
+                        top: l.y,
+                        left: -6000,
+                        height: l.isCurrentYear ? 3 : l.isYear ? 2 : 1,
+                        width: 13000,
+                        background: l.isCurrentYear
+                          ? "#f4c430"
+                          : l.isYear
+                          ? "rgba(255,255,255,0.22)"
+                          : "rgba(255,255,255,0.08)",
+                        boxShadow: l.isCurrentYear ? "0 0 8px rgba(244,196,48,0.6)" : "none",
                         pointerEvents: "none",
                       }}
                     >
                       <span
                         style={{
                           position: "absolute",
-                          top: 3980,
-                          left: 4,
-                          fontSize: l.isYear ? 12 : 10,
-                          fontWeight: l.isYear ? 700 : 400,
-                          color: "rgba(255,255,255,0.55)",
+                          top: l.isCurrentYear ? -19 : -16,
+                          left: 5980,
+                          fontSize: l.isCurrentYear ? 13 : l.isYear ? 12 : 10,
+                          fontWeight: l.isCurrentYear || l.isYear ? 700 : 400,
+                          color: l.isCurrentYear ? "#f4c430" : "rgba(255,255,255,0.55)",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -452,22 +393,36 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                     </div>
                   ))}
 
-                {filteredDreams
+                {activeDreams
                   .filter((d) => d.expectedDateStart && d.expectedDateEnd && d.expectedDateStart !== d.expectedDateEnd)
                   .map((dream) => {
-                    const startX = isoToX(dream.expectedDateStart!);
-                    const endX = isoToX(dream.expectedDateEnd!);
-                    const { height } = nodeSizeFor(dream.priority);
-                    const centerY = dream.posY + height / 2;
+                    const startY = isoToY(dream.expectedDateStart!);
+                    const endY = isoToY(dream.expectedDateEnd!);
+                    const { width } = nodeSizeFor(dream.priority, zoom);
+                    const centerX = dream.posX + width / 2;
                     const color = priorityColorFor(dream.priority);
+                    const top = Math.min(startY, endY);
+                    const barHeight = Math.abs(endY - startY);
                     return (
                       <React.Fragment key={dream.id}>
                         <div
                           style={{
                             position: "absolute",
-                            left: startX,
-                            top: centerY - 1,
-                            width: endX - startX,
+                            left: centerX - 1,
+                            top,
+                            width: 2,
+                            height: barHeight,
+                            background: color,
+                            opacity: 0.6,
+                            pointerEvents: "none",
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: centerX - 8,
+                            top: startY - 1,
+                            width: 16,
                             height: 2,
                             background: color,
                             opacity: 0.6,
@@ -477,22 +432,10 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                         <div
                           style={{
                             position: "absolute",
-                            left: startX - 1,
-                            top: centerY - 8,
-                            width: 2,
-                            height: 16,
-                            background: color,
-                            opacity: 0.6,
-                            pointerEvents: "none",
-                          }}
-                        />
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: endX - 1,
-                            top: centerY - 8,
-                            width: 2,
-                            height: 16,
+                            left: centerX - 8,
+                            top: endY - 1,
+                            width: 16,
+                            height: 2,
                             background: color,
                             opacity: 0.6,
                             pointerEvents: "none",
@@ -505,8 +448,8 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
             </ViewportPortal>
 
             <Panel position="top-right" className="dream-canvas-hint">
-              Drag between the corner dots to link dreams. Dated dreams only move up/down — change
-              the date to move them in time.
+              Future is up, past is down. Drag between the corner dots to link dreams. Dated dreams
+              only move left/right — change the date to move them in time.
             </Panel>
             <Background
               color="#64748b"

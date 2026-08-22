@@ -11,7 +11,7 @@ import {
   formatDateRange,
   LinkedDream,
 } from "../db/dreams";
-import { Dream, DreamHistoryEntry, DreamPriority } from "../types/models";
+import { Dream, DreamHistoryEntry, DreamHistoryField, DreamPriority } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { DreamDateRangeField } from "../components/DreamDateRangeField";
@@ -24,7 +24,7 @@ const PRIORITY_LABELS: Record<DreamPriority, string> = {
   high: "High",
 };
 
-const FIELD_LABELS: Record<string, string> = {
+const FIELD_LABELS: Record<DreamHistoryField, string> = {
   name: "Name",
   reasoning: "Reasoning",
   expectedDate: "Expected date",
@@ -32,6 +32,8 @@ const FIELD_LABELS: Record<string, string> = {
   notes: "Notes",
   sleep: "Sleep state",
 };
+
+const ALL_HISTORY_FIELDS = Object.keys(FIELD_LABELS) as DreamHistoryField[];
 
 function formatTimestamp(raw: string): string {
   const iso = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
@@ -76,6 +78,12 @@ export function DreamDetailPage({
   const [dateResetToken, setDateResetToken] = useState(0);
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
   const [reasonDraft, setReasonDraft] = useState("");
+  const [showHistoryFilter, setShowHistoryFilter] = useState(false);
+  const [historyFieldFilter, setHistoryFieldFilter] = useState<Record<DreamHistoryField, boolean>>(
+    Object.fromEntries(ALL_HISTORY_FIELDS.map((f) => [f, true])) as Record<DreamHistoryField, boolean>
+  );
+  const [historyDateFrom, setHistoryDateFrom] = useState("");
+  const [historyDateTo, setHistoryDateTo] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -194,6 +202,16 @@ export function DreamDetailPage({
     await removeDreamLink(linkId);
     setLinked((prev) => prev.filter((l) => l.linkId !== linkId));
   };
+
+  const filteredHistory = history.filter((entry) => {
+    if (!historyFieldFilter[entry.field]) return false;
+    if (historyDateFrom || historyDateTo) {
+      const entryDate = entry.changedAt.slice(0, 10);
+      if (historyDateFrom && entryDate < historyDateFrom) return false;
+      if (historyDateTo && entryDate > historyDateTo) return false;
+    }
+    return true;
+  });
 
   const handleWake = async () => {
     if (!dream) return;
@@ -331,12 +349,60 @@ export function DreamDetailPage({
       </div>
 
       <div className="theme-section">
-        <h2 className="theme-section-title">Memory</h2>
+        <div className="dream-memory-header">
+          <h2 className="theme-section-title">Memory</h2>
+          {history.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <button className="add-button secondary" onClick={() => setShowHistoryFilter((v) => !v)}>
+                Filter
+              </button>
+              {showHistoryFilter && (
+                <div className="dream-filter-dropdown">
+                  <div className="dream-filter-section">
+                    {ALL_HISTORY_FIELDS.map((f) => (
+                      <label key={f} className="dream-filter-checkbox">
+                        <span>{FIELD_LABELS[f]}</span>
+                        <input
+                          type="checkbox"
+                          checked={historyFieldFilter[f]}
+                          onChange={(e) =>
+                            setHistoryFieldFilter({ ...historyFieldFilter, [f]: e.target.checked })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <hr />
+                  <div className="dream-filter-section">
+                    <label className="dream-filter-date">
+                      From
+                      <input
+                        type="date"
+                        value={historyDateFrom}
+                        onChange={(e) => setHistoryDateFrom(e.target.value)}
+                      />
+                    </label>
+                    <label className="dream-filter-date">
+                      To
+                      <input
+                        type="date"
+                        value={historyDateTo}
+                        onChange={(e) => setHistoryDateTo(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {history.length === 0 ? (
           <p className="page-text">No edits yet — this dream's history will build up here.</p>
+        ) : filteredHistory.length === 0 ? (
+          <p className="page-text">No changes match this filter.</p>
         ) : (
           <ul className="dream-history-list">
-            {history.map((entry) => (
+            {filteredHistory.map((entry) => (
               <li key={entry.id} className="dream-history-entry">
                 <span className="dream-history-field">{FIELD_LABELS[entry.field] ?? entry.field}</span>
                 <span className="dream-history-change">

@@ -359,6 +359,30 @@
   border-color: var(--color-primary-bg, #333);
 }
 
+.resp-day-presets {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.resp-day-presets button {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border: 1px solid var(--color-border, #ddd);
+  background: var(--color-bg-secondary, #f5f5f5);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.resp-lead-time-input {
+  margin-top: 6px;
+  width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
 .resp-yearly-date {
   display: flex;
   gap: 6px;

@@ -5,6 +5,7 @@ import {
   ResponsibilityCompletion,
   ResponsibilitySchedule,
   defaultScheduleFor,
+  normalizeSchedule,
 } from "../types/responsibility";
 
 type RawRow = {
@@ -18,6 +19,7 @@ type RawRow = {
   soundKey: string;
   scheduleJson: string;
   sortOrder: number;
+  pendingLeadTimeHours: number;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -25,13 +27,14 @@ type RawRow = {
 const COLUMNS = `
   id, name, description, consequences, reasoning, category, icon,
   sound_key as soundKey, schedule_json as scheduleJson,
-  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt
+  sort_order as sortOrder, pending_lead_time_hours as pendingLeadTimeHours,
+  created_at as createdAt, updated_at as updatedAt
 `;
 
 function mapRow(row: RawRow): Responsibility {
   let schedule: ResponsibilitySchedule;
   try {
-    schedule = JSON.parse(row.scheduleJson);
+    schedule = normalizeSchedule(row.category, JSON.parse(row.scheduleJson));
   } catch {
     console.warn(`Responsibility ${row.id} has unparseable schedule_json, using default.`);
     schedule = defaultScheduleFor(row.category);
@@ -47,6 +50,7 @@ function mapRow(row: RawRow): Responsibility {
     soundKey: row.soundKey,
     schedule,
     sortOrder: row.sortOrder,
+    pendingLeadTimeHours: row.pendingLeadTimeHours ?? 0,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
   };
@@ -137,6 +141,14 @@ export async function updateResponsibilitySound(id: number, soundKey: string): P
   await db.execute(
     "UPDATE responsibilities SET sound_key = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
     [soundKey, id]
+  );
+}
+
+export async function updateResponsibilityPendingLeadTime(id: number, hours: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE responsibilities SET pending_lead_time_hours = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    [hours, id]
   );
 }
 

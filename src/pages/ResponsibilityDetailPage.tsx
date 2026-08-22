@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import { View } from "../types/nav";
-import { Responsibility, DailySchedule, WeeklySchedule, YearlySchedule } from "../types/responsibility";
+import {
+  Responsibility,
+  DailySchedule,
+  WeeklySchedule,
+  YearlySchedule,
+  YearlyAlarmMode,
+  defaultYearlyAlarm,
+} from "../types/responsibility";
 import {
   fetchResponsibility,
   updateResponsibilityDetails,
   updateResponsibilitySchedule,
   updateResponsibilityIcon,
   updateResponsibilitySound,
+  updateResponsibilityPendingLeadTime,
   deleteResponsibility,
 } from "../db/responsibilities";
 import { RESPONSIBILITY_ICON_CHOICES } from "../responsibilities/iconChoices";
@@ -32,6 +40,7 @@ export function ResponsibilityDetailPage({
   const [description, setDescription] = useState("");
   const [consequences, setConsequences] = useState("");
   const [reasoning, setReasoning] = useState("");
+  const [leadTimeDraft, setLeadTimeDraft] = useState("0");
   const [showIconPicker, setShowIconPicker] = useState(false);
 
   useEffect(() => {
@@ -42,6 +51,7 @@ export function ResponsibilityDetailPage({
         setDescription(r.description);
         setConsequences(r.consequences);
         setReasoning(r.reasoning);
+        setLeadTimeDraft(String(r.pendingLeadTimeHours));
       }
       setLoading(false);
     });
@@ -68,6 +78,14 @@ export function ResponsibilityDetailPage({
     if (!resp) return;
     setResp({ ...resp, soundKey });
     await updateResponsibilitySound(responsibilityId, soundKey);
+  };
+
+  const saveLeadTime = async () => {
+    const hours = Math.max(0, Number(leadTimeDraft) || 0);
+    setLeadTimeDraft(String(hours));
+    if (!resp) return;
+    setResp({ ...resp, pendingLeadTimeHours: hours });
+    await updateResponsibilityPendingLeadTime(responsibilityId, hours);
   };
 
   const handleDelete = async () => {
@@ -171,6 +189,22 @@ export function ResponsibilityDetailPage({
       </div>
 
       <div className="resp-section">
+        <div className="resp-section-title">When it shows up as pending</div>
+        <label className="resp-field-label">
+          Show as pending starting this many hours before it's due (0 = show for the whole period)
+          <input
+            className="resp-lead-time-input"
+            type="number"
+            min={0}
+            step={0.5}
+            value={leadTimeDraft}
+            onChange={(e) => setLeadTimeDraft(e.target.value)}
+            onBlur={saveLeadTime}
+          />
+        </label>
+      </div>
+
+      <div className="resp-section">
         <div className="resp-section-title">Alarm sound</div>
         <div className="resp-sound-list">
           {SOUND_PRESETS.map((s) => (
@@ -193,6 +227,54 @@ export function ResponsibilityDetailPage({
   );
 }
 
+// ---- Shared: a simple add/remove list of HH:MM times --------------
+
+function TimeListEditor({
+  times,
+  onChange,
+  label,
+}: {
+  times: string[];
+  onChange: (times: string[]) => void;
+  label: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const add = () => {
+    if (!draft) return;
+    onChange([...times, draft].sort());
+    setDraft("");
+  };
+
+  const remove = (time: string) => {
+    onChange(times.filter((t) => t !== time));
+  };
+
+  return (
+    <div className="resp-field-label">
+      {label}
+      <div className="resp-alarm-row">
+        <input type="time" value={draft} onChange={(e) => setDraft(e.target.value)} />
+        <button className="add-button secondary" onClick={add}>
+          Add
+        </button>
+      </div>
+      {times.length > 0 && (
+        <ul className="resp-alarm-list">
+          {times.map((t) => (
+            <li key={t}>
+              {t}
+              <button className="resp-alarm-remove" onClick={() => remove(t)}>
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ---- Daily ----------------------------------------------------------
 
 function DailyScheduleEditor({
@@ -202,17 +284,15 @@ function DailyScheduleEditor({
   schedule: DailySchedule;
   onChange: (s: DailySchedule) => void;
 }) {
-  const [alarmDraft, setAlarmDraft] = useState("");
-
-  const addAlarm = () => {
-    if (!alarmDraft) return;
-    onChange({ ...schedule, alarms: [...schedule.alarms, alarmDraft].sort() });
-    setAlarmDraft("");
+  const toggleActiveDay = (day: number) => {
+    const has = schedule.activeDays.includes(day);
+    const activeDays = has
+      ? schedule.activeDays.filter((d) => d !== day)
+      : [...schedule.activeDays, day].sort();
+    onChange({ ...schedule, activeDays });
   };
 
-  const removeAlarm = (time: string) => {
-    onChange({ ...schedule, alarms: schedule.alarms.filter((a) => a !== time) });
-  };
+  const setAllDays = (days: number[]) => onChange({ ...schedule, activeDays: days });
 
   return (
     <div className="resp-schedule-grid">
@@ -242,26 +322,30 @@ function DailyScheduleEditor({
       </label>
 
       <div className="resp-field-label">
-        Alarms
-        <div className="resp-alarm-row">
-          <input type="time" value={alarmDraft} onChange={(e) => setAlarmDraft(e.target.value)} />
-          <button className="add-button secondary" onClick={addAlarm}>
-            Add alarm
-          </button>
+        Active days
+        <div className="resp-day-toggle">
+          {WEEKDAY_LABELS.map((label, idx) => (
+            <button
+              key={label}
+              className={schedule.activeDays.includes(idx) ? "active" : ""}
+              onClick={() => toggleActiveDay(idx)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        {schedule.alarms.length > 0 && (
-          <ul className="resp-alarm-list">
-            {schedule.alarms.map((a) => (
-              <li key={a}>
-                {a}
-                <button className="resp-alarm-remove" onClick={() => removeAlarm(a)}>
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="resp-day-presets">
+          <button onClick={() => setAllDays([0, 1, 2, 3, 4, 5, 6])}>Every day</button>
+          <button onClick={() => setAllDays([1, 2, 3, 4, 5])}>Weekdays</button>
+          <button onClick={() => setAllDays([0, 6])}>Weekends</button>
+        </div>
       </div>
+
+      <TimeListEditor
+        label="Alarms"
+        times={schedule.alarms}
+        onChange={(alarms) => onChange({ ...schedule, alarms })}
+      />
     </div>
   );
 }
@@ -317,6 +401,12 @@ function WeeklyScheduleEditor({
           ))}
         </div>
       </div>
+
+      <TimeListEditor
+        label="Alarms (on whichever allowed day it's due)"
+        times={schedule.alarms}
+        onChange={(alarms) => onChange({ ...schedule, alarms })}
+      />
     </div>
   );
 }
@@ -332,59 +422,152 @@ function YearlyScheduleEditor({
 }) {
   const daysInMonth = (month: number) => new Date(2028, month, 0).getDate(); // 2028: leap year, safe for Feb 29
 
-  return (
-    <div className="resp-yearly-grid">
-      <label className="resp-field-label">
-        From
-        <div className="resp-yearly-date">
-          <select
-            value={schedule.startMonth}
-            onChange={(e) => onChange({ ...schedule, startMonth: Number(e.target.value) })}
-          >
-            {MONTH_NAMES.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select
-            value={schedule.startDay}
-            onChange={(e) => onChange({ ...schedule, startDay: Number(e.target.value) })}
-          >
-            {Array.from({ length: daysInMonth(schedule.startMonth) }, (_, i) => i + 1).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-      </label>
+  const setAlarmMode = (mode: YearlyAlarmMode) => {
+    onChange({ ...schedule, alarm: defaultYearlyAlarm(mode) });
+  };
 
-      <label className="resp-field-label">
-        To
-        <div className="resp-yearly-date">
-          <select
-            value={schedule.endMonth}
-            onChange={(e) => onChange({ ...schedule, endMonth: Number(e.target.value) })}
+  const toggleAlarmWeekDay = (day: number) => {
+    if (!schedule.alarm) return;
+    const has = schedule.alarm.weekDays.includes(day);
+    const weekDays = has
+      ? schedule.alarm.weekDays.filter((d) => d !== day)
+      : [...schedule.alarm.weekDays, day].sort();
+    onChange({ ...schedule, alarm: { ...schedule.alarm, weekDays } });
+  };
+
+  return (
+    <div>
+      <div className="resp-yearly-grid">
+        <label className="resp-field-label">
+          From
+          <div className="resp-yearly-date">
+            <select
+              value={schedule.startMonth}
+              onChange={(e) => onChange({ ...schedule, startMonth: Number(e.target.value) })}
+            >
+              {MONTH_NAMES.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <select
+              value={schedule.startDay}
+              onChange={(e) => onChange({ ...schedule, startDay: Number(e.target.value) })}
+            >
+              {Array.from({ length: daysInMonth(schedule.startMonth) }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+        </label>
+
+        <label className="resp-field-label">
+          To
+          <div className="resp-yearly-date">
+            <select
+              value={schedule.endMonth}
+              onChange={(e) => onChange({ ...schedule, endMonth: Number(e.target.value) })}
+            >
+              {MONTH_NAMES.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <select
+              value={schedule.endDay}
+              onChange={(e) => onChange({ ...schedule, endDay: Number(e.target.value) })}
+            >
+              {Array.from({ length: daysInMonth(schedule.endMonth) }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+        </label>
+      </div>
+
+      <div className="resp-field-label" style={{ marginTop: 8 }}>
+        Recurring alarm while within this range
+        <div className="resp-freq-toggle">
+          <button className={!schedule.alarm ? "active" : ""} onClick={() => onChange({ ...schedule, alarm: null })}>
+            None
+          </button>
+          <button
+            className={schedule.alarm?.mode === "day" ? "active" : ""}
+            onClick={() => setAlarmMode("day")}
           >
-            {MONTH_NAMES.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select
-            value={schedule.endDay}
-            onChange={(e) => onChange({ ...schedule, endDay: Number(e.target.value) })}
+            Every day
+          </button>
+          <button
+            className={schedule.alarm?.mode === "week" ? "active" : ""}
+            onClick={() => setAlarmMode("week")}
           >
-            {Array.from({ length: daysInMonth(schedule.endMonth) }, (_, i) => i + 1).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+            Certain weekdays
+          </button>
+          <button
+            className={schedule.alarm?.mode === "hours" ? "active" : ""}
+            onClick={() => setAlarmMode("hours")}
+          >
+            Every N hours
+          </button>
         </div>
-      </label>
+      </div>
+
+      {schedule.alarm?.mode === "day" && (
+        <TimeListEditor
+          label="Times each day"
+          times={schedule.alarm.dayTimes}
+          onChange={(dayTimes) => onChange({ ...schedule, alarm: { ...schedule.alarm!, dayTimes } })}
+        />
+      )}
+
+      {schedule.alarm?.mode === "week" && (
+        <>
+          <div className="resp-field-label">
+            Which weekdays
+            <div className="resp-day-toggle">
+              {WEEKDAY_LABELS.map((label, idx) => (
+                <button
+                  key={label}
+                  className={schedule.alarm!.weekDays.includes(idx) ? "active" : ""}
+                  onClick={() => toggleAlarmWeekDay(idx)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <TimeListEditor
+            label="Times on those days"
+            times={schedule.alarm.weekTimes}
+            onChange={(weekTimes) => onChange({ ...schedule, alarm: { ...schedule.alarm!, weekTimes } })}
+          />
+        </>
+      )}
+
+      {schedule.alarm?.mode === "hours" && (
+        <label className="resp-field-label">
+          Every how many hours
+          <input
+            type="number"
+            min={1}
+            max={24}
+            className="resp-lead-time-input"
+            value={schedule.alarm.everyHours}
+            onChange={(e) =>
+              onChange({
+                ...schedule,
+                alarm: { ...schedule.alarm!, everyHours: Math.max(1, Number(e.target.value) || 1) },
+              })
+            }
+          />
+        </label>
+      )}
     </div>
   );
 }
