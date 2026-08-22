@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "../types/nav";
 import { useIcons } from "../icons/IconContext";
 import { useTextElements } from "../icons/TextElementContext";
@@ -7,7 +7,10 @@ import { useTheme } from "../theme/ThemeContext";
 import { TextElementOverride } from "../db/textElements";
 import { ButtonStyleOverride } from "../db/buttonStyles";
 import { ThemeSettings } from "../theme/themeDefaults";
+import { fetchPresets, savePreset, deletePreset, fetchPresetData, ThemePresetRow } from "../db/themePresets";
+import { buildSettingsSearchIndex } from "./settingsSearchIndex";
 import "./Page.css";
+import "./SettingsShared.css";
 
 interface ThemeExport {
   icons: Record<string, string>;
@@ -15,6 +18,13 @@ interface ThemeExport {
   buttonStyles: Record<string, ButtonStyleOverride>;
   themeSettings: Partial<ThemeSettings>;
 }
+
+const NAV_CARDS: { view: View; title: string; desc: string }[] = [
+  { view: { type: "settings-icons" }, title: "Icons", desc: "Replace any glyph with a custom image" },
+  { view: { type: "settings-text" }, title: "Text Elements", desc: "Editor toolbar letters, size, color" },
+  { view: { type: "settings-buttons" }, title: "Buttons", desc: "Text, font, colors, box size" },
+  { view: { type: "settings-theme" }, title: "Theme", desc: "Colors, fonts, radius, density, backgrounds" },
+];
 
 export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
   const { overrides: iconOverrides, setOverride: setIconOverride, clearOverride: clearIconOverride } =
@@ -29,17 +39,88 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     setOverride: setButtonOverride,
     clearOverride: clearButtonOverride,
   } = useButtonStyles();
-  const { overrides: themeOverrides, setThemeValue, resetThemeValue } = useTheme();
+  const { overrides: themeOverrides, replaceTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [presets, setPresets] = useState<ThemePresetRow[]>([]);
+  const [presetNameDraft, setPresetNameDraft] = useState("");
+  const [savingPreset, setSavingPreset] = useState(false);
+
+  const searchIndex = useMemo(() => buildSettingsSearchIndex(), []);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return searchIndex
+      .filter(
+        (item) =>
+          item.label.toLowerCase().includes(q) ||
+          item.key.toLowerCase().includes(q) ||
+          item.section.toLowerCase().includes(q)
+      )
+      .slice(0, 30);
+  }, [query, searchIndex]);
+
+  const loadPresets = () => {
+    fetchPresets()
+      .then(setPresets)
+      .catch((err) => console.error("Failed to load theme presets:", err));
+  };
+
+  useEffect(() => {
+    loadPresets();
+  }, []);
+
+  const captureCurrentExport = (): ThemeExport => ({
+    icons: iconOverrides,
+    textElements: textOverrides,
+    buttonStyles: buttonOverrides,
+    themeSettings: themeOverrides,
+  });
+
+  // Shared by file import and preset-apply: full replace, not merge —
+  // clears whatever's currently customized in each system first so
+  // switching themes doesn't leave stale overrides behind from whatever
+  // was active before.
+  const applyThemeExport = async (parsed: Partial<ThemeExport>) => {
+    const icons = parsed.icons ?? {};
+    const textElements = parsed.textElements ?? {};
+    const buttonStyles = parsed.buttonStyles ?? {};
+    const themeSettings = parsed.themeSettings ?? {};
+
+    for (const key of Object.keys(iconOverrides)) await clearIconOverride(key);
+    for (const key of Object.keys(textOverrides)) await clearTextOverride(key);
+    for (const key of Object.keys(buttonOverrides)) await clearButtonOverride(key);
+    await replaceTheme(themeSettings);
+
+    let iconCount = 0,
+      textCount = 0,
+      buttonCount = 0;
+
+    for (const [key, imageData] of Object.entries(icons)) {
+      if (typeof imageData === "string") {
+        await setIconOverride(key, imageData);
+        iconCount++;
+      }
+    }
+    for (const [key, override] of Object.entries(textElements)) {
+      if (override && typeof override === "object") {
+        await setTextOverride(key, override);
+        textCount++;
+      }
+    }
+    for (const [key, override] of Object.entries(buttonStyles)) {
+      if (override && typeof override === "object") {
+        await setButtonOverride(key, override);
+        buttonCount++;
+      }
+    }
+
+    return { iconCount, textCount, buttonCount, themeCount: Object.keys(themeSettings).length };
+  };
 
   const handleExport = () => {
-    const data: ThemeExport = {
-      icons: iconOverrides,
-      textElements: textOverrides,
-      buttonStyles: buttonOverrides,
-      themeSettings: themeOverrides,
-    };
+    const data = captureCurrentExport();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -73,50 +154,9 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
       }
 
       try {
-        const icons = parsed.icons ?? {};
-        const textElements = parsed.textElements ?? {};
-        const buttonStyles = parsed.buttonStyles ?? {};
-        const themeSettings = parsed.themeSettings ?? {};
-
-        // Full replace, not merge — clear whatever's currently
-        // customized in each system first so switching themes doesn't
-        // leave stale overrides behind from whatever was active before.
-        for (const key of Object.keys(iconOverrides)) await clearIconOverride(key);
-        for (const key of Object.keys(textOverrides)) await clearTextOverride(key);
-        for (const key of Object.keys(buttonOverrides)) await clearButtonOverride(key);
-        for (const key of Object.keys(themeOverrides)) {
-          await resetThemeValue(key as keyof ThemeSettings);
-        }
-
-        let iconCount = 0, textCount = 0, buttonCount = 0, themeCount = 0;
-
-        for (const [key, imageData] of Object.entries(icons)) {
-          if (typeof imageData === "string") {
-            await setIconOverride(key, imageData);
-            iconCount++;
-          }
-        }
-        for (const [key, override] of Object.entries(textElements)) {
-          if (override && typeof override === "object") {
-            await setTextOverride(key, override);
-            textCount++;
-          }
-        }
-        for (const [key, override] of Object.entries(buttonStyles)) {
-          if (override && typeof override === "object") {
-            await setButtonOverride(key, override);
-            buttonCount++;
-          }
-        }
-        for (const [key, value] of Object.entries(themeSettings)) {
-          if (typeof value === "string") {
-            await setThemeValue(key as keyof ThemeSettings, value);
-            themeCount++;
-          }
-        }
-
+        const counts = await applyThemeExport(parsed);
         setStatus(
-          `Imported: ${iconCount} icons, ${textCount} text elements, ${buttonCount} button styles, ${themeCount} theme settings.`
+          `Imported: ${counts.iconCount} icons, ${counts.textCount} text elements, ${counts.buttonCount} button styles, ${counts.themeCount} theme settings.`
         );
       } catch (err) {
         console.error("Theme import error:", err);
@@ -127,31 +167,128 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     e.target.value = "";
   };
 
+  const handleSavePreset = async () => {
+    const name = presetNameDraft.trim();
+    if (!name) return;
+    setSavingPreset(true);
+    try {
+      const data = JSON.stringify(captureCurrentExport());
+      await savePreset(name, data);
+      setPresetNameDraft("");
+      loadPresets();
+      setStatus(`Saved preset "${name}".`);
+    } catch (err) {
+      console.error("Save preset error:", err);
+      setStatus(`Failed to save preset: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingPreset(false);
+    }
+  };
+
+  const handleApplyPreset = async (preset: ThemePresetRow) => {
+    setStatus(`Applying "${preset.name}"...`);
+    try {
+      const raw = await fetchPresetData(preset.id);
+      if (!raw) {
+        setStatus(`Preset "${preset.name}" has no data.`);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<ThemeExport>;
+      const counts = await applyThemeExport(parsed);
+      setStatus(
+        `Applied "${preset.name}": ${counts.iconCount} icons, ${counts.textCount} text elements, ${counts.buttonCount} button styles, ${counts.themeCount} theme settings.`
+      );
+    } catch (err) {
+      console.error("Apply preset error:", err);
+      setStatus(`Failed to apply preset: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleDeletePreset = async (preset: ThemePresetRow) => {
+    try {
+      await deletePreset(preset.id);
+      loadPresets();
+    } catch (err) {
+      console.error("Delete preset error:", err);
+      setStatus(`Failed to delete preset: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   return (
     <div className="page">
       <h1 className="page-title">Settings</h1>
-      <ul className="list">
-        <li>
-          <button className="list-item" onClick={() => onNavigate({ type: "settings-icons" })}>
-            Icons
+
+      <input
+        className="settings-search"
+        placeholder='Search all settings (e.g. "filter button", "proven", "radius")...'
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
+      {query.trim() && (
+        results.length === 0 ? (
+          <p className="settings-search-empty">No matches for "{query}".</p>
+        ) : (
+          <div className="settings-search-results">
+            {results.map((item) => (
+              <button
+                key={`${item.section}:${item.key}`}
+                className="settings-search-result"
+                onClick={() => onNavigate(item.view)}
+              >
+                <span className="settings-search-result-section">{item.section}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )
+      )}
+
+      <div className="settings-card-grid">
+        {NAV_CARDS.map((card) => (
+          <button key={card.title} className="settings-card" onClick={() => onNavigate(card.view)}>
+            <span className="settings-card-title">{card.title}</span>
+            <span className="settings-card-desc">{card.desc}</span>
           </button>
-        </li>
-        <li>
-          <button className="list-item" onClick={() => onNavigate({ type: "settings-text" })}>
-            Text Elements
-          </button>
-        </li>
-        <li>
-          <button className="list-item" onClick={() => onNavigate({ type: "settings-buttons" })}>
-            Buttons
-          </button>
-        </li>
-        <li>
-          <button className="list-item" onClick={() => onNavigate({ type: "settings-theme" })}>
-            Theme
-          </button>
-        </li>
-      </ul>
+        ))}
+      </div>
+
+      <div className="theme-section">
+        <h2 className="theme-section-title">Saved theme presets</h2>
+        <div className="theme-color-list">
+          <div className="theme-color-row">
+            <input
+              className="inline-add-input"
+              style={{ marginBottom: 0, flex: 1 }}
+              placeholder="Preset name"
+              value={presetNameDraft}
+              onChange={(e) => setPresetNameDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSavePreset()}
+            />
+            <button
+              className="add-button secondary"
+              onClick={handleSavePreset}
+              disabled={!presetNameDraft.trim() || savingPreset}
+            >
+              Save current as preset
+            </button>
+          </div>
+
+          {presets.length === 0 && <p className="page-text">No saved presets yet.</p>}
+
+          {presets.map((preset) => (
+            <div key={preset.id} className="theme-color-row">
+              <span className="theme-color-label">{preset.name}</span>
+              <button className="add-button secondary" onClick={() => handleApplyPreset(preset)}>
+                Apply
+              </button>
+              <button className="add-button danger" onClick={() => handleDeletePreset(preset)}>
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
         <button className="add-button secondary" onClick={handleExport}>
@@ -170,7 +307,9 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
       </div>
 
       {status && (
-        <p style={{ marginTop: "12px", fontSize: "0.85rem", color: "#666" }}>{status}</p>
+        <p style={{ marginTop: "12px", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+          {status}
+        </p>
       )}
     </div>
   );

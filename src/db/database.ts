@@ -202,6 +202,22 @@ async function runMigrations(db: Database): Promise<void> {
     `);
     await markMigrationApplied(db, "create_capture_targets_table");
   }
+
+  // Saved theme presets — an in-app library alongside file export/
+  // import. Each row is a full snapshot (icons + text elements + button
+  // styles + theme settings) serialized as JSON, the same shape the
+  // file export produces, so both paths share one apply routine.
+  if (!(await isMigrationApplied(db, "create_theme_presets_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS theme_presets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_theme_presets_table");
+  }
 }
 
 // ---- Connection + schema setup -------------------------------------

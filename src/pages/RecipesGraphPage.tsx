@@ -328,7 +328,18 @@ export function RecipesGraphPage({
       </div>
 
       {/* Full-Window Expanding Canvas */}
-      <div style={{ flex: 1, width: "100%", border: "1px solid #334155", borderRadius: "8px" }}>
+      <div
+        style={{
+          flex: 1,
+          width: "100%",
+          border: "1px solid #334155",
+          borderRadius: "8px",
+          overflow: "hidden",
+          backgroundImage: theme.webBackgroundImage ? `url("${theme.webBackgroundImage}")` : "none",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -345,7 +356,11 @@ export function RecipesGraphPage({
             />
           </Panel>
 
-          <Background color="#64748b" bgColor={theme.webBackground} gap={16} />
+          <Background
+            color="#64748b"
+            bgColor={theme.webBackgroundImage ? "transparent" : theme.webBackground}
+            gap={16}
+          />
           <Controls />
         </ReactFlow>
       </div>

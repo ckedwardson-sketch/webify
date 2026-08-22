@@ -16,7 +16,7 @@
 .theme-mode-button {
   padding: 8px 20px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-elevated);
   color: var(--color-text);
   font-size: 0.9rem;
@@ -44,9 +44,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 8px;
+  padding: var(--space-sm) var(--space-xs);
   border-bottom: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: background-color 0.6s ease;
 }
 
@@ -61,7 +61,43 @@
   height: 30px;
   padding: 0;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   background: none;
+}
+
+.theme-color-row select {
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.85rem;
+  min-width: 160px;
+}
+
+.theme-number-input {
+  width: 60px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.theme-image-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-image-preview {
+  width: 44px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
 }
