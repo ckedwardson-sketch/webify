@@ -12,6 +12,8 @@ export function Sidebar({ view, onNavigate }: SidebarProps) {
     if (label === "Home") return view.type === "home";
     if (label === "Recipes") return view.type.startsWith("recipe");
     if (label === "Settings") return view.type.startsWith("settings");
+    if (label === "Responsibilities") return view.type.startsWith("responsibilit");
+    if (label === "Dreams") return view.type === "dreams-web" || view.type === "dream-detail";
     if (view.type === "placeholder") return view.label === label;
     return false;
   };
@@ -20,6 +22,8 @@ export function Sidebar({ view, onNavigate }: SidebarProps) {
     if (label === "Home") return onNavigate({ type: "home" });
     if (label === "Recipes") return onNavigate({ type: "recipes-home" });
     if (label === "Settings") return onNavigate({ type: "settings-home" });
+    if (label === "Responsibilities") return onNavigate({ type: "responsibilities-home" });
+    if (label === "Dreams") return onNavigate({ type: "dreams-web" });
     if (isPlaceholder) return onNavigate({ type: "placeholder", label });
   };
 

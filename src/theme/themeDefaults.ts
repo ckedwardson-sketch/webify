@@ -58,7 +58,24 @@ export interface WebThemeSettings {
   webCardImageStyle: string; // "boxed" | "fill"
 }
 
-export interface ThemeSettings extends GeneralThemeSettings, ScaleThemeSettings, WebThemeSettings {
+// Dream web colors. Same pattern as WebThemeSettings — not backed by
+// CSS variables, read directly via useTheme() by the dream graph nodes.
+export interface DreamWebThemeSettings {
+  dreamWebBackground: string;
+  dreamWebBackgroundImage: string; // raw data: URL, or "" for none
+  dreamNodeBackground: string;
+  dreamNodeOutlineColor: string;
+  dreamLinkColor: string;
+  dreamPriorityLow: string;
+  dreamPriorityMedium: string;
+  dreamPriorityHigh: string;
+}
+
+export interface ThemeSettings
+  extends GeneralThemeSettings,
+    ScaleThemeSettings,
+    WebThemeSettings,
+    DreamWebThemeSettings {
   mode: ThemeMode;
 }
 
@@ -97,6 +114,14 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "webCardShadow",
   "webCardRadius",
   "webCardImageStyle",
+  "dreamWebBackground",
+  "dreamWebBackgroundImage",
+  "dreamNodeBackground",
+  "dreamNodeOutlineColor",
+  "dreamLinkColor",
+  "dreamPriorityLow",
+  "dreamPriorityMedium",
+  "dreamPriorityHigh",
 ];
 
 // Maps each general-theme key to the CSS custom property it drives.
@@ -199,6 +224,17 @@ export const SCALE_DEFAULTS: ScaleThemeSettings = {
   density: DEFAULT_DENSITY,
 };
 
+export const DREAM_WEB_DEFAULTS: DreamWebThemeSettings = {
+  dreamWebBackground: "#1e1b2e",
+  dreamWebBackgroundImage: "",
+  dreamNodeBackground: "#4c1d95",
+  dreamNodeOutlineColor: "#a78bfa",
+  dreamLinkColor: "#a78bfa",
+  dreamPriorityLow: "#64748b",
+  dreamPriorityMedium: "#eab308",
+  dreamPriorityHigh: "#ef4444",
+};
+
 export function defaultsForMode(mode: ThemeMode): GeneralThemeSettings {
   return mode === "dark" ? DARK_DEFAULTS : LIGHT_DEFAULTS;
 }
@@ -208,4 +244,5 @@ export const DEFAULT_THEME: ThemeSettings = {
   ...LIGHT_DEFAULTS,
   ...SCALE_DEFAULTS,
   ...WEB_DEFAULTS,
+  ...DREAM_WEB_DEFAULTS,
 };

@@ -31,3 +31,42 @@ export interface FilterState {
   unproven: boolean;
   excludeMode: boolean;
 }
+
+export type DreamPriority = "low" | "medium" | "high";
+
+export interface Dream {
+  id: number;
+  name: string;
+  reasoning: string;
+  // A range, not a point — exact for near-term dreams (start === end),
+  // wider for far-off ones (e.g. a whole month or year) since those
+  // genuinely can't be pinned to a single day.
+  expectedDateStart?: string; // ISO date (yyyy-mm-dd)
+  expectedDateEnd?: string; // ISO date (yyyy-mm-dd)
+  priority: DreamPriority;
+  notes: string;
+  posX: number; // free-drag only when undated; date-derived otherwise
+  posY: number; // always free-drag
+  isAsleep: boolean;
+  sleepUntil?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DreamLink {
+  id: number;
+  sourceDreamId: number;
+  targetDreamId: number;
+}
+
+export type DreamHistoryField = "name" | "reasoning" | "expectedDate" | "priority" | "notes" | "sleep";
+
+export interface DreamHistoryEntry {
+  id: number;
+  dreamId: number;
+  field: DreamHistoryField;
+  oldValue: string | null;
+  newValue: string | null;
+  reason: string | null;
+  changedAt: string;
+}

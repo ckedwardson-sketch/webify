@@ -1,0 +1,187 @@
+.dream-web-shell {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+.dream-timeline {
+  width: 240px;
+  min-width: 240px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px 12px;
+  overflow-y: auto;
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-border);
+}
+
+.dream-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dream-timeline-title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--color-sidebar-text);
+}
+
+.dream-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dream-timeline-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+}
+
+.dream-timeline-item:hover {
+  background: var(--color-sidebar-hover-bg);
+}
+
+.dream-timeline-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dream-timeline-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dream-timeline-name {
+  font-size: 0.85rem;
+  color: var(--color-sidebar-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dream-timeline-date {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.dream-canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.dream-canvas {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+
+.dream-canvas-hint {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  max-width: 220px;
+}
+
+.dream-timeline-title-sleeping {
+  margin-top: 16px;
+}
+
+.dream-timeline-item-sleeping .dream-timeline-name,
+.dream-timeline-item-sleeping .dream-timeline-date {
+  color: var(--color-text-secondary);
+}
+
+.dream-node-menu-trigger {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+
+.dream-node-dropdown {
+  right: 0;
+  min-width: 150px;
+}
+
+.dream-filter-dropdown {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  width: 200px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  z-index: 100;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.dream-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dream-filter-checkbox {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.dream-filter-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  gap: 8px;
+}
+
+.dream-filter-date input {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: 0.8rem;
+  padding: 3px 6px;
+}

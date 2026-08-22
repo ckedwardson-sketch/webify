@@ -1,0 +1,133 @@
+.dream-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.dream-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-md);
+}
+
+.dream-field-label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.dream-field .inline-add-input {
+  margin-bottom: 0;
+}
+
+.dream-link-button {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--color-accent);
+  cursor: pointer;
+  padding: 0;
+}
+
+.dream-link-button:hover {
+  text-decoration: underline;
+}
+
+.dream-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dream-history-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dream-history-field {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.dream-history-change {
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.dream-history-time {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.dream-history-reason {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.dream-sleeping-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.dream-reason-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.dream-reason-modal {
+  width: 420px;
+  max-width: 90vw;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.dream-reason-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: var(--color-text);
+}
+
+.dream-reason-diff {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+
+.dream-reason-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

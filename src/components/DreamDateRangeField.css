@@ -1,0 +1,41 @@
+.dream-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dream-date-precision {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dream-date-precision-option {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  text-transform: capitalize;
+  cursor: pointer;
+  font: inherit;
+}
+
+.dream-date-precision-option.active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
+  border-color: var(--color-primary-bg);
+}
+
+.dream-date-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.dream-date-range-inputs .inline-add-input {
+  margin-bottom: 0;
+}

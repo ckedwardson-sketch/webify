@@ -14,6 +14,10 @@ import { SettingsIconsPage } from "./pages/SettingsIconsPage";
 import { SettingsTextPage } from "./pages/SettingsTextPage";
 import { SettingsButtonsPage } from "./pages/SettingsButtonsPage";
 import { SettingsThemePage } from "./pages/SettingsThemePage";
+import { ResponsibilitiesHomePage } from "./pages/ResponsibilitiesHomePage";
+import { ResponsibilityDetailPage } from "./pages/ResponsibilityDetailPage";
+import { DreamWebPage } from "./pages/DreamWebPage";
+import { DreamDetailPage } from "./pages/DreamDetailPage";
 import { IconProvider } from "./icons/IconContext";
 import { TextElementProvider } from "./icons/TextElementContext";
 import { ButtonStyleProvider } from "./icons/ButtonStyleContext";
@@ -38,9 +42,6 @@ export default function App() {
       case "recipes-home":
         return <RecipesHomePage onNavigate={setView} />;
       case "recipes-graph":
-        // Was dropping categoryId/categoryName here, so opening the
-        // web from inside a specific category showed every category
-        // instead of just that one.
         return (
           <RecipesGraphPage
             categoryId={view.categoryId}
@@ -75,6 +76,19 @@ export default function App() {
         return <SettingsButtonsPage onNavigate={setView} focusKey={view.focusKey} />;
       case "settings-theme":
         return <SettingsThemePage onNavigate={setView} focusKey={view.focusKey} />;
+      case "responsibilities-home":
+        return <ResponsibilitiesHomePage onNavigate={setView} />;
+      case "responsibility-detail":
+        return (
+          <ResponsibilityDetailPage
+            responsibilityId={view.responsibilityId}
+            onNavigate={setView}
+          />
+        );
+      case "dreams-web":
+        return <DreamWebPage onNavigate={setView} />;
+      case "dream-detail":
+        return <DreamDetailPage dreamId={view.dreamId} onNavigate={setView} />;
     }
   };
 

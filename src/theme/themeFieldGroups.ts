@@ -111,4 +111,17 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
       },
     ],
   },
+  {
+    title: "Dream web",
+    fields: [
+      { key: "dreamWebBackground", label: "Web background" },
+      { key: "dreamWebBackgroundImage", label: "Web background image", kind: "image" },
+      { key: "dreamNodeBackground", label: "Dream node background" },
+      { key: "dreamNodeOutlineColor", label: "Dream node outline color" },
+      { key: "dreamLinkColor", label: "Link line color" },
+      { key: "dreamPriorityLow", label: "Low priority color" },
+      { key: "dreamPriorityMedium", label: "Medium priority color" },
+      { key: "dreamPriorityHigh", label: "High priority color" },
+    ],
+  },
 ];
