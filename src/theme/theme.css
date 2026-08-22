@@ -1,25 +1,48 @@
+/* Light/dark preset palettes. Mirrored in themeDefaults.ts
+   (LIGHT_DEFAULTS / DARK_DEFAULTS) — keep both in sync. Per-field
+   overrides from Settings > Theme are applied on top of these as
+   inline custom properties on <html> by ThemeContext, which always win
+   over these rules regardless of specificity. */
 :root {
   --color-bg: #ffffff;
   --color-bg-secondary: #fafafa;
+  --color-bg-elevated: #ffffff;
   --color-text: #1a1a1a;
   --color-text-secondary: #666666;
   --color-border: #e5e5e5;
+  --color-border-strong: #999999;
   --color-sidebar-bg: #fafafa;
   --color-sidebar-text: #444444;
   --color-sidebar-text-active: #000000;
   --color-sidebar-hover-bg: #eeeeee;
   --color-sidebar-active-bg: #e8e8e8;
+  --color-input-bg: #ffffff;
+  --color-input-text: #1a1a1a;
+  --color-primary-bg: #333333;
+  --color-primary-text: #ffffff;
+  --color-primary-hover-bg: #000000;
+  --color-accent: #2563eb;
+  --color-danger: #cc0000;
 }
 
 :root[data-theme="dark"] {
   --color-bg: #16181d;
   --color-bg-secondary: #1e2128;
+  --color-bg-elevated: #22252c;
   --color-text: #e8e8e8;
   --color-text-secondary: #9aa0a8;
   --color-border: #30343c;
+  --color-border-strong: #4b5058;
   --color-sidebar-bg: #1a1c22;
   --color-sidebar-text: #c3c7cf;
   --color-sidebar-text-active: #ffffff;
   --color-sidebar-hover-bg: #262932;
   --color-sidebar-active-bg: #2c3038;
+  --color-input-bg: #22252c;
+  --color-input-text: #e8e8e8;
+  --color-primary-bg: #4b5563;
+  --color-primary-text: #ffffff;
+  --color-primary-hover-bg: #64748b;
+  --color-accent: #60a5fa;
+  --color-danger: #f87171;
 }

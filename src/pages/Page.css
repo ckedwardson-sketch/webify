@@ -29,16 +29,25 @@
   width: 30px;
   height: 30px;
   border-radius: 6px;
-  border: 1px solid #ddd;
-  background: #fff;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
-  color: #333;
+  color: var(--color-text);
 }
 
 .icon-button:hover {
-  background: #f5f5f5;
+  background: var(--color-bg-secondary);
+}
+
+.icon-button.danger {
+  color: var(--color-danger);
+}
+
+.icon-button.danger:hover {
+  background: var(--color-danger);
+  color: var(--color-primary-text);
 }
 
 .inline-add-input {
@@ -46,15 +55,17 @@
   box-sizing: border-box;
   padding: 8px 10px;
   margin-bottom: 12px;
-  border: 1px solid #999;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
   font-size: 0.9rem;
   font: inherit;
 }
 
 .inline-add-input:focus {
   outline: none;
-  border-color: #333;
+  border-color: var(--color-accent);
 }
 
 .list {
@@ -69,8 +80,10 @@
 .instructions-textarea {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
   font-size: 0.95rem;
   font-family: inherit;
   line-height: 1.5;
@@ -80,7 +93,7 @@
 
 .instructions-textarea:focus {
   outline: none;
-  border-color: #999;
+  border-color: var(--color-border-strong);
 }
 
 .save-row {
@@ -92,26 +105,26 @@
 
 .save-status {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--color-text-secondary);
 }
 
 .add-button {
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
-  background: #333;
-  color: #fff;
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
   font-size: 0.9rem;
   cursor: pointer;
   font: inherit;
 }
 
 .add-button:hover {
-  background: #000;
+  background: var(--color-primary-hover-bg);
 }
 
 .add-button:disabled {
-  background: #ccc;
+  background: var(--color-border-strong);
   cursor: default;
 }
 .cover-image-wrapper {
@@ -141,20 +154,20 @@
 }
 
 .add-button.danger {
-  background: #c00;
+  background: var(--color-danger);
 }
 
 .add-button.danger:hover {
-  background: #900;
+  filter: brightness(0.85);
 }
 
 .cover-image-placeholder {
   width: 100%;
   height: 140px;
-  border: 1.5px dashed #ccc;
+  border: 1.5px dashed var(--color-border-strong);
   border-radius: 8px;
   background: none;
-  color: #999;
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   cursor: pointer;
   margin-bottom: 16px;
@@ -162,8 +175,8 @@
 }
 
 .cover-image-placeholder:hover {
-  border-color: #999;
-  color: #666;
+  border-color: var(--color-accent);
+  color: var(--color-text);
 }
 
 .recipe-flags {
@@ -172,7 +185,7 @@
   gap: 16px;
   margin-bottom: 20px;
   font-size: 0.9rem;
-  color: #444;
+  color: var(--color-text);
 }
 
 .flag-checkbox {
@@ -203,13 +216,13 @@
 }
 
 .add-button.secondary {
-  background: #fff;
-  color: #333;
-  border: 1px solid #ccc;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
 }
 
 .add-button.secondary:hover {
-  background: #f5f5f5;
+  background: var(--color-bg-secondary);
 }
 
 .iterations-menu-wrapper {
@@ -223,7 +236,7 @@
 }
 
 .dropdown-empty {
-  color: #999;
+  color: var(--color-text-secondary);
   cursor: default;
 }
 
@@ -238,98 +251,20 @@
   padding: 0;
   margin-bottom: 16px;
   font-size: 0.85rem;
-  color: #888;
+  color: var(--color-text-secondary);
   cursor: pointer;
   font: inherit;
 }
 
 .parent-link:hover {
-  color: #333;
+  color: var(--color-text);
   text-decoration: underline;
 }
 
 .iteration-diff-label {
   display: block;
   font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 16px;
-}
-
-.iteration-diff-label .inline-add-input {
-  margin-top: 6px;
-  margin-bottom: 0;
-}
-/* ---- Add the rules below to the end of src/pages/Page.css ---- */
-
-.detail-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.detail-header .page-title {
-  margin: 0;
-}
-
-.detail-header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.add-button.secondary {
-  background: #fff;
-  color: #333;
-  border: 1px solid #ccc;
-}
-
-.add-button.secondary:hover {
-  background: #f5f5f5;
-}
-
-.iterations-menu-wrapper {
-  position: relative;
-}
-
-.iterations-dropdown {
-  min-width: 220px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.dropdown-empty {
-  color: #999;
-  cursor: default;
-}
-
-.dropdown-empty:hover {
-  background: none;
-}
-
-.parent-link {
-  display: inline-block;
-  background: none;
-  border: none;
-  padding: 0;
-  margin-bottom: 16px;
-  font-size: 0.85rem;
-  color: #888;
-  cursor: pointer;
-  font: inherit;
-}
-
-.parent-link:hover {
-  color: #333;
-  text-decoration: underline;
-}
-
-.iteration-diff-label {
-  display: block;
-  font-size: 0.85rem;
-  color: #666;
+  color: var(--color-text-secondary);
   margin-bottom: 16px;
 }
 
@@ -342,8 +277,9 @@
   font-size: 1.6rem;
   font-family: inherit;
   font-weight: inherit;
-  color: #1a1a1a;
-  border: 1px solid #999;
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   padding: 2px 8px;
   flex: 1;
@@ -352,5 +288,5 @@
 
 .title-rename-input:focus {
   outline: none;
-  border-color: #333;
+  border-color: var(--color-accent);
 }

@@ -1,4 +1,3 @@
-import React from "react";
 import { useIcons } from "./IconContext";
 import { ICON_REGISTRY } from "./registry";
 

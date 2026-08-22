@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { fetchThemeSettings, setThemeSetting, clearThemeSetting } from "../db/themeSettings";
-import { DEFAULT_THEME, ThemeSettings } from "./themeDefaults";
+import { CSS_VAR_MAP, DEFAULT_THEME, GeneralThemeSettings, ThemeSettings } from "./themeDefaults";
 
 interface ThemeContextValue {
   theme: ThemeSettings;
@@ -10,6 +10,8 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+const GENERAL_KEYS = Object.keys(CSS_VAR_MAP) as (keyof GeneralThemeSettings)[];
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [overrides, setOverrides] = useState<Partial<ThemeSettings>>({});
@@ -22,11 +24,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const theme: ThemeSettings = { ...DEFAULT_THEME, ...overrides };
 
-  // The general light/dark mode drives CSS variables defined in
-  // theme.css, scoped via this attribute on <html>.
+  // The general light/dark mode picks which CSS preset applies (see
+  // theme.css). Individual overrides are then applied as inline custom
+  // properties, which always win over the preset regardless of mode.
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme.mode);
   }, [theme.mode]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    for (const key of GENERAL_KEYS) {
+      const cssVar = CSS_VAR_MAP[key];
+      const override = overrides[key];
+      if (override) root.setProperty(cssVar, override);
+      else root.removeProperty(cssVar);
+    }
+  }, [overrides]);
 
   const setThemeValue = async (key: keyof ThemeSettings, value: string) => {
     await setThemeSetting(key, value);

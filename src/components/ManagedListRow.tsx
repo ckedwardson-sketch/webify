@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Icon } from "../icons/Icon";
 import { TextElement } from "../icons/TextElement";
+import "./ManagedListRow.css";
 
 interface ManagedListRowProps {
   label: string;
@@ -61,27 +62,16 @@ export function ManagedListRow({
       onDragStart={onDragStart}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDropOn}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "8px",
-        padding: "12px",
-        borderBottom: "1px solid #cbd5e1",
-        backgroundColor: "#ffffff",
-        borderRadius: "6px",
-        marginBottom: "8px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-      }}
     >
       {/* Primary Row: Drag Handle, Name, Add Image, Edit, Delete */}
-      <div style={{ display: "flex", alignItems: "center", width: "100%", gap: "10px" }}>
-        <span className="drag-handle" style={{ cursor: "grab", userSelect: "none", color: "#64748b" }}>
+      <div className="list-row-primary">
+        <span className="list-row-drag-handle">
           <TextElement elementKey="drag-handle" />
         </span>
 
         {editing ? (
           <input
-            className="row-edit-input"
+            className="list-row-edit-input"
             autoFocus
             value={val}
             onChange={(e) => setVal(e.target.value)}
@@ -93,35 +83,15 @@ export function ManagedListRow({
               }
             }}
             onBlur={confirm}
-            style={{ flex: 1, padding: "4px 8px", fontSize: "14px" }}
           />
         ) : (
-          <span
-            className="row-label"
-            onClick={onOpen}
-            style={{ cursor: "pointer", flex: 1, fontWeight: "600", fontSize: "15px", color: "#0f172a" }}
-          >
+          <span className="list-row-label" onClick={onOpen}>
             {label}
           </span>
         )}
 
         {onAddImage && (
-          <label
-            style={{
-              padding: "4px 10px",
-              fontSize: "12px",
-              backgroundColor: "#f1f5f9",
-              border: "1px solid #cbd5e1",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-              color: "#334155",
-              whiteSpace: "nowrap",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
+          <label className="list-row-add-image">
             <Icon iconKey="add-image" size={13} /> {imageUrl ? "Change Image" : "Add Image"}
             <input
               type="file"
@@ -142,18 +112,8 @@ export function ManagedListRow({
 
       {/* Secondary Row: State Flags */}
       {onToggleFlag && (
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "16px",
-            fontSize: "12px",
-            paddingLeft: "28px",
-            color: "#475569",
-            alignItems: "center",
-          }}
-        >
-          <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+        <div className="list-row-flags">
+          <label className="list-row-flag">
             <input
               type="checkbox"
               checked={isProven}
@@ -162,7 +122,7 @@ export function ManagedListRow({
             Proven
           </label>
 
-          <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+          <label className="list-row-flag">
             <input
               type="checkbox"
               checked={!isProven}
@@ -171,7 +131,7 @@ export function ManagedListRow({
             Unproven
           </label>
 
-          <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+          <label className="list-row-flag">
             <input
               type="checkbox"
               checked={isFrozen}
@@ -180,7 +140,7 @@ export function ManagedListRow({
             Frozen
           </label>
 
-          <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+          <label className="list-row-flag">
             <input
               type="checkbox"
               checked={isHomegrown}
@@ -189,7 +149,7 @@ export function ManagedListRow({
             Homegrown
           </label>
 
-          <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+          <label className="list-row-flag">
             <input
               type="checkbox"
               checked={isFavorite}

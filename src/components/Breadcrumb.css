@@ -4,7 +4,7 @@
   gap: 6px;
   margin-bottom: 20px;
   font-size: 0.85rem;
-  color: #888;
+  color: var(--color-text-secondary);
 }
 
 .breadcrumb-link {
@@ -12,20 +12,20 @@
   border: none;
   padding: 0;
   font: inherit;
-  color: #888;
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 
 .breadcrumb-link:hover {
-  color: #333;
+  color: var(--color-text);
   text-decoration: underline;
 }
 
 .breadcrumb-current {
-  color: #333;
+  color: var(--color-text);
   font-weight: 600;
 }
 
 .breadcrumb-sep {
-  color: #ccc;
+  color: var(--color-border-strong);
 }

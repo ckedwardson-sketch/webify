@@ -4,7 +4,9 @@ import { Breadcrumb } from "../components/Breadcrumb";
 import { StyledButton, resolveButtonStyle } from "../icons/StyledButton";
 import { useButtonStyles } from "../icons/ButtonStyleContext";
 import { BUTTON_STYLE_REGISTRY } from "../icons/buttonRegistry";
+import { useSettingsFocus } from "./useSettingsFocus";
 import "./Page.css";
+import "./SettingsShared.css";
 import "./SettingsIconsPage.css";
 
 type Draft = {
@@ -19,9 +21,16 @@ type Draft = {
   borderRadius: number;
 };
 
-export function SettingsButtonsPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function SettingsButtonsPage({
+  onNavigate,
+  focusKey,
+}: {
+  onNavigate: (view: View) => void;
+  focusKey?: string;
+}) {
   const { overrides, setOverride, clearOverride } = useButtonStyles();
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  useSettingsFocus(focusKey);
 
   const draftFor = (key: string): Draft => {
     if (drafts[key]) return drafts[key];
@@ -62,7 +71,7 @@ export function SettingsButtonsPage({ onNavigate }: { onNavigate: (view: View) =
         {BUTTON_STYLE_REGISTRY.map((def) => {
           const draft = draftFor(def.key);
           return (
-            <div key={def.key} className="button-settings-row">
+            <div key={def.key} className="button-settings-row" data-settings-key={def.key}>
               <div className="button-settings-preview">
                 <StyledButton buttonKey={def.key} />
               </div>

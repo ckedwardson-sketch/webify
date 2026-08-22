@@ -5,16 +5,17 @@ import { Icon } from "../icons/Icon";
 import { useTheme } from "../theme/ThemeContext";
 
 export function CategoryNode({ data }: { data: { label: string } }) {
+  const { theme } = useTheme();
   return (
     <div
       style={{
         padding: "10px 16px",
         borderRadius: "8px",
-        background: "#1e3a8a",
+        background: theme.webCategoryNodeBackground,
         color: "#ffffff",
         fontWeight: "bold",
         fontSize: "14px",
-        border: "2px solid #3b82f6",
+        border: `2px solid ${theme.accent}`,
         textAlign: "center",
         boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
       }}
@@ -173,6 +174,7 @@ export function RecipeCardNode({
 }
 
 export function IterationNode({ data }: { data: { label: string; difference: string } }) {
+  const { theme } = useTheme();
   return (
     <div
       style={{
@@ -181,10 +183,10 @@ export function IterationNode({ data }: { data: { label: string; difference: str
         boxSizing: "border-box",
         padding: "8px 10px",
         borderRadius: "6px",
-        background: "#0284c7",
+        background: theme.webIterationNodeBackground,
         color: "#ffffff",
         fontSize: "11px",
-        border: "1px dashed #38bdf8",
+        border: `1px dashed ${theme.accent}`,
         boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
       }}
     >

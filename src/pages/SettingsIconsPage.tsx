@@ -4,13 +4,22 @@ import { Breadcrumb } from "../components/Breadcrumb";
 import { Icon } from "../icons/Icon";
 import { useIcons } from "../icons/IconContext";
 import { ICON_REGISTRY } from "../icons/registry";
+import { useSettingsFocus } from "./useSettingsFocus";
 import "./Page.css";
+import "./SettingsShared.css";
 import "./SettingsIconsPage.css";
 
-export function SettingsIconsPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function SettingsIconsPage({
+  onNavigate,
+  focusKey,
+}: {
+  onNavigate: (view: View) => void;
+  focusKey?: string;
+}) {
   const { overrides, setOverride, clearOverride } = useIcons();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  useSettingsFocus(focusKey);
 
   const triggerChange = (key: string) => {
     setActiveKey(key);
@@ -52,7 +61,7 @@ export function SettingsIconsPage({ onNavigate }: { onNavigate: (view: View) => 
 
       <div className="icon-settings-list">
         {ICON_REGISTRY.map((def) => (
-          <div key={def.key} className="icon-settings-row">
+          <div key={def.key} className="icon-settings-row" data-settings-key={def.key}>
             <div className="icon-settings-preview">
               <Icon iconKey={def.key} size={26} />
             </div>

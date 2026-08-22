@@ -1,19 +1,32 @@
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { useTheme } from "../theme/ThemeContext";
-import { ThemeSettings } from "../theme/themeDefaults";
+import { defaultsForMode, ThemeSettings } from "../theme/themeDefaults";
+import { THEME_COLOR_GROUPS } from "../theme/themeFieldGroups";
+import { useSettingsFocus } from "./useSettingsFocus";
 import "./Page.css";
+import "./SettingsShared.css";
 import "./SettingsThemePage.css";
 
-const WEB_COLOR_FIELDS: { key: keyof ThemeSettings; label: string }[] = [
-  { key: "webBackground", label: "Web background" },
-  { key: "webNodeProvenBackground", label: "Proven recipe node background" },
-  { key: "webNodeUnprovenBackground", label: "Unproven recipe node background" },
-  { key: "webNodeOutlineColor", label: "Recipe node outline color" },
-];
-
-export function SettingsThemePage({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function SettingsThemePage({
+  onNavigate,
+  focusKey,
+}: {
+  onNavigate: (view: View) => void;
+  focusKey?: string;
+}) {
   const { theme, overrides, setThemeValue, resetThemeValue } = useTheme();
+  const modeDefaults = defaultsForMode(theme.mode);
+  useSettingsFocus(focusKey);
+
+  const valueFor = (key: keyof ThemeSettings): string => {
+    const override = overrides[key];
+    if (override) return override;
+    if (key in modeDefaults) {
+      return (modeDefaults as unknown as Record<string, string>)[key as string];
+    }
+    return theme[key] as string;
+  };
 
   return (
     <div className="page">
@@ -25,8 +38,8 @@ export function SettingsThemePage({ onNavigate }: { onNavigate: (view: View) => 
       />
       <h1 className="page-title">Theme</h1>
       <p className="page-text">
-        Choose a general light or dark theme, and customize the recipe web's background and node
-        colors.
+        Choose a general light or dark theme, then fine-tune any individual color — your changes
+        stick even if you switch modes later.
       </p>
 
       <div className="theme-section">
@@ -47,26 +60,28 @@ export function SettingsThemePage({ onNavigate }: { onNavigate: (view: View) => 
         </div>
       </div>
 
-      <div className="theme-section">
-        <h2 className="theme-section-title">Recipe web</h2>
-        <div className="theme-color-list">
-          {WEB_COLOR_FIELDS.map(({ key, label }) => (
-            <div key={key} className="theme-color-row">
-              <span className="theme-color-label">{label}</span>
-              <input
-                type="color"
-                value={theme[key]}
-                onChange={(e) => setThemeValue(key, e.target.value)}
-              />
-              {overrides[key] && (
-                <button className="add-button danger" onClick={() => resetThemeValue(key)}>
-                  Reset
-                </button>
-              )}
-            </div>
-          ))}
+      {THEME_COLOR_GROUPS.map((group) => (
+        <div className="theme-section" key={group.title}>
+          <h2 className="theme-section-title">{group.title}</h2>
+          <div className="theme-color-list">
+            {group.fields.map(({ key, label }) => (
+              <div key={key} className="theme-color-row" data-settings-key={key}>
+                <span className="theme-color-label">{label}</span>
+                <input
+                  type="color"
+                  value={valueFor(key)}
+                  onChange={(e) => setThemeValue(key, e.target.value)}
+                />
+                {overrides[key] && (
+                  <button className="add-button danger" onClick={() => resetThemeValue(key)}>
+                    Reset
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ))}
     </div>
   );
 }

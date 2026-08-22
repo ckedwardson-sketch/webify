@@ -10,7 +10,8 @@
   align-items: center;
   gap: 14px;
   padding: 10px 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 4px;
 }
 
 .icon-settings-preview {
@@ -20,8 +21,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
-  border: 1px solid #eee;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 1.2rem;
 }
@@ -33,12 +34,12 @@
 
 .icon-settings-label {
   font-size: 0.9rem;
-  color: #222;
+  color: var(--color-text);
 }
 
 .icon-settings-key {
   font-size: 0.75rem;
-  color: #999;
+  color: var(--color-text-secondary);
   font-family: monospace;
 }
 
@@ -54,29 +55,32 @@
   margin-top: 6px;
 }
 
+.text-settings-text,
+.text-settings-size {
+  padding: 4px 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: 0.85rem;
+}
+
 .text-settings-text {
   width: 60px;
-  padding: 4px 6px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.85rem;
 }
 
 .text-settings-size {
   width: 55px;
-  padding: 4px 6px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.85rem;
 }
 
 .text-settings-color {
   width: 34px;
   height: 28px;
   padding: 0;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border-strong);
   border-radius: 4px;
   cursor: pointer;
+  background: none;
 }
 
 .button-settings-row {
@@ -84,7 +88,8 @@
   align-items: flex-start;
   gap: 14px;
   padding: 12px 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 4px;
 }
 
 .button-settings-preview {
@@ -108,13 +113,15 @@
   flex-direction: column;
   gap: 3px;
   font-size: 0.75rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .button-settings-field input {
   padding: 4px 6px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border-strong);
   border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
   font-size: 0.85rem;
   width: 120px;
 }
@@ -128,4 +135,5 @@
   height: 28px;
   padding: 0;
   cursor: pointer;
+  background: none;
 }

@@ -67,13 +67,13 @@ export default function App() {
       case "settings-home":
         return <SettingsHomePage onNavigate={setView} />;
       case "settings-icons":
-        return <SettingsIconsPage onNavigate={setView} />;
+        return <SettingsIconsPage onNavigate={setView} focusKey={view.focusKey} />;
       case "settings-text":
-        return <SettingsTextPage onNavigate={setView} />;
+        return <SettingsTextPage onNavigate={setView} focusKey={view.focusKey} />;
       case "settings-buttons":
-        return <SettingsButtonsPage onNavigate={setView} />;
+        return <SettingsButtonsPage onNavigate={setView} focusKey={view.focusKey} />;
       case "settings-theme":
-        return <SettingsThemePage onNavigate={setView} />;
+        return <SettingsThemePage onNavigate={setView} focusKey={view.focusKey} />;
     }
   };
 

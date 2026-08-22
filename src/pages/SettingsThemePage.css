@@ -15,23 +15,23 @@
 
 .theme-mode-button {
   padding: 8px 20px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
-  background: #fff;
-  color: #333;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
   font-size: 0.9rem;
   cursor: pointer;
   font: inherit;
 }
 
 .theme-mode-button:hover {
-  background: #f5f5f5;
+  background: var(--color-bg-secondary);
 }
 
 .theme-mode-button.active {
-  background: #333;
-  color: #fff;
-  border-color: #333;
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
+  border-color: var(--color-primary-bg);
 }
 
 .theme-color-list {
@@ -45,7 +45,9 @@
   align-items: center;
   gap: 12px;
   padding: 10px 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 4px;
+  transition: background-color 0.6s ease;
 }
 
 .theme-color-label {
@@ -58,7 +60,8 @@
   width: 44px;
   height: 30px;
   padding: 0;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   cursor: pointer;
+  background: none;
 }

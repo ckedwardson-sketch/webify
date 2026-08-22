@@ -155,7 +155,7 @@ export function RecipesGraphPage({
             source: catNodeId,
             target: recNodeId,
             animated: true,
-            style: { stroke: "#64748b", strokeWidth: 2 },
+            style: { stroke: theme.webNodeOutlineColor, strokeWidth: 2 },
           });
 
           // Iterations arranged 2-wide directly above their parent
@@ -199,7 +199,7 @@ export function RecipesGraphPage({
                   id: `e-${recNodeId}-${iterNodeId}`,
                   source: recNodeId,
                   target: iterNodeId,
-                  style: { stroke: "#38bdf8", strokeDasharray: "5,5" },
+                  style: { stroke: theme.accent, strokeDasharray: "5,5" },
                 });
               }
             }
@@ -211,7 +211,7 @@ export function RecipesGraphPage({
 
       setNodes(computedNodes);
       setEdges(computedEdges);
-  }, [rawData, categoryId, filters, expandedIterations]);
+  }, [rawData, categoryId, filters, expandedIterations, theme]);
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     if (node.type === "recipeCardNode" || node.type === "iterationNode") {

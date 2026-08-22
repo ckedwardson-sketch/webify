@@ -4,12 +4,21 @@ import { Breadcrumb } from "../components/Breadcrumb";
 import { TextElement } from "../icons/TextElement";
 import { useTextElements } from "../icons/TextElementContext";
 import { TEXT_ELEMENT_REGISTRY } from "../icons/textRegistry";
+import { useSettingsFocus } from "./useSettingsFocus";
 import "./Page.css";
+import "./SettingsShared.css";
 import "./SettingsIconsPage.css";
 
-export function SettingsTextPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function SettingsTextPage({
+  onNavigate,
+  focusKey,
+}: {
+  onNavigate: (view: View) => void;
+  focusKey?: string;
+}) {
   const { overrides, setOverride, clearOverride } = useTextElements();
   const [drafts, setDrafts] = useState<Record<string, { text: string; size: number; color: string }>>({});
+  useSettingsFocus(focusKey);
 
   const draftFor = (key: string) => {
     if (drafts[key]) return drafts[key];
@@ -57,7 +66,7 @@ export function SettingsTextPage({ onNavigate }: { onNavigate: (view: View) => v
         {TEXT_ELEMENT_REGISTRY.map((def) => {
           const draft = draftFor(def.key);
           return (
-            <div key={def.key} className="icon-settings-row">
+            <div key={def.key} className="icon-settings-row" data-settings-key={def.key}>
               <div className="icon-settings-preview">
                 <TextElement elementKey={def.key} />
               </div>
