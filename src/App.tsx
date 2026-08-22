@@ -18,6 +18,7 @@ import { IconProvider } from "./icons/IconContext";
 import { TextElementProvider } from "./icons/TextElementContext";
 import { ButtonStyleProvider } from "./icons/ButtonStyleContext";
 import { ThemeProvider } from "./theme/ThemeContext";
+import { ScreenCaptureWidget } from "./capture/ScreenCaptureWidget";
 import "./App.css";
 
 export default function App() {
@@ -96,6 +97,7 @@ export default function App() {
               <Sidebar view={view} onNavigate={setView} />
               <main className="app-content">{renderPage()}</main>
             </div>
+            <ScreenCaptureWidget view={view} onNavigate={setView} />
           </ButtonStyleProvider>
         </TextElementProvider>
       </IconProvider>

@@ -189,6 +189,19 @@ async function runMigrations(db: Database): Promise<void> {
     `);
     await markMigrationApplied(db, "create_theme_settings_table");
   }
+
+  // Screen-capture batch selection — which pages/categories/recipes are
+  // checked in the capture widget's checklist. Presence of a row means
+  // "included in the next batch capture"; this persists so the same
+  // set gets captured every time until the user changes it.
+  if (!(await isMigrationApplied(db, "create_capture_targets_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS capture_targets (
+        target_key TEXT PRIMARY KEY
+      )
+    `);
+    await markMigrationApplied(db, "create_capture_targets_table");
+  }
 }
 
 // ---- Connection + schema setup -------------------------------------
