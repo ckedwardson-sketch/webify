@@ -16,7 +16,9 @@ export type View =
   | { type: "settings-text"; focusKey?: string }
   | { type: "settings-buttons"; focusKey?: string }
   | { type: "settings-theme"; focusKey?: string }
+  | { type: "settings-issues" }
   | { type: "responsibilities-home" }
+  | { type: "responsibilities-manage" }
   | { type: "responsibility-detail"; responsibilityId: number }
   | { type: "dreams-web" }
   | { type: "dream-detail"; dreamId: number };

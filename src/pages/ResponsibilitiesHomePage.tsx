@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { View } from "../types/nav";
-import { Responsibility, ResponsibilityCategory, ResponsibilityCompletion } from "../types/responsibility";
+import { Responsibility, ResponsibilityCompletion } from "../types/responsibility";
 import {
   fetchResponsibilities,
   fetchAllCompletions,
-  addResponsibility,
   markComplete,
+  unmarkComplete,
+  unmarkCompletionsInRange,
 } from "../db/responsibilities";
 import {
   isPendingNow,
@@ -13,6 +14,8 @@ import {
   dailyCompletionPercent,
   minutesFromTimeString,
   todayISO,
+  startOfWeekISO,
+  endOfWeekISO,
   WEEKDAY_LABELS,
 } from "../responsibilities/scheduling";
 import "./Page.css";
@@ -22,8 +25,6 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
   const [responsibilities, setResponsibilities] = useState<Responsibility[]>([]);
   const [completions, setCompletions] = useState<ResponsibilityCompletion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingCategory, setAddingCategory] = useState<ResponsibilityCategory | null>(null);
-  const [newName, setNewName] = useState("");
 
   const load = async () => {
     const [r, c] = await Promise.all([fetchResponsibilities(), fetchAllCompletions()]);
@@ -38,21 +39,29 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
 
   const daily = responsibilities.filter((r) => r.category === "daily");
   const weekly = responsibilities.filter((r) => r.category === "weekly");
-  const yearly = responsibilities.filter((r) => r.category === "yearly");
-  const pending = responsibilities.filter((r) => isPendingNow(r, completions));
 
-  const handleQuickComplete = async (r: Responsibility) => {
-    await markComplete(r.id, todayISO());
+  // The ONLY tasks that ever appear with a checkbox: currently pending,
+  // or already completed for the period they'd otherwise be pending
+  // in. A yearly task that isn't due for another 11 months is neither
+  // — it never shows up here at all, checkbox or otherwise.
+  const currentTasks = responsibilities.filter(
+    (r) => isPendingNow(r, completions) || isCompletedForCurrentPeriod(r, completions)
+  );
+
+  const handleToggleComplete = async (r: Responsibility, currentlyDone: boolean) => {
+    if (currentlyDone) {
+      if (r.category === "daily") {
+        await unmarkComplete(r.id, todayISO());
+      } else if (r.category === "weekly") {
+        await unmarkCompletionsInRange(r.id, startOfWeekISO(), endOfWeekISO());
+      } else {
+        const year = String(new Date().getFullYear());
+        await unmarkCompletionsInRange(r.id, `${year}-01-01`, `${year}-12-31`);
+      }
+    } else {
+      await markComplete(r.id, todayISO());
+    }
     await load();
-  };
-
-  const confirmAdd = async (category: ResponsibilityCategory) => {
-    const name = newName.trim();
-    setAddingCategory(null);
-    setNewName("");
-    if (!name) return;
-    const id = await addResponsibility(name, category);
-    onNavigate({ type: "responsibility-detail", responsibilityId: id });
   };
 
   if (loading) {
@@ -68,34 +77,65 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
 
   return (
     <div className="page resp-page">
-      <h1 className="page-title">Responsibilities</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h1 className="page-title">Responsibilities</h1>
+        <button
+          className="add-button secondary"
+          onClick={() => onNavigate({ type: "responsibilities-manage" })}
+        >
+          Manage
+        </button>
+      </div>
 
-      <div className="resp-quick-grid">
-        {/* 1. Pending list */}
-        <div className="resp-widget">
-          <div className="resp-widget-title">Pending</div>
-          {pending.length === 0 ? (
-            <p className="resp-empty">Nothing pending right now.</p>
-          ) : (
-            <ul className="resp-pending-list">
-              {pending.map((r) => (
-                <li key={r.id} className="resp-pending-item">
+      <div className="resp-widget" style={{ marginBottom: 16 }}>
+        <div className="resp-widget-title">Current Tasks</div>
+        {currentTasks.length === 0 ? (
+          <p className="resp-empty">Nothing due right now.</p>
+        ) : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            {currentTasks.map((r) => {
+              const done = isCompletedForCurrentPeriod(r, completions);
+              return (
+                <li
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 4px",
+                    borderBottom: "1px solid #eee",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    onChange={() => handleToggleComplete(r, done)}
+                    title={done ? "Mark not done" : "Mark done"}
+                  />
                   <button
-                    className="resp-pending-label"
                     onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
+                    style={{
+                      flex: 1,
+                      textAlign: "left",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "0.9rem",
+                      color: done ? "#999" : "#222",
+                      textDecoration: done ? "line-through" : "none",
+                    }}
                   >
                     <span className="resp-icon">{r.icon}</span> {r.name}
                   </button>
-                  <button className="resp-done-btn" onClick={() => handleQuickComplete(r)}>
-                    Done
-                  </button>
                 </li>
-              ))}
-            </ul>
-          )}
-        </div>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
-        {/* 2. Hourly timeline (daily only) */}
+      <div className="resp-quick-grid">
+        {/* Hourly timeline (daily only) */}
         <div className="resp-widget">
           <div className="resp-widget-title">Today</div>
           <div className="resp-hourly-track">
@@ -126,7 +166,7 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
           </div>
         </div>
 
-        {/* 3. Weekly timeline (weekly/biweekly only) */}
+        {/* Weekly timeline (weekly/biweekly only) */}
         <div className="resp-widget">
           <div className="resp-widget-title">This Week</div>
           <div className="resp-week-grid">
@@ -157,7 +197,7 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
           </div>
         </div>
 
-        {/* 4. Completion bar */}
+        {/* Completion bar */}
         <div className="resp-widget">
           <div className="resp-widget-title">Today's Completion</div>
           {(() => {
@@ -173,65 +213,6 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
           })()}
         </div>
       </div>
-
-      {(
-        [
-          ["daily", "Daily"],
-          ["weekly", "Weekly / Bi-weekly"],
-          ["yearly", "Yearly"],
-        ] as [ResponsibilityCategory, string][]
-      ).map(([category, title]) => {
-        const items =
-          category === "daily" ? daily : category === "weekly" ? weekly : yearly;
-        return (
-          <div key={category} className="resp-category-section">
-            <div className="resp-category-header">
-              <h2 className="resp-category-title">{title}</h2>
-              <button className="icon-button" onClick={() => setAddingCategory(category)} title="Add">
-                +
-              </button>
-            </div>
-
-            {addingCategory === category && (
-              <input
-                className="inline-add-input"
-                autoFocus
-                placeholder="New responsibility name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmAdd(category);
-                  if (e.key === "Escape") {
-                    setAddingCategory(null);
-                    setNewName("");
-                  }
-                }}
-                onBlur={() => {
-                  setAddingCategory(null);
-                  setNewName("");
-                }}
-              />
-            )}
-
-            {items.length === 0 ? (
-              <p className="resp-empty">Nothing here yet.</p>
-            ) : (
-              <ul className="list">
-                {items.map((r) => (
-                  <li key={r.id}>
-                    <button
-                      className="list-item"
-                      onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
-                    >
-                      <span className="resp-icon">{r.icon}</span> {r.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }

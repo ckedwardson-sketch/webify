@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import { View } from "../types/nav";
 import { buildCaptureTargets, CaptureTarget } from "./captureTargetList";
 import { fetchCaptureSelection, setCaptureTargetSelected } from "../db/captureTargets";
+import { ReportIssueModal } from "../components/ReportIssueModal";
 
 interface Capture {
   dataUrl: string;
@@ -29,6 +30,7 @@ export function ScreenCaptureWidget({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [batchProgress, setBatchProgress] = useState<string | null>(null);
+  const [showReportIssue, setShowReportIssue] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +57,13 @@ export function ScreenCaptureWidget({
 
   const captureThisPageNow = async () => {
     await captureCurrentPage(`Current page (${new Date().toLocaleTimeString()})`);
+  };
+
+  // Same raw screenshot mechanism as captureCurrentPage, just handed
+  // to the ReportIssueModal instead of added to the batch list.
+  const captureForIssueReport = async (): Promise<string> => {
+    const canvas = await html2canvas(document.body, { backgroundColor: null });
+    return canvas.toDataURL("image/png");
   };
 
   const runBatchCapture = async () => {
@@ -213,7 +222,7 @@ export function ScreenCaptureWidget({
             style={{
               width: "100%",
               padding: "6px",
-              marginBottom: 8,
+              marginBottom: 6,
               background: "#f5f5f5",
               border: "1px solid #ccc",
               borderRadius: 4,
@@ -222,6 +231,25 @@ export function ScreenCaptureWidget({
             }}
           >
             Capture Just This Page
+          </button>
+
+          <button
+            onClick={() => setShowReportIssue(true)}
+            disabled={batchProgress !== null}
+            style={{
+              width: "100%",
+              padding: "6px",
+              marginBottom: 8,
+              background: "#fef2f2",
+              border: "1px solid #fca5a5",
+              color: "#b91c1c",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Report Issue
           </button>
 
           {captures.length > 0 && (
@@ -310,6 +338,13 @@ export function ScreenCaptureWidget({
       >
         📷
       </button>
+
+      {showReportIssue && (
+        <ReportIssueModal
+          onCapture={captureForIssueReport}
+          onClose={() => setShowReportIssue(false)}
+        />
+      )}
     </div>
   );
 }

@@ -351,7 +351,24 @@ async function runMigrations(db: Database): Promise<void> {
     `);
     await markMigrationApplied(db, "create_responsibility_completions_table");
   }
+
+  if (!(await isMigrationApplied(db, "create_issue_reports_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS issue_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        note TEXT NOT NULL,
+        screenshot_data TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_issue_reports_table");
+  }
 }
+
+  // Issue reports — a note + screenshot saved from the capture widget's
+  // "Report Issue" button, for logging problems while using the app
+  // instead of coding, viewed later from Settings > Reported Issues.
+ 
 
 // ---- Connection + schema setup -------------------------------------
 

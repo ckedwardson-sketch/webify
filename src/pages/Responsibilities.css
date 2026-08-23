@@ -417,3 +417,26 @@
   cursor: pointer;
   font-size: 0.75rem;
 }
+/* ---- Add the rules below to the end of src/pages/Responsibilities.css ---- */
+
+.resp-task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resp-task-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.resp-task-name {
+  flex: 1;
+}
+
+.resp-task-done {
+  color: #999;
+  text-decoration: line-through;
+}

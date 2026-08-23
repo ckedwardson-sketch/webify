@@ -188,3 +188,18 @@ export async function unmarkComplete(responsibilityId: number, occurrenceDate: s
     [responsibilityId, occurrenceDate]
   );
 }
+
+// Clears every completion within a date range for one responsibility —
+// used to "uncheck" a weekly/yearly task regardless of which exact day
+// within its current period it was originally marked done on.
+export async function unmarkCompletionsInRange(
+  responsibilityId: number,
+  startDate: string,
+  endDate: string
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM responsibility_completions WHERE responsibility_id = $1 AND occurrence_date >= $2 AND occurrence_date <= $3",
+    [responsibilityId, startDate, endDate]
+  );
+}

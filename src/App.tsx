@@ -14,7 +14,9 @@ import { SettingsIconsPage } from "./pages/SettingsIconsPage";
 import { SettingsTextPage } from "./pages/SettingsTextPage";
 import { SettingsButtonsPage } from "./pages/SettingsButtonsPage";
 import { SettingsThemePage } from "./pages/SettingsThemePage";
+import { SettingsIssuesPage } from "./pages/SettingsIssuesPage";
 import { ResponsibilitiesHomePage } from "./pages/ResponsibilitiesHomePage";
+import { ResponsibilitiesManagePage } from "./pages/ResponsibilitiesManagePage";
 import { ResponsibilityDetailPage } from "./pages/ResponsibilityDetailPage";
 import { DreamWebPage } from "./pages/DreamWebPage";
 import { DreamDetailPage } from "./pages/DreamDetailPage";
@@ -76,8 +78,12 @@ export default function App() {
         return <SettingsButtonsPage onNavigate={setView} focusKey={view.focusKey} />;
       case "settings-theme":
         return <SettingsThemePage onNavigate={setView} focusKey={view.focusKey} />;
+      case "settings-issues":
+        return <SettingsIssuesPage onNavigate={setView} />;
       case "responsibilities-home":
         return <ResponsibilitiesHomePage onNavigate={setView} />;
+      case "responsibilities-manage":
+        return <ResponsibilitiesManagePage onNavigate={setView} />;
       case "responsibility-detail":
         return (
           <ResponsibilityDetailPage

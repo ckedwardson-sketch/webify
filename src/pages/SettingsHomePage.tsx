@@ -24,6 +24,7 @@ const NAV_CARDS: { view: View; title: string; desc: string }[] = [
   { view: { type: "settings-text" }, title: "Text Elements", desc: "Editor toolbar letters, size, color" },
   { view: { type: "settings-buttons" }, title: "Buttons", desc: "Text, font, colors, box size" },
   { view: { type: "settings-theme" }, title: "Theme", desc: "Colors, fonts, radius, density, backgrounds" },
+  { view: { type: "settings-issues" }, title: "Reported Issues", desc: "Notes + screenshots saved from the capture button" },
 ];
 
 export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {

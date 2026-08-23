@@ -89,6 +89,11 @@ export function isCompletedForCurrentPeriod(
 }
 
 // Should this show up as an outstanding/pending task right now?
+// ---- Replace isPendingNow and getNextOccurrenceMoment in
+// ---- src/responsibilities/scheduling.ts with these two versions.
+// ---- Everything else in that file is unchanged.
+
+// Should this show up as an outstanding/pending task right now?
 export function isPendingNow(
   r: Responsibility,
   completions: ResponsibilityCompletion[],
@@ -114,6 +119,17 @@ export function isPendingNow(
   // due moment — still shown (as overdue) after that moment passes,
   // right up until it's actually completed.
   const nextMoment = getNextOccurrenceMoment(r, date);
+
+  if (!nextMoment) {
+    // No real alarm/due time configured for this responsibility — a
+    // lead-time window has nothing meaningful to count back from
+    // (previously this silently anchored to midnight, which opened
+    // the window at a meaningless, unconfigured hour the night
+    // before). Fall back to whole-period pending instead.
+    if (r.category === "weekly") return true;
+    return isWithinYearlyRange(r.schedule as YearlySchedule, date);
+  }
+
   const windowStart = new Date(nextMoment.getTime() - lead * 3600 * 1000);
   return date >= windowStart;
 }
@@ -126,12 +142,10 @@ function timeStringToDate(dateBase: Date, time: string): Date {
 }
 
 // The next real moment (as a Date) this responsibility is "due" — the
-// anchor point the pending lead-time counts back from. This is a
-// practical approximation, not a perfectly precise scheduler: for
-// weekly it uses the first allowed day of the current week, for
-// yearly the start of this year's range, each combined with the
-// earliest configured alarm time (or midnight if none).
-export function getNextOccurrenceMoment(r: Responsibility, ref = new Date()): Date {
+// anchor point the pending lead-time counts back from. Returns null
+// when there's no real configured alarm/due time to anchor to (daily
+// always has a suggestedTime, so it never returns null).
+export function getNextOccurrenceMoment(r: Responsibility, ref = new Date()): Date | null {
   if (r.category === "daily") {
     const s = r.schedule as DailySchedule;
     return timeStringToDate(ref, s.suggestedTime || "00:00");
@@ -139,14 +153,15 @@ export function getNextOccurrenceMoment(r: Responsibility, ref = new Date()): Da
 
   if (r.category === "weekly") {
     const s = r.schedule as WeeklySchedule;
+    if (!s.alarms[0]) return null; // no configured time — nothing to anchor to
+
     const weekStart = new Date(startOfWeekISO(ref));
     const activeDays = s.allowedDays.length ? s.allowedDays : [1];
     // Monday-based ordering: treat Sunday (0) as day 7 so it sorts last.
     const firstDay = Math.min(...activeDays.map((d) => (d === 0 ? 7 : d)));
     const dueDate = new Date(weekStart);
     dueDate.setDate(dueDate.getDate() + (firstDay - 1));
-    const time = s.alarms[0] || "00:00";
-    return timeStringToDate(dueDate, time);
+    return timeStringToDate(dueDate, s.alarms[0]);
   }
 
   // yearly
@@ -158,9 +173,11 @@ export function getNextOccurrenceMoment(r: Responsibility, ref = new Date()): Da
   if (wraps) endDate.setFullYear(year + 1);
   if (ref > endDate) dueDate.setFullYear(year + 1); // this year's window already passed — anchor to next year
 
-  let time = "00:00";
+  let time: string | null = null;
   if (s.alarm?.mode === "day" && s.alarm.dayTimes[0]) time = s.alarm.dayTimes[0];
   if (s.alarm?.mode === "week" && s.alarm.weekTimes[0]) time = s.alarm.weekTimes[0];
+  if (!time) return null; // no configured time — nothing to anchor to
+
   return timeStringToDate(dueDate, time);
 }
 
