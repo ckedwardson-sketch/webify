@@ -133,7 +133,7 @@ export function ProjectDetailPage({
         ]}
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="page-header">
         {editingName ? (
           <input
             className="title-rename-input"
@@ -203,10 +203,8 @@ export function ProjectDetailPage({
       </div>
 
       <div className="project-widgets-section">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 className="project-field-label" style={{ margin: 0 }}>
-            Widgets
-          </h2>
+        <div className="project-widgets-header">
+          <h2 className="project-field-label">Widgets</h2>
           <button className="icon-button" onClick={() => setShowAddWidget((v) => !v)} title="Add widget">
             +
           </button>

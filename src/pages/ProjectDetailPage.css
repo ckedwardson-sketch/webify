@@ -6,14 +6,24 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #555;
+  color: var(--color-text-secondary);
   margin-bottom: 4px;
 }
 
 .project-widgets-section {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--color-border);
+}
+
+.project-widgets-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.project-widgets-header .project-field-label {
+  margin: 0;
 }
 
 .project-add-widget-menu {
@@ -42,14 +52,14 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fafafa;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
   cursor: pointer;
 }
 
 .project-widget-card-open:hover {
-  background: #f0f0f0;
+  background: var(--color-border);
 }
 
 .project-widget-card-icon {
@@ -58,7 +68,7 @@
 
 .project-widget-card-title {
   font-size: 0.85rem;
-  color: #333;
+  color: var(--color-text);
 }
 
 .project-widget-card-delete {
