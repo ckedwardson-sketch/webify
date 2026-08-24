@@ -8,7 +8,10 @@ import {
   fetchWidgetsForProject,
   addWidget,
   deleteWidget,
+  deleteProject,
 } from "../db/projects";
+import { fetchDream } from "../db/dreams";
+import { Breadcrumb } from "../components/Breadcrumb";
 import { DreamDateRangeField } from "../components/DreamDateRangeField";
 import "./Page.css";
 import "./ProjectDetailPage.css";
@@ -21,6 +24,7 @@ export function ProjectDetailPage({
   onNavigate: (view: View) => void;
 }) {
   const [project, setProject] = useState<Project | null>(null);
+  const [dreamName, setDreamName] = useState("");
   const [widgets, setWidgets] = useState<ProjectWidget[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState(false);
@@ -38,6 +42,8 @@ export function ProjectDetailPage({
       setGoalsDraft(p.goals);
       setReasoningDraft(p.reasoning);
       setNeedsDoingDraft(p.needsDoing);
+      const dream = await fetchDream(p.dreamId);
+      setDreamName(dream?.name ?? "");
     }
     setWidgets(await fetchWidgetsForProject(projectId));
     setLoading(false);
@@ -95,6 +101,13 @@ export function ProjectDetailPage({
     await load();
   };
 
+  const handleDeleteProject = async () => {
+    if (!project) return;
+    if (!confirm(`Delete "${project.name}"? This also removes its widgets and everything in them.`)) return;
+    await deleteProject(project.id);
+    onNavigate({ type: "dream-detail", dreamId: project.dreamId });
+  };
+
   if (loading) {
     return (
       <div className="page">
@@ -112,23 +125,36 @@ export function ProjectDetailPage({
 
   return (
     <div className="page">
-      {editingName ? (
-        <input
-          className="title-rename-input"
-          autoFocus
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") confirmRename();
-            if (e.key === "Escape") setEditingName(false);
-          }}
-          onBlur={confirmRename}
-        />
-      ) : (
-        <h1 className="page-title" onDoubleClick={startRename} title="Double-click to rename">
-          {project.name}
-        </h1>
-      )}
+      <Breadcrumb
+        crumbs={[
+          { label: "Dream Web", onClick: () => onNavigate({ type: "dreams-web" }) },
+          { label: dreamName, onClick: () => onNavigate({ type: "dream-detail", dreamId: project.dreamId }) },
+          { label: project.name },
+        ]}
+      />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {editingName ? (
+          <input
+            className="title-rename-input"
+            autoFocus
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmRename();
+              if (e.key === "Escape") setEditingName(false);
+            }}
+            onBlur={confirmRename}
+          />
+        ) : (
+          <h1 className="page-title" onDoubleClick={startRename} title="Double-click to rename">
+            {project.name}
+          </h1>
+        )}
+        <button className="add-button danger" onClick={handleDeleteProject}>
+          Delete Project
+        </button>
+      </div>
 
       <div className="project-field">
         <label className="project-field-label">Goals</label>
