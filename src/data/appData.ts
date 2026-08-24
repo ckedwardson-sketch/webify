@@ -3,13 +3,13 @@ export interface SidebarItem {
   isPlaceholder: boolean;
 }
 
-// Goals, Projects, Progress Webs, Inventory, and Notes are still stubs
-// for now — clicking them shows a "coming soon" page.
+// Goals, Progress Webs, Inventory, and Notes are still stubs for now —
+// clicking them shows a "coming soon" page.
 export const sidebarItems: SidebarItem[] = [
   { label: "Home", isPlaceholder: false },
   { label: "Dreams", isPlaceholder: false },
   { label: "Goals", isPlaceholder: true },
-  { label: "Projects", isPlaceholder: true },
+  { label: "Projects", isPlaceholder: false },
   { label: "Progress Webs", isPlaceholder: true },
   { label: "Recipes", isPlaceholder: false },
   { label: "Responsibilities", isPlaceholder: false },

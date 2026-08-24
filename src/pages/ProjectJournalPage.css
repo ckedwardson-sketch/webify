@@ -1,0 +1,29 @@
+.journal-add-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.journal-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.journal-entry {
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+
+.journal-entry-timestamp {
+  font-size: 0.75rem;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.journal-entry-content {
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+}

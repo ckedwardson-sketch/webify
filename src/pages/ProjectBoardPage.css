@@ -1,0 +1,54 @@
+.project-board-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.project-board-item {
+  position: relative;
+  width: 200px;
+  min-height: 80px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.project-board-item-text {
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.project-board-item-image {
+  width: 100%;
+  border-radius: 4px;
+  display: block;
+}
+
+.project-board-item-link {
+  display: block;
+  width: 100%;
+  font-size: 0.85rem;
+  color: #2563eb;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.project-board-item-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+  font-size: 10px;
+}

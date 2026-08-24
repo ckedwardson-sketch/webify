@@ -1,0 +1,76 @@
+.project-field {
+  margin-bottom: 16px;
+}
+
+.project-field-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.project-widgets-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+
+.project-add-widget-menu {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.project-widget-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.project-widget-card {
+  position: relative;
+  width: 140px;
+}
+
+.project-widget-card-open {
+  width: 100%;
+  height: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.project-widget-card-open:hover {
+  background: #f0f0f0;
+}
+
+.project-widget-card-icon {
+  font-size: 1.5rem;
+}
+
+.project-widget-card-title {
+  font-size: 0.85rem;
+  color: #333;
+}
+
+.project-widget-card-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+}

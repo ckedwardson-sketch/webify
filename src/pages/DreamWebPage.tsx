@@ -26,18 +26,23 @@ import {
   removeDreamLink,
   putDreamToBed,
 } from "../db/dreams";
+import { fetchAllProjects, addProject } from "../db/projects";
 import { Dream, DreamPriority } from "../types/models";
+import { Project } from "../types/project";
 import { DreamNode, DREAM_BASE_WIDTH, DREAM_BASE_HEIGHT, zoomCompensation } from "../components/DreamGraphNodes";
+import { ProjectNode } from "../components/ProjectGraphNodes";
 import { View } from "../types/nav";
 import { StyledButton } from "../icons/StyledButton";
 import { useTheme } from "../theme/ThemeContext";
 import "./Page.css";
 import "./DreamWebPage.css";
 
-const nodeTypes = { dreamNode: DreamNode };
+const nodeTypes = { dreamNode: DreamNode, projectNode: ProjectNode };
 
 const dreamNodeId = (id: number) => `d-${id}`;
 const parseDreamNodeId = (nodeId: string) => Number(nodeId.slice(2));
+const projectNodeId = (id: number) => `p-${id}`;
+const parseProjectNodeId = (nodeId: string) => Number(nodeId.slice(2));
 const linkEdgeId = (id: number) => `link-${id}`;
 const parseLinkEdgeId = (edgeId: string) => Number(edgeId.slice(5));
 
@@ -54,6 +59,13 @@ const PIXELS_PER_DAY = 1;
 const DAY_MS = 86400000;
 const MONTH_ZOOM_THRESHOLD = 0.6;
 const UNDATED_LANE_X = -650;
+
+// Projects render as a small vertical stack to the right of their
+// parent dream. Position isn't stored anywhere — it's recomputed from
+// the dream's current position every render, so a project always
+// stays visually attached to its dream even as the dream moves.
+const PROJECT_OFFSET_X = 200;
+const PROJECT_STACK_GAP = 60;
 
 function isoToY(iso: string): number {
   const t = new Date(`${iso}T00:00:00`).getTime();
@@ -122,6 +134,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const { theme } = useTheme();
   const { zoom } = useViewport();
   const [dreams, setDreams] = useState<Dream[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [links, setLinks] = useState<{ id: number; sourceDreamId: number; targetDreamId: number }[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,9 +143,10 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const gridLines = useMemo(buildGridLines, []);
 
   const load = () => {
-    fetchDreamGraphData().then(({ dreams, links }) => {
+    Promise.all([fetchDreamGraphData(), fetchAllProjects()]).then(([{ dreams, links }, allProjects]) => {
       setDreams(dreams);
       setLinks(links);
+      setProjects(allProjects);
       setLoading(false);
     });
   };
@@ -142,10 +156,11 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const dreamById = useMemo(() => new Map(dreams.map((d) => [d.id, d])), [dreams]);
 
   const handleDelete = async (dream: Dream) => {
-    if (!confirm(`Delete "${dream.name}"? This also removes its links and history.`)) return;
+    if (!confirm(`Delete "${dream.name}"? This also removes its links, history, and any projects attached to it.`)) return;
     await deleteDream(dream.id);
     setDreams((prev) => prev.filter((d) => d.id !== dream.id));
     setLinks((prev) => prev.filter((l) => l.sourceDreamId !== dream.id && l.targetDreamId !== dream.id));
+    setProjects((prev) => prev.filter((p) => p.dreamId !== dream.id));
   };
 
   const handlePutToBed = async (dream: Dream) => {
@@ -163,6 +178,11 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     load();
   };
 
+  const handleAddProject = async (dream: Dream) => {
+    const id = await addProject(dream.id, "New Project");
+    onNavigate({ type: "project-detail", projectId: id });
+  };
+
   const activeDreams = useMemo(() => dreams.filter((d) => !d.isAsleep), [dreams]);
   const sleepingDreams = useMemo(() => dreams.filter((d) => d.isAsleep), [dreams]);
 
@@ -173,32 +193,51 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     return { x: dream.posX, y: dream.posY };
   };
 
-  // Nodes are rebuilt from `activeDreams` whenever the underlying data
-  // changes. A dated dream's y always comes from its date — dragging
-  // can only ever move x (see onNodesChange) — so there's no "live drag
-  // position" for y to preserve here.
+  // Nodes are rebuilt from `activeDreams` and `projects` whenever
+  // either changes. A dated dream's y always comes from its date —
+  // dragging can only ever move x (see onNodesChange) — so there's no
+  // "live drag position" for y to preserve here. Project nodes are
+  // derived the same way each time: a small stack offset from their
+  // parent dream's current position, never independently dragged.
   useEffect(() => {
-    setNodes(
-      activeDreams.map((dream) => ({
-        id: dreamNodeId(dream.id),
-        type: "dreamNode",
-        position: positionFor(dream),
-        data: {
-          name: dream.name,
-          priority: dream.priority,
-          expectedDateStart: dream.expectedDateStart,
-          expectedDateEnd: dream.expectedDateEnd,
-          onDelete: () => handleDelete(dream),
-          onPutToBed: () => handlePutToBed(dream),
-        },
-      }))
-    );
+    const dreamNodes: Node[] = activeDreams.map((dream) => ({
+      id: dreamNodeId(dream.id),
+      type: "dreamNode",
+      position: positionFor(dream),
+      data: {
+        name: dream.name,
+        priority: dream.priority,
+        expectedDateStart: dream.expectedDateStart,
+        expectedDateEnd: dream.expectedDateEnd,
+        onDelete: () => handleDelete(dream),
+        onPutToBed: () => handlePutToBed(dream),
+        onAddProject: () => handleAddProject(dream),
+      },
+    }));
+
+    const projectNodes: Node[] = [];
+    activeDreams.forEach((dream) => {
+      const dreamPos = positionFor(dream);
+      const dreamProjects = projects.filter((p) => p.dreamId === dream.id);
+      dreamProjects.forEach((project, i) => {
+        const offsetY = (i - (dreamProjects.length - 1) / 2) * PROJECT_STACK_GAP;
+        projectNodes.push({
+          id: projectNodeId(project.id),
+          type: "projectNode",
+          position: { x: dreamPos.x + PROJECT_OFFSET_X, y: dreamPos.y + offsetY },
+          draggable: false,
+          data: { name: project.name },
+        });
+      });
+    });
+
+    setNodes([...dreamNodes, ...projectNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDreams]);
+  }, [activeDreams, projects]);
 
   const edges: Edge[] = useMemo(() => {
     const activeIds = new Set(activeDreams.map((d) => d.id));
-    return links
+    const linkEdges: Edge[] = links
       .filter((l) => activeIds.has(l.sourceDreamId) && activeIds.has(l.targetDreamId))
       .map((link) => ({
         id: linkEdgeId(link.id),
@@ -206,7 +245,18 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         target: dreamNodeId(link.targetDreamId),
         style: { stroke: theme.dreamLinkColor, strokeWidth: 2 },
       }));
-  }, [links, activeDreams, theme.dreamLinkColor]);
+
+    const projectEdges: Edge[] = projects
+      .filter((p) => activeIds.has(p.dreamId))
+      .map((project) => ({
+        id: `proj-edge-${project.id}`,
+        source: dreamNodeId(project.dreamId),
+        target: projectNodeId(project.id),
+        style: { stroke: "#f59e0b", strokeWidth: 1.5, strokeDasharray: "3,3" },
+      }));
+
+    return [...linkEdges, ...projectEdges];
+  }, [links, projects, activeDreams, theme.dreamLinkColor]);
 
   const onNodesChange = (changes: NodeChange[]) => {
     const adjusted = changes
@@ -224,6 +274,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   };
 
   const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
+    if (node.type === "projectNode") return; // not independently draggable
     const id = parseDreamNodeId(node.id);
     const dream = dreamById.get(id);
     if (!dream) return;
@@ -238,6 +289,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
 
   const onConnect = (connection: Connection) => {
     if (!connection.source || !connection.target) return;
+    if (!connection.source.startsWith("d-") || !connection.target.startsWith("d-")) return;
     const sourceId = parseDreamNodeId(connection.source);
     const targetId = parseDreamNodeId(connection.target);
     if (sourceId === targetId) return;
@@ -246,11 +298,16 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
 
   const onEdgesDelete = (deleted: Edge[]) => {
     for (const edge of deleted) {
+      if (edge.id.startsWith("proj-edge-")) continue; // project links aren't user-removable this way
       removeDreamLink(parseLinkEdgeId(edge.id)).then(load);
     }
   };
 
   const onNodeClick = (_: React.MouseEvent, node: Node) => {
+    if (node.type === "projectNode") {
+      onNavigate({ type: "project-detail", projectId: parseProjectNodeId(node.id) });
+      return;
+    }
     onNavigate({ type: "dream-detail", dreamId: parseDreamNodeId(node.id) });
   };
 
@@ -449,7 +506,8 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
 
             <Panel position="top-right" className="dream-canvas-hint">
               Future is up, past is down. Drag between the corner dots to link dreams. Dated dreams
-              only move left/right — change the date to move them in time.
+              only move left/right — change the date to move them in time. Amber nodes are projects —
+              add one from a dream's ⋯ menu.
             </Panel>
             <Background
               color="#64748b"

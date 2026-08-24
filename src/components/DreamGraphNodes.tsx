@@ -36,6 +36,7 @@ export interface DreamNodeData {
   expectedDateEnd?: string;
   onDelete?: () => void;
   onPutToBed?: () => void;
+  onAddProject?: () => void;
 }
 
 const HANDLE_INSET = "10px";
@@ -131,6 +132,18 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
             <>
               <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
               <div className="managed-row-dropdown dream-node-dropdown">
+                {data.onAddProject && (
+                  <button
+                    className="dropdown-item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      data.onAddProject!();
+                    }}
+                  >
+                    Add Project
+                  </button>
+                )}
                 {data.onPutToBed && (
                   <button
                     className="dropdown-item"

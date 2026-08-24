@@ -21,4 +21,8 @@ export type View =
   | { type: "responsibilities-manage" }
   | { type: "responsibility-detail"; responsibilityId: number }
   | { type: "dreams-web" }
-  | { type: "dream-detail"; dreamId: number };
+  | { type: "dream-detail"; dreamId: number }
+  | { type: "projects-home" }
+  | { type: "project-detail"; projectId: number }
+  | { type: "project-journal"; widgetId: number; projectId: number }
+  | { type: "project-board"; widgetId: number; projectId: number };

@@ -20,6 +20,10 @@ import { ResponsibilitiesManagePage } from "./pages/ResponsibilitiesManagePage";
 import { ResponsibilityDetailPage } from "./pages/ResponsibilityDetailPage";
 import { DreamWebPage } from "./pages/DreamWebPage";
 import { DreamDetailPage } from "./pages/DreamDetailPage";
+import { ProjectsHomePage } from "./pages/ProjectsHomePage";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { ProjectJournalPage } from "./pages/ProjectJournalPage";
+import { ProjectBoardPage } from "./pages/ProjectBoardPage";
 import { IconProvider } from "./icons/IconContext";
 import { TextElementProvider } from "./icons/TextElementContext";
 import { ButtonStyleProvider } from "./icons/ButtonStyleContext";
@@ -30,10 +34,15 @@ import "./App.css";
 export default function App() {
   const [view, setView] = useState<View>({ type: "home" });
   const [dbReady, setDbReady] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
-    getDb().then(() => setDbReady(true));
-  }, []);
+  getDb()
+    .then(() => setDbReady(true))
+    .catch((error) => {
+      console.error("DATABASE INITIALIZATION FAILED:", error);
+    });
+}, []);
 
   const renderPage = () => {
     switch (view.type) {
@@ -95,6 +104,26 @@ export default function App() {
         return <DreamWebPage onNavigate={setView} />;
       case "dream-detail":
         return <DreamDetailPage dreamId={view.dreamId} onNavigate={setView} />;
+      case "projects-home":
+        return <ProjectsHomePage onNavigate={setView} />;
+      case "project-detail":
+        return <ProjectDetailPage projectId={view.projectId} onNavigate={setView} />;
+      case "project-journal":
+        return (
+          <ProjectJournalPage
+            widgetId={view.widgetId}
+            projectId={view.projectId}
+            onNavigate={setView}
+          />
+        );
+      case "project-board":
+        return (
+          <ProjectBoardPage
+            widgetId={view.widgetId}
+            projectId={view.projectId}
+            onNavigate={setView}
+          />
+        );
     }
   };
 
@@ -113,8 +142,24 @@ export default function App() {
       <IconProvider>
         <TextElementProvider>
           <ButtonStyleProvider>
-            <div className="app-shell">
-              <Sidebar view={view} onNavigate={setView} />
+            <div className={`app-shell${sidebarOpen ? "" : " sidebar-collapsed"}`}>
+              {sidebarOpen && (
+                <Sidebar
+                  view={view}
+                  onNavigate={setView}
+                  onToggle={() => setSidebarOpen(false)}
+                />
+              )}
+              {!sidebarOpen && (
+                <button
+                  className="sidebar-toggle sidebar-toggle-floating"
+                  type="button"
+                  aria-label="Show sidebar"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  ☰
+                </button>
+              )}
               <main className="app-content">{renderPage()}</main>
             </div>
             <ScreenCaptureWidget view={view} onNavigate={setView} />

@@ -203,105 +203,6 @@ async function runMigrations(db: Database): Promise<void> {
     await markMigrationApplied(db, "create_capture_targets_table");
   }
 
-  // Saved theme presets — an in-app library alongside file export/
-  // import. Each row is a full snapshot (icons + text elements + button
-  // styles + theme settings) serialized as JSON, the same shape the
-  // file export produces, so both paths share one apply routine.
-  if (!(await isMigrationApplied(db, "create_theme_presets_table"))) {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS theme_presets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        data TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await markMigrationApplied(db, "create_theme_presets_table");
-  }
-
-  // Dream web — a free-form canvas the user builds entirely by hand
-  // (no derived structure like the recipe web's category/parent
-  // hierarchy): dreams placed and sized wherever the user drags them,
-  // linked however the user connects them.
-  if (!(await isMigrationApplied(db, "create_dreams_table"))) {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS dreams (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        reasoning TEXT NOT NULL DEFAULT '',
-        expected_date TEXT,
-        priority TEXT NOT NULL DEFAULT 'medium',
-        notes TEXT NOT NULL DEFAULT '',
-        pos_x REAL NOT NULL DEFAULT 0,
-        pos_y REAL NOT NULL DEFAULT 0,
-        scale REAL NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await markMigrationApplied(db, "create_dreams_table");
-  }
-
-  // User-drawn connections between dream nodes — not derived from any
-  // hierarchy, just whatever the user dragged a connection between.
-  if (!(await isMigrationApplied(db, "create_dream_links_table"))) {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS dream_links (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_dream_id INTEGER NOT NULL REFERENCES dreams(id) ON DELETE CASCADE,
-        target_dream_id INTEGER NOT NULL REFERENCES dreams(id) ON DELETE CASCADE,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(source_dream_id, target_dream_id)
-      )
-    `);
-    await markMigrationApplied(db, "create_dream_links_table");
-  }
-
-  // Deep memory for dream pages: every time name/reasoning/expected
-  // date/priority/notes changes, the prior value is appended here
-  // before the update lands — so a dream page can show its own history
-  // even though the live row only ever holds the current value.
-  if (!(await isMigrationApplied(db, "create_dream_history_table"))) {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS dream_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        dream_id INTEGER NOT NULL REFERENCES dreams(id) ON DELETE CASCADE,
-        field TEXT NOT NULL,
-        old_value TEXT,
-        new_value TEXT,
-        changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await markMigrationApplied(db, "create_dream_history_table");
-  }
-
-  // Expected date becomes a range (start/end) instead of a single day —
-  // far-off dreams can only be pinned down to a month or year, which is
-  // modeled as a wide range rather than a fake precise date. The old
-  // expected_date column is left in place unused rather than dropped
-  // (SQLite ALTER TABLE DROP COLUMN is a real risk on a live db file);
-  // any pre-existing value is backfilled into both ends of the range.
-  await ensureColumn(db, "add_dreams_expected_date_start", "dreams", "expected_date_start", "TEXT");
-  await ensureColumn(db, "add_dreams_expected_date_end", "dreams", "expected_date_end", "TEXT");
-
-  if (!(await isMigrationApplied(db, "backfill_dreams_expected_date_range"))) {
-    await db.execute(
-      `UPDATE dreams SET expected_date_start = expected_date, expected_date_end = expected_date
-       WHERE expected_date_start IS NULL AND expected_date IS NOT NULL`
-    );
-    await markMigrationApplied(db, "backfill_dreams_expected_date_range");
-  }
-
-  // "Put to bed" — parks a dream off the timeline instead of deleting
-  // it. sleep_until is informational (shown on the dream page) and
-  // doesn't currently drive any auto-wake behavior.
-  await ensureColumn(db, "add_dreams_is_asleep", "dreams", "is_asleep", "INTEGER NOT NULL DEFAULT 0");
-  await ensureColumn(db, "add_dreams_sleep_until", "dreams", "sleep_until", "TEXT");
-
-  // Accountability: the reason typed in when a field was changed,
-  // alongside the old/new value already captured.
-  await ensureColumn(db, "add_dream_history_reason", "dream_history", "reason", "TEXT");
-
   // Responsibilities — recurring tasks (daily/weekly-biweekly/yearly).
   // schedule_json holds a category-shaped JSON blob (see
   // src/types/responsibility.ts) rather than a wide sparse column set,
@@ -351,24 +252,7 @@ async function runMigrations(db: Database): Promise<void> {
     `);
     await markMigrationApplied(db, "create_responsibility_completions_table");
   }
-
-  if (!(await isMigrationApplied(db, "create_issue_reports_table"))) {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS issue_reports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        note TEXT NOT NULL,
-        screenshot_data TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await markMigrationApplied(db, "create_issue_reports_table");
-  }
 }
-
-  // Issue reports — a note + screenshot saved from the capture widget's
-  // "Report Issue" button, for logging problems while using the app
-  // instead of coding, viewed later from Settings > Reported Issues.
- 
 
 // ---- Connection + schema setup -------------------------------------
 
