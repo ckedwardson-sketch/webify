@@ -77,6 +77,19 @@ export function SettingsThemePage({
       );
     }
 
+    if (kind === "code") {
+      return (
+        <textarea
+          className="theme-code-input"
+          rows={4}
+          spellCheck={false}
+          value={value}
+          placeholder={field.placeholder}
+          onChange={(e) => setThemeValue(key, e.target.value)}
+        />
+      );
+    }
+
     if (kind === "image") {
       return (
         <div className="theme-image-field">
@@ -136,9 +149,14 @@ export function SettingsThemePage({
           <h2 className="theme-section-title">{group.title}</h2>
           <div className="theme-color-list">
             {group.fields.map((field) => (
-              <div key={field.key} className="theme-color-row" data-settings-key={field.key}>
+              <div
+                key={field.key}
+                className={`theme-color-row${field.kind === "code" ? " theme-color-row-code" : ""}`}
+                data-settings-key={field.key}
+              >
                 <span className="theme-color-label">{field.label}</span>
                 {renderField(field)}
+                {field.help && <p className="theme-code-help">{field.help}</p>}
                 {overrides[field.key] && (
                   <button className="add-button danger" onClick={() => resetThemeValue(field.key)}>
                     Reset

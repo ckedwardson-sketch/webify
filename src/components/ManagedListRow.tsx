@@ -5,6 +5,7 @@ import { TextElement } from "../icons/TextElement";
 import "./ManagedListRow.css";
 
 interface ManagedListRowProps {
+  id: number;
   label: string;
   imageUrl?: string;
   isProven?: boolean;
@@ -17,10 +18,25 @@ interface ManagedListRowProps {
   onAddImage?: (file: File) => void;
   onToggleFlag?: (flagKey: string, value: boolean) => void;
   onDragStart: () => void;
-  onDropOn: () => void;
+  onDragOverTarget: (id: number) => void;
+  onDragEnd: () => void;
+}
+
+// Finds the nearest ancestor (including itself) carrying a
+// data-item-id, starting from whatever element is physically under the
+// pointer right now. Used instead of native dragenter/dragover targets
+// since pointer-capture keeps every event routed to the row that
+// started the drag, not whatever's currently underneath the finger.
+function itemIdAtPoint(x: number, y: number): number | null {
+  const el = document.elementFromPoint(x, y);
+  const row = el?.closest<HTMLElement>("[data-item-id]");
+  if (!row) return null;
+  const id = Number(row.dataset.itemId);
+  return Number.isNaN(id) ? null : id;
 }
 
 export function ManagedListRow({
+  id,
   label,
   imageUrl,
   isProven = false,
@@ -33,10 +49,12 @@ export function ManagedListRow({
   onAddImage,
   onToggleFlag,
   onDragStart,
-  onDropOn,
+  onDragOverTarget,
+  onDragEnd,
 }: ManagedListRowProps) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(label);
+  const [dragging, setDragging] = useState(false);
 
   const confirm = () => {
     setEditing(false);
@@ -55,17 +73,44 @@ export function ManagedListRow({
     }
   };
 
+  // Pointer events unify mouse and touch (native HTML5 drag-and-drop has
+  // no real touch support). setPointerCapture keeps every subsequent
+  // move/up event routed to this handle even once the finger leaves it,
+  // so the drag reads consistently no matter where the pointer wanders.
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse") return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+    onDragStart();
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const overId = itemIdAtPoint(e.clientX, e.clientY);
+    if (overId !== null) onDragOverTarget(overId);
+  };
+
+  const endDrag = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    setDragging(false);
+    onDragEnd();
+  };
+
   return (
-    <li
-      className="list-row"
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDropOn}
-    >
+    <li className={`list-row${dragging ? " list-row-dragging" : ""}`} data-item-id={id}>
       {/* Primary Row: Drag Handle, Name, Add Image, Edit, Delete */}
       <div className="list-row-primary">
-        <span className="list-row-drag-handle">
+        <span
+          className="list-row-drag-handle"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
           <TextElement elementKey="drag-handle" />
         </span>
 

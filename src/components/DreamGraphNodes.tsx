@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Handle, Position, useViewport } from "@xyflow/react";
 import { useTheme } from "../theme/ThemeContext";
+import { clipPathFor } from "../theme/nodeShapes";
 import { DreamPriority } from "../types/models";
 import "./ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "../pages/DreamWebPage.css";
@@ -74,6 +75,7 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
         background: theme.dreamNodeBackground,
         color: "#ffffff",
         boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+        clipPath: clipPathFor(theme.dreamNodeShape),
         padding: "8px 10px",
         boxSizing: "border-box",
         display: "flex",

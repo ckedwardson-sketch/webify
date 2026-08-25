@@ -1,6 +1,10 @@
 .dream-web-shell {
   display: flex;
-  height: 100vh;
+  /* Fills app-content's actual flex-stretched height, not a fresh
+     100vh — app-shell now carries safe-area inset padding, so a raw
+     100vh here would overflow past the visible area on notched
+     devices. */
+  height: 100%;
   width: 100%;
 }
 

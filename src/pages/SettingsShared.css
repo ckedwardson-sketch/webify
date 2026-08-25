@@ -47,17 +47,20 @@
   gap: 8px;
   width: 100%;
   text-align: left;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  border: var(--surface-border-width) solid var(--color-border);
   padding: 10px 12px;
   border-radius: var(--radius-md);
   cursor: pointer;
   font: inherit;
   color: var(--color-text);
+  transition: transform var(--motion-speed) var(--motion-easing),
+    border-color var(--motion-speed) var(--motion-easing);
 }
 
 .settings-search-result:hover {
   border-color: var(--color-border-strong);
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
 }
 
 .settings-search-result-section {
@@ -100,22 +103,28 @@
   align-items: flex-start;
   gap: 4px;
   padding: 14px;
-  border: 1px solid var(--color-border);
+  border: var(--surface-border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-bg-elevated);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: var(--surface-backdrop-filter);
   color: var(--color-text);
   cursor: pointer;
   font: inherit;
   text-align: left;
+  transition: transform var(--motion-speed) var(--motion-easing),
+    border-color var(--motion-speed) var(--motion-easing);
 }
 
 .settings-card:hover {
   border-color: var(--color-accent);
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
 }
 
 .settings-card-title {
   font-weight: 600;
   font-size: 0.95rem;
+  font-family: var(--heading-font);
 }
 
 .settings-card-desc {

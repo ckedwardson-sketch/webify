@@ -25,4 +25,6 @@ export type View =
   | { type: "projects-home" }
   | { type: "project-detail"; projectId: number }
   | { type: "project-journal"; widgetId: number; projectId: number }
-  | { type: "project-board"; widgetId: number; projectId: number };
+  | { type: "project-board"; widgetId: number; projectId: number }
+  | { type: "progress-web" }
+  | { type: "progress-node-detail"; nodeId: number };

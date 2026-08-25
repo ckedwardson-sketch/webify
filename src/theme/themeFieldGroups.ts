@@ -1,13 +1,20 @@
 import { ThemeSettings } from "./themeDefaults";
 import { FONT_PRESETS } from "./fontPresets";
+import { SURFACE_PRESETS } from "./surfacePresets";
+import { HEADING_PRESETS } from "./headingPresets";
+import { BACKGROUND_PRESETS } from "./backgroundPresets";
+import { MOTION_PRESETS } from "./motionPresets";
+import { NODE_SHAPE_OPTIONS } from "./nodeShapes";
 
-export type ThemeFieldKind = "color" | "select" | "image" | "number";
+export type ThemeFieldKind = "color" | "select" | "image" | "number" | "code";
 
 export interface ThemeColorField {
   key: keyof ThemeSettings;
   label: string;
   kind?: ThemeFieldKind; // default "color"
   options?: { value: string; label: string }[]; // required for "select"
+  placeholder?: string; // used by "code"
+  help?: string; // short explanatory line shown under a "code" field
 }
 
 export interface ThemeColorGroup {
@@ -37,6 +44,56 @@ const CARD_IMAGE_STYLE_OPTIONS = [
   { value: "fill", label: "Fill card" },
 ];
 
+const NAV_LAYOUT_OPTIONS = [
+  { value: "left", label: "Sidebar, left (default)" },
+  { value: "right", label: "Sidebar, right" },
+  { value: "top", label: "Top navigation bar" },
+];
+
+const SURFACE_STYLE_LABELS: Record<string, string> = {
+  bordered: "Bordered (default)",
+  flat: "Flat — no border or shadow",
+  elevated: "Elevated — drop shadow",
+  glass: "Glass — blurred, translucent",
+};
+const SURFACE_STYLE_OPTIONS = Object.keys(SURFACE_PRESETS).map((value) => ({
+  value,
+  label: SURFACE_STYLE_LABELS[value] ?? value,
+}));
+
+const HEADING_STYLE_LABELS: Record<string, string> = {
+  default: "Default — matches body font",
+  editorial: "Editorial — uppercase serif",
+  "mono-technical": "Mono / Technical",
+  "soft-rounded": "Soft & Rounded",
+};
+const HEADING_STYLE_OPTIONS = Object.keys(HEADING_PRESETS).map((value) => ({
+  value,
+  label: HEADING_STYLE_LABELS[value] ?? value,
+}));
+
+const BACKGROUND_STYLE_LABELS: Record<string, string> = {
+  solid: "Solid (default)",
+  gradient: "Soft gradient glow",
+  grid: "Grid lines",
+  dotted: "Dot grid",
+  noise: "Diagonal hatch",
+};
+const BACKGROUND_STYLE_OPTIONS = Object.keys(BACKGROUND_PRESETS).map((value) => ({
+  value,
+  label: BACKGROUND_STYLE_LABELS[value] ?? value,
+}));
+
+const MOTION_STYLE_LABELS: Record<string, string> = {
+  none: "None — instant, no hover motion",
+  subtle: "Subtle (default)",
+  lively: "Lively — bouncy hover lift",
+};
+const MOTION_STYLE_OPTIONS = Object.keys(MOTION_PRESETS).map((value) => ({
+  value,
+  label: MOTION_STYLE_LABELS[value] ?? value,
+}));
+
 export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
   {
     title: "Typography & Layout",
@@ -49,6 +106,26 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
       },
       { key: "radiusScale", label: "Corner roundness", kind: "select", options: RADIUS_OPTIONS },
       { key: "density", label: "Density / spacing", kind: "select", options: DENSITY_OPTIONS },
+    ],
+  },
+  {
+    title: "Big layout & feel",
+    fields: [
+      { key: "navLayout", label: "Navigation position", kind: "select", options: NAV_LAYOUT_OPTIONS },
+      {
+        key: "surfaceStyle",
+        label: "Surface style (buttons, cards, rows)",
+        kind: "select",
+        options: SURFACE_STYLE_OPTIONS,
+      },
+      { key: "headingStyle", label: "Heading voice", kind: "select", options: HEADING_STYLE_OPTIONS },
+      {
+        key: "backgroundStyle",
+        label: "Background atmosphere",
+        kind: "select",
+        options: BACKGROUND_STYLE_OPTIONS,
+      },
+      { key: "motionStyle", label: "Motion", kind: "select", options: MOTION_STYLE_OPTIONS },
     ],
   },
   {
@@ -109,6 +186,18 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
         kind: "select",
         options: CARD_IMAGE_STYLE_OPTIONS,
       },
+      { key: "webCardShape", label: "Recipe card shape", kind: "select", options: NODE_SHAPE_OPTIONS },
+    ],
+  },
+  {
+    title: "Progress web",
+    fields: [
+      { key: "progressWebBackground", label: "Web background" },
+      { key: "progressLaborColor", label: "Labor" },
+      { key: "progressPurchaseColor", label: "Purchase" },
+      { key: "progressDesignColor", label: "Design" },
+      { key: "progressConceiveColor", label: "Conceive" },
+      { key: "progressTaskColor", label: "Task" },
     ],
   },
   {
@@ -122,6 +211,45 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
       { key: "dreamPriorityLow", label: "Low priority color" },
       { key: "dreamPriorityMedium", label: "Medium priority color" },
       { key: "dreamPriorityHigh", label: "High priority color" },
+      {
+        key: "dreamNodeShape",
+        label: "Dream / project node shape",
+        kind: "select",
+        options: NODE_SHAPE_OPTIONS,
+      },
+    ],
+  },
+  {
+    title: "Advanced",
+    fields: [
+      {
+        key: "customCss",
+        label: "Custom CSS",
+        kind: "code",
+        placeholder: ".page-title { letter-spacing: 0.08em; }",
+        help: "Injected last, after every other theme rule — this can override anything above.",
+      },
+      {
+        key: "recipeThemeOverrides",
+        label: "Recipes palette override",
+        kind: "code",
+        placeholder: '{"bg": "#fffaf0", "accent": "#c2410c"}',
+        help: 'JSON of any color keys from "Surfaces" / "Text" / "Sidebar" / "Inputs & Buttons" above — only set keys change, everything else still follows the global theme. Leave empty to inherit it everywhere.',
+      },
+      {
+        key: "dreamThemeOverrides",
+        label: "Dream Web palette override",
+        kind: "code",
+        placeholder: '{"bg": "#0a0e27", "accent": "#818cf8"}',
+        help: "Same shape as the Recipes override, applied to the Dream Web section instead.",
+      },
+      {
+        key: "responsibilityThemeOverrides",
+        label: "Responsibilities palette override",
+        kind: "code",
+        placeholder: '{"bg": "#f0fdf4", "accent": "#16a34a"}',
+        help: "Same shape as the Recipes override, applied to the Responsibilities section instead.",
+      },
     ],
   },
 ];

@@ -23,7 +23,7 @@ export function RecipesHomePage({
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
 
-  const { items: categories, setItems, handleDragStart, handleDropOn } =
+  const { items: categories, setItems, handleDragStart, handleDragOver, handleDragEnd } =
     useReorderableList<Category>(reorderCategories);
 
   const load = async () => {
@@ -95,6 +95,7 @@ export function RecipesHomePage({
         {categories.map((category) => (
           <ManagedListRow
             key={category.id}
+            id={category.id}
             label={category.name}
             onOpen={() =>
               onNavigate({
@@ -106,7 +107,8 @@ export function RecipesHomePage({
             onRename={(name) => handleRename(category.id, name)}
             onDelete={() => handleDelete(category.id)}
             onDragStart={() => handleDragStart(category.id)}
-            onDropOn={() => handleDropOn(category.id)}
+            onDragOverTarget={handleDragOver}
+            onDragEnd={handleDragEnd}
           />
         ))}
       </ul>

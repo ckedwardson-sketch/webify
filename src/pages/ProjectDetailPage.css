@@ -52,14 +52,19 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--color-border-strong);
+  border: var(--surface-border-width) solid var(--color-border-strong);
   border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
+  background: color-mix(in srgb, var(--color-bg-secondary) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: var(--surface-backdrop-filter);
   cursor: pointer;
+  transition: transform var(--motion-speed) var(--motion-easing),
+    background-color var(--motion-speed) var(--motion-easing);
 }
 
 .project-widget-card-open:hover {
   background: var(--color-border);
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
 }
 
 .project-widget-card-icon {

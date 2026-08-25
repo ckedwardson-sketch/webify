@@ -9,6 +9,10 @@ import {
 } from "./themeDefaults";
 import { fontStackFor } from "./fontPresets";
 import { densityFor, radiusFor } from "./scalePresets";
+import { surfaceFor } from "./surfacePresets";
+import { headingFor } from "./headingPresets";
+import { backgroundPatternFor } from "./backgroundPresets";
+import { motionFor } from "./motionPresets";
 
 interface ThemeContextValue {
   theme: ThemeSettings;
@@ -40,6 +44,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme.mode);
   }, [theme.mode]);
+
+  // Sidebar position is a structural layout change, not a value swap —
+  // driven by a data attribute the same way data-theme picks light/dark,
+  // so App.css/Sidebar.css can key real layout rules off it.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-nav-layout", theme.navLayout);
+  }, [theme.navLayout]);
 
   useEffect(() => {
     const root = document.documentElement.style;
@@ -95,6 +106,84 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.removeProperty("--space-page-y");
     }
   }, [overrides.density]);
+
+  // Surface/heading/background/motion are named presets, same pattern
+  // as font/radius/density above — each fans out to several properties.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.surfaceStyle) {
+      const s = surfaceFor(overrides.surfaceStyle);
+      root.setProperty("--surface-border-width", s.borderWidth);
+      root.setProperty("--surface-shadow", s.shadow);
+      root.setProperty("--surface-backdrop-filter", s.backdropFilter);
+      root.setProperty("--surface-bg-opacity", s.bgOpacity);
+    } else {
+      root.removeProperty("--surface-border-width");
+      root.removeProperty("--surface-shadow");
+      root.removeProperty("--surface-backdrop-filter");
+      root.removeProperty("--surface-bg-opacity");
+    }
+  }, [overrides.surfaceStyle]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.headingStyle) {
+      const h = headingFor(overrides.headingStyle);
+      root.setProperty("--heading-font", h.font);
+      root.setProperty("--heading-weight", h.weight);
+      root.setProperty("--heading-transform", h.transform);
+      root.setProperty("--heading-tracking", h.tracking);
+    } else {
+      root.removeProperty("--heading-font");
+      root.removeProperty("--heading-weight");
+      root.removeProperty("--heading-transform");
+      root.removeProperty("--heading-tracking");
+    }
+  }, [overrides.headingStyle]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.backgroundStyle) {
+      const b = backgroundPatternFor(overrides.backgroundStyle);
+      root.setProperty("--bg-pattern", b.image);
+      root.setProperty("--bg-pattern-size", b.size);
+    } else {
+      root.removeProperty("--bg-pattern");
+      root.removeProperty("--bg-pattern-size");
+    }
+  }, [overrides.backgroundStyle]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.motionStyle) {
+      const m = motionFor(overrides.motionStyle);
+      root.setProperty("--motion-speed", m.speed);
+      root.setProperty("--motion-easing", m.easing);
+      root.setProperty("--hover-lift", m.hoverLift);
+      root.setProperty("--hover-scale", m.hoverScale);
+    } else {
+      root.removeProperty("--motion-speed");
+      root.removeProperty("--motion-easing");
+      root.removeProperty("--hover-lift");
+      root.removeProperty("--hover-scale");
+    }
+  }, [overrides.motionStyle]);
+
+  // The raw-CSS escape hatch. Kept as the last child of <body> — rather
+  // than in <head>, and re-appended (which moves an existing node)
+  // every time this runs — so it always sits after every other
+  // stylesheet in document order and wins any same-specificity tie,
+  // regardless of how many page-specific <style> tags Vite has injected
+  // into <head> by the time this runs.
+  useEffect(() => {
+    let el = document.getElementById("theme-custom-css") as HTMLStyleElement | null;
+    if (!el) {
+      el = document.createElement("style");
+      el.id = "theme-custom-css";
+    }
+    document.body.appendChild(el);
+    el.textContent = theme.customCss;
+  }, [theme.customCss]);
 
   const setThemeValue = async (key: keyof ThemeSettings, value: string) => {
     await setThemeSetting(key, value);

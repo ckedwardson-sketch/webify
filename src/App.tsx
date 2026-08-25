@@ -24,10 +24,13 @@ import { ProjectsHomePage } from "./pages/ProjectsHomePage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectJournalPage } from "./pages/ProjectJournalPage";
 import { ProjectBoardPage } from "./pages/ProjectBoardPage";
+import { ProgressWebPage } from "./pages/ProgressWebPage";
+import { ProgressNodeDetailPage } from "./pages/ProgressNodeDetailPage";
 import { IconProvider } from "./icons/IconContext";
 import { TextElementProvider } from "./icons/TextElementContext";
 import { ButtonStyleProvider } from "./icons/ButtonStyleContext";
 import { ThemeProvider } from "./theme/ThemeContext";
+import { SectionThemeScope, ThemeSection } from "./theme/SectionThemeScope";
 import { ScreenCaptureWidget } from "./capture/ScreenCaptureWidget";
 import "./App.css";
 
@@ -124,7 +127,22 @@ export default function App() {
             onNavigate={setView}
           />
         );
+      case "progress-web":
+        return <ProgressWebPage onNavigate={setView} />;
+      case "progress-node-detail":
+        return <ProgressNodeDetailPage nodeId={view.nodeId} onNavigate={setView} />;
     }
+  };
+
+  // Recipes / Dream Web / Responsibilities are the three sections a
+  // saved theme can give a distinct palette layer via *ThemeOverrides
+  // (see themeDefaults.ts) — everything else (Home, Projects, Settings)
+  // always renders the plain global theme.
+  const sectionFor = (viewType: View["type"]): ThemeSection | null => {
+    if (viewType.startsWith("recipe")) return "recipe";
+    if (viewType.startsWith("dream")) return "dream";
+    if (viewType.startsWith("responsibilit")) return "responsibility";
+    return null;
   };
 
   if (!dbReady) {
@@ -160,7 +178,13 @@ export default function App() {
                   ☰
                 </button>
               )}
-              <main className="app-content">{renderPage()}</main>
+              <main className="app-content">
+                {sectionFor(view.type) ? (
+                  <SectionThemeScope section={sectionFor(view.type)!}>{renderPage()}</SectionThemeScope>
+                ) : (
+                  renderPage()
+                )}
+              </main>
             </div>
             <ScreenCaptureWidget view={view} onNavigate={setView} />
           </ButtonStyleProvider>

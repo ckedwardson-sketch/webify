@@ -38,6 +38,28 @@
   --space-lg: 24px;
   --space-page-x: 48px;
   --space-page-y: 40px;
+
+  /* Baseline values for the surface/heading/background/motion presets
+     below (surfacePresets.ts / headingPresets.ts / backgroundPresets.ts
+     / motionPresets.ts) — the "default" entry of each, so surfaces look
+     right before ThemeContext's effects run, same convention as the
+     radius and space defaults above mirroring the "subtle" / "comfortable"
+     presets. Not mode-gated, same reasoning as font/radius/density: these
+     aren't a light/dark concept. */
+  --surface-border-width: 1px;
+  --surface-shadow: none;
+  --surface-backdrop-filter: none;
+  --surface-bg-opacity: 100%;
+  --heading-font: var(--font-body);
+  --heading-weight: 700;
+  --heading-transform: none;
+  --heading-tracking: normal;
+  --bg-pattern: none;
+  --bg-pattern-size: auto;
+  --motion-speed: 150ms;
+  --motion-easing: ease;
+  --hover-lift: -1px;
+  --hover-scale: 1.01;
 }
 
 :root[data-theme="dark"] {

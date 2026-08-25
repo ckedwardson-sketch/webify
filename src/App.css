@@ -1,16 +1,46 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
 .app-shell {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   font-family: var(--font-body);
+  box-sizing: border-box;
+  /* Keeps the shell (and everything fixed-positioned inside it, like
+     the sidebar toggle and capture widget) clear of a phone's notch,
+     status bar, or gesture-nav bar. Needs viewport-fit=cover in
+     index.html's viewport meta or these all resolve to 0. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+/* Nav layout: sidebar position is a structural change (Sidebar.tsx's
+   markup doesn't change — App.css/Sidebar.css just re-flow it), driven
+   by the data-nav-layout attribute ThemeContext sets on <html>. "left"
+   is the default, no attribute rules needed for it. */
+[data-nav-layout="right"] .app-shell {
+  flex-direction: row-reverse;
+}
+
+[data-nav-layout="top"] .app-shell {
+  flex-direction: column;
 }
 
 .app-content {
   flex: 1;
   overflow-y: auto;
   background-color: var(--color-bg);
-  background-image: var(--bg-image-app);
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+  /* Two layers: an optional user-uploaded image on top, a generative
+     pattern (backgroundPresets.ts) underneath — "solid" resolves
+     --bg-pattern to "none" so this is a no-op until the user picks a
+     pattern. */
+  background-image: var(--bg-image-app), var(--bg-pattern);
+  background-size: cover, var(--bg-pattern-size);
+  background-position: center, top left;
+  background-attachment: fixed, fixed;
   color: var(--color-text);
 }

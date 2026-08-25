@@ -1,8 +1,11 @@
 import { useState } from "react";
 
-// Manages an ordered list of items that can be drag-reordered. Handles
-// the local reorder (instant, for a snappy feel) and calls `persist`
-// with the new id order so the caller can write it to the database.
+// Manages an ordered list of items that can be drag-reordered. The
+// actual drag gesture is driven by pointer events (see ManagedListRow),
+// not native HTML5 drag-and-drop, so this works the same on mouse and
+// touch. handleDragOver reorders locally on every row the drag passes
+// over (a live preview, same feel native DnD gave); handleDragEnd
+// persists whatever order that settled on once the pointer is released.
 export function useReorderableList<T extends { id: number }>(
   persist: (orderedIds: number[]) => Promise<void>
 ) {
@@ -11,21 +14,24 @@ export function useReorderableList<T extends { id: number }>(
 
   const handleDragStart = (id: number) => setDraggedId(id);
 
-  const handleDropOn = async (targetId: number) => {
+  const handleDragOver = (targetId: number) => {
     if (draggedId === null || draggedId === targetId) return;
-
-    const fromIndex = items.findIndex((item) => item.id === draggedId);
-    const toIndex = items.findIndex((item) => item.id === targetId);
-    if (fromIndex === -1 || toIndex === -1) return;
-
-    const reordered = [...items];
-    const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, moved);
-
-    setItems(reordered);
-    setDraggedId(null);
-    await persist(reordered.map((item) => item.id));
+    setItems((prev) => {
+      const fromIndex = prev.findIndex((item) => item.id === draggedId);
+      const toIndex = prev.findIndex((item) => item.id === targetId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const reordered = [...prev];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      return reordered;
+    });
   };
 
-  return { items, setItems, handleDragStart, handleDropOn };
+  const handleDragEnd = async () => {
+    if (draggedId === null) return;
+    setDraggedId(null);
+    await persist(items.map((item) => item.id));
+  };
+
+  return { items, setItems, draggedId, handleDragStart, handleDragOver, handleDragEnd };
 }

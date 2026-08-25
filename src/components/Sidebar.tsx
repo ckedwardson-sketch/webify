@@ -16,6 +16,7 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
     if (label === "Responsibilities") return view.type.startsWith("responsibilit");
     if (label === "Dreams") return view.type === "dreams-web" || view.type === "dream-detail";
     if (label === "Projects") return view.type.startsWith("project");
+    if (label === "Progress Webs") return view.type.startsWith("progress");
     if (view.type === "placeholder") return view.label === label;
     return false;
   };
@@ -27,6 +28,7 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
     if (label === "Responsibilities") return onNavigate({ type: "responsibilities-home" });
     if (label === "Dreams") return onNavigate({ type: "dreams-web" });
     if (label === "Projects") return onNavigate({ type: "projects-home" });
+    if (label === "Progress Webs") return onNavigate({ type: "progress-web" });
     if (isPlaceholder) return onNavigate({ type: "placeholder", label });
   };
 

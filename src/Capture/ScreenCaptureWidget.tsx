@@ -125,7 +125,14 @@ export function ScreenCaptureWidget({
   const groups: CaptureTarget["group"][] = ["App Pages", "Categories", "Recipes"];
 
   return (
-    <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 9999 }}>
+    <div
+      style={{
+        position: "fixed",
+        bottom: "calc(16px + env(safe-area-inset-bottom))",
+        right: "calc(16px + env(safe-area-inset-right))",
+        zIndex: 9999,
+      }}
+    >
       {open && (
         <div
           style={{

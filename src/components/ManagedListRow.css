@@ -119,6 +119,13 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
+.list-row-dragging {
+  opacity: 0.6;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 5;
+}
+
 .list-row-primary {
   display: flex;
   align-items: center;
@@ -130,6 +137,20 @@
   cursor: grab;
   user-select: none;
   color: var(--color-text-secondary);
+  /* Without this, touch browsers treat a press-and-move on the handle
+     as a page scroll gesture instead of handing it to pointermove. */
+  touch-action: none;
+  /* 44px minimum touch target (mobile fix #2) — the glyph stays small,
+     the hit box around it doesn't. */
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.list-row-drag-handle:active {
+  cursor: grabbing;
 }
 
 .list-row-edit-input {

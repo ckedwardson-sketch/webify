@@ -1,5 +1,10 @@
 import { DEFAULT_FONT_KEY } from "./fontPresets";
 import { DEFAULT_DENSITY, DEFAULT_RADIUS_SCALE } from "./scalePresets";
+import { DEFAULT_SURFACE_STYLE } from "./surfacePresets";
+import { DEFAULT_HEADING_STYLE } from "./headingPresets";
+import { DEFAULT_BACKGROUND_STYLE } from "./backgroundPresets";
+import { DEFAULT_MOTION_STYLE } from "./motionPresets";
+import { DEFAULT_NODE_SHAPE } from "./nodeShapes";
 
 export type ThemeMode = "light" | "dark";
 
@@ -42,6 +47,20 @@ export interface ScaleThemeSettings {
   density: string;
 }
 
+// Big, structural/atmospheric knobs — each a named preset key (see the
+// matching *Presets.ts file) that fans out across the whole app rather
+// than one component. navLayout is the exception: it drives a
+// data-nav-layout attribute on <html> (same mechanism as data-theme)
+// instead of a CSS variable, since repositioning the sidebar needs
+// actual layout rules, not just a value swap.
+export interface LayoutThemeSettings {
+  navLayout: string; // "left" | "right" | "top"
+  surfaceStyle: string; // see surfacePresets.ts
+  headingStyle: string; // see headingPresets.ts
+  backgroundStyle: string; // see backgroundPresets.ts
+  motionStyle: string; // see motionPresets.ts
+}
+
 // Recipe web colors + card chrome. Not backed by CSS variables — the
 // graph nodes are plain React components rendered by ReactFlow, so they
 // just read theme.webX directly via useTheme().
@@ -56,6 +75,37 @@ export interface WebThemeSettings {
   webCardShadow: string; // "none" | "soft" | "strong"
   webCardRadius: string; // px, numeric string
   webCardImageStyle: string; // "boxed" | "fill"
+  webCardShape: string; // "rectangle" | "hexagon" | "blob" | "diamond" — see nodeShapes.ts
+}
+
+// Advanced / power-user knobs. customCss is the escape hatch for
+// whatever a structured field doesn't cover yet — stored as plain text,
+// injected verbatim as a <style> tag (see ThemeContext.tsx), so it can
+// override literally anything. The three *ThemeOverrides fields are
+// per-section palette layers: each is a JSON-serialized
+// Partial<GeneralThemeSettings> (not a nested object directly on
+// ThemeSettings, since every other field here — and the whole
+// export/import/preset pipeline — assumes flat string values) that
+// SectionThemeScope merges on top of the global theme for just that
+// section. Empty ("" / "{}") means "inherit the global theme
+// everywhere", so this is zero-risk to any existing saved preset.
+export interface AdvancedThemeSettings {
+  customCss: string;
+  recipeThemeOverrides: string;
+  dreamThemeOverrides: string;
+  responsibilityThemeOverrides: string;
+}
+
+// Progress web colors — one per work category (see ProgressCategory in
+// types/models.ts). Same pattern as WebThemeSettings — not backed by
+// CSS variables, read directly via useTheme() by the progress graph node.
+export interface ProgressWebThemeSettings {
+  progressWebBackground: string;
+  progressLaborColor: string;
+  progressPurchaseColor: string;
+  progressDesignColor: string;
+  progressConceiveColor: string;
+  progressTaskColor: string;
 }
 
 // Dream web colors. Same pattern as WebThemeSettings — not backed by
@@ -69,12 +119,16 @@ export interface DreamWebThemeSettings {
   dreamPriorityLow: string;
   dreamPriorityMedium: string;
   dreamPriorityHigh: string;
+  dreamNodeShape: string; // "rectangle" | "hexagon" | "blob" | "diamond" — see nodeShapes.ts, also drives project nodes
 }
 
 export interface ThemeSettings
   extends GeneralThemeSettings,
     ScaleThemeSettings,
+    LayoutThemeSettings,
+    AdvancedThemeSettings,
     WebThemeSettings,
+    ProgressWebThemeSettings,
     DreamWebThemeSettings {
   mode: ThemeMode;
 }
@@ -104,6 +158,15 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "fontFamily",
   "radiusScale",
   "density",
+  "navLayout",
+  "surfaceStyle",
+  "headingStyle",
+  "backgroundStyle",
+  "motionStyle",
+  "customCss",
+  "recipeThemeOverrides",
+  "dreamThemeOverrides",
+  "responsibilityThemeOverrides",
   "webBackground",
   "webBackgroundImage",
   "webNodeProvenBackground",
@@ -114,6 +177,13 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "webCardShadow",
   "webCardRadius",
   "webCardImageStyle",
+  "webCardShape",
+  "progressWebBackground",
+  "progressLaborColor",
+  "progressPurchaseColor",
+  "progressDesignColor",
+  "progressConceiveColor",
+  "progressTaskColor",
   "dreamWebBackground",
   "dreamWebBackgroundImage",
   "dreamNodeBackground",
@@ -122,6 +192,7 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "dreamPriorityLow",
   "dreamPriorityMedium",
   "dreamPriorityHigh",
+  "dreamNodeShape",
 ];
 
 // Maps each general-theme key to the CSS custom property it drives.
@@ -216,12 +287,37 @@ export const WEB_DEFAULTS: WebThemeSettings = {
   webCardShadow: "soft",
   webCardRadius: "10",
   webCardImageStyle: "boxed",
+  webCardShape: DEFAULT_NODE_SHAPE,
 };
 
 export const SCALE_DEFAULTS: ScaleThemeSettings = {
   fontFamily: DEFAULT_FONT_KEY,
   radiusScale: DEFAULT_RADIUS_SCALE,
   density: DEFAULT_DENSITY,
+};
+
+export const LAYOUT_DEFAULTS: LayoutThemeSettings = {
+  navLayout: "left",
+  surfaceStyle: DEFAULT_SURFACE_STYLE,
+  headingStyle: DEFAULT_HEADING_STYLE,
+  backgroundStyle: DEFAULT_BACKGROUND_STYLE,
+  motionStyle: DEFAULT_MOTION_STYLE,
+};
+
+export const ADVANCED_DEFAULTS: AdvancedThemeSettings = {
+  customCss: "",
+  recipeThemeOverrides: "",
+  dreamThemeOverrides: "",
+  responsibilityThemeOverrides: "",
+};
+
+export const PROGRESS_WEB_DEFAULTS: ProgressWebThemeSettings = {
+  progressWebBackground: "#1c1917",
+  progressLaborColor: "#f97316",
+  progressPurchaseColor: "#22c55e",
+  progressDesignColor: "#a855f7",
+  progressConceiveColor: "#3b82f6",
+  progressTaskColor: "#64748b",
 };
 
 export const DREAM_WEB_DEFAULTS: DreamWebThemeSettings = {
@@ -233,6 +329,7 @@ export const DREAM_WEB_DEFAULTS: DreamWebThemeSettings = {
   dreamPriorityLow: "#64748b",
   dreamPriorityMedium: "#eab308",
   dreamPriorityHigh: "#ef4444",
+  dreamNodeShape: DEFAULT_NODE_SHAPE,
 };
 
 export function defaultsForMode(mode: ThemeMode): GeneralThemeSettings {
@@ -243,6 +340,9 @@ export const DEFAULT_THEME: ThemeSettings = {
   mode: "light",
   ...LIGHT_DEFAULTS,
   ...SCALE_DEFAULTS,
+  ...LAYOUT_DEFAULTS,
+  ...ADVANCED_DEFAULTS,
   ...WEB_DEFAULTS,
+  ...PROGRESS_WEB_DEFAULTS,
   ...DREAM_WEB_DEFAULTS,
 };

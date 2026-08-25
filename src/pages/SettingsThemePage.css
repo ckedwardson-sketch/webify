@@ -6,6 +6,10 @@
   font-size: 1.05rem;
   margin: 0 0 12px;
   color: var(--color-text);
+  font-family: var(--heading-font);
+  font-weight: var(--heading-weight);
+  text-transform: var(--heading-transform);
+  letter-spacing: var(--heading-tracking);
 }
 
 .theme-mode-toggle {
@@ -15,13 +19,20 @@
 
 .theme-mode-button {
   padding: 8px 20px;
-  border: 1px solid var(--color-border-strong);
+  border: var(--surface-border-width) solid var(--color-border-strong);
   border-radius: var(--radius-md);
-  background: var(--color-bg-elevated);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
   color: var(--color-text);
   font-size: 0.9rem;
   cursor: pointer;
   font: inherit;
+  transition: transform var(--motion-speed) var(--motion-easing),
+    background-color var(--motion-speed) var(--motion-easing);
+}
+
+.theme-mode-button:hover {
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
 }
 
 .theme-mode-button:hover {
@@ -100,4 +111,35 @@
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
+}
+
+.theme-color-row-code {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.theme-code-input {
+  flex-basis: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-family: "Consolas", "SF Mono", Menlo, monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+}
+
+.theme-code-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.theme-code-help {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
 }

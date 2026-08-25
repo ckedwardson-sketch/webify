@@ -3,6 +3,7 @@ import React from "react";
 import { Handle, Position } from "@xyflow/react";
 import { Icon } from "../icons/Icon";
 import { useTheme } from "../theme/ThemeContext";
+import { clipPathFor } from "../theme/nodeShapes";
 
 const CARD_SHADOWS: Record<string, string> = {
   none: "none",
@@ -67,6 +68,7 @@ export function RecipeCardNode({
       ? "0 0 12px rgba(250, 204, 21, 0.5)"
       : CARD_SHADOWS[theme.webCardShadow] ?? CARD_SHADOWS.soft,
     color: "#ffffff",
+    clipPath: clipPathFor(theme.webCardShape),
   };
 
   const iterationButton = (

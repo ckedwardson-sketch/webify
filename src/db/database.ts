@@ -428,6 +428,31 @@ async function runMigrations(db: Database): Promise<void> {
     `);
     await markMigrationApplied(db, "create_project_board_items_table");
   }
+
+  // Progress web — baseline only, see types/models.ts's ProgressNode
+  // comment. Free-drag position like an undated dream; no links table
+  // yet since there's no dependency logic to hang it off of.
+  if (!(await isMigrationApplied(db, "create_progress_nodes_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS progress_nodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL DEFAULT 'task',
+        short_description TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        difficulty TEXT NOT NULL DEFAULT 'moderate',
+        reason TEXT NOT NULL DEFAULT '',
+        instructions TEXT NOT NULL DEFAULT '',
+        image_data TEXT,
+        is_complete INTEGER NOT NULL DEFAULT 0,
+        is_read INTEGER NOT NULL DEFAULT 0,
+        pos_x REAL NOT NULL DEFAULT 0,
+        pos_y REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_progress_nodes_table");
+  }
 }
 
 // ---- Connection + schema setup -------------------------------------
