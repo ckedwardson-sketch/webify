@@ -18,10 +18,12 @@ import "./ProjectBoardPage.css";
 export function ProjectBoardPage({
   widgetId,
   projectId,
+  goalId,
   onNavigate,
 }: {
   widgetId: number;
-  projectId: number;
+  projectId?: number;
+  goalId?: number;
   onNavigate: (view: View) => void;
 }) {
   const [items, setItems] = useState<ProjectBoardItem[]>([]);
@@ -133,9 +135,15 @@ export function ProjectBoardPage({
         <div style={{ display: "flex", gap: 8, position: "relative" }}>
           <button
             className="add-button secondary"
-            onClick={() => onNavigate({ type: "project-detail", projectId })}
+            onClick={() =>
+              onNavigate(
+                projectId !== undefined
+                  ? { type: "project-detail", projectId }
+                  : { type: "goal-detail", goalId: goalId! }
+              )
+            }
           >
-            ← Back to Project
+            ← Back to {projectId !== undefined ? "Project" : "Goal"}
           </button>
           <button className="add-button" onClick={() => setShowAddMenu((v) => !v)}>
             + Add

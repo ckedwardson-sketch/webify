@@ -1,27 +1,37 @@
 // src/components/DreamGraphNodes.tsx
-import React, { useState } from "react";
-import { Handle, Position, useViewport } from "@xyflow/react";
+import { BaseEdge, EdgeProps, Handle, Position, useViewport } from "@xyflow/react";
 import { useTheme } from "../theme/ThemeContext";
-import { clipPathFor } from "../theme/nodeShapes";
+import { clipPathFor, contentInsetFor } from "../theme/nodeShapes";
+import { pointOnShapeBoundary } from "../theme/nodeBoundary";
 import { DreamPriority } from "../types/models";
-import "./ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "../pages/DreamWebPage.css";
 
-export const DREAM_BASE_WIDTH = 170;
-export const DREAM_BASE_HEIGHT = 92;
+// Doubled from the original 170x92 — nodes were hard to click at the
+// old size, and there's plenty of empty canvas space to spend on it.
+export const DREAM_BASE_WIDTH = 340;
+export const DREAM_BASE_HEIGHT = 184;
 
 // As the canvas zooms out to show more of the timeline, a node's own
 // on-screen size shrinks right along with it — past a certain point
 // that makes it unreadable. This claws some of that back: the node
 // grows a bit in canvas-space to compensate, capped so it doesn't blow
-// up at extreme zoom-out.
+// up at extreme zoom-out. Node width lives in the same coordinate space
+// as the date axis (1 canvas unit = 1 day — see DreamWebPage.ts's
+// PIXELS_PER_DAY), so any growth here directly eats into how much
+// timeline a node visually covers; the cap and exponent are kept
+// deliberately modest (was 2.5 / 0.65) so a fully zoomed-out low-
+// priority dream doesn't balloon into spanning the better part of a
+// year of gridlines.
 export function zoomCompensation(zoom: number): number {
-  return Math.min(2.5, Math.max(1, 1 / Math.pow(Math.max(zoom, 0.05), 0.65)));
+  return Math.min(1.6, Math.max(1, 1 / Math.pow(Math.max(zoom, 0.05), 0.55)));
 }
 
 // Priority drives size directly — no manual resize control. Higher
-// priority dreams are literally bigger on the web.
-const PRIORITY_SCALE: Record<DreamPriority, number> = { low: 0.8, medium: 1, high: 1.3 };
+// priority dreams are literally bigger on the web. Low dropped from
+// 0.8 to 0.55 so a low-priority dream reads as genuinely secondary
+// instead of nearly full-size, especially once zoomCompensation above
+// also scales it up while zoomed out.
+export const PRIORITY_SCALE: Record<DreamPriority, number> = { low: 0.55, medium: 1, high: 1.3 };
 
 function formatDate(iso?: string): string {
   if (!iso) return "";
@@ -30,28 +40,116 @@ function formatDate(iso?: string): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// name/date only — "Put dream to bed" and "Delete" moved to
+// DreamDetailPage's title-row menu (opened by clicking the node), so
+// the node itself doesn't have to spend its already-tight width on a
+// menu trigger.
 export interface DreamNodeData {
   name: string;
   priority: DreamPriority;
   expectedDateStart?: string;
   expectedDateEnd?: string;
-  onDelete?: () => void;
-  onPutToBed?: () => void;
-  onAddProject?: () => void;
 }
 
-const HANDLE_INSET = "10px";
-const cornerHandles: { id: string; position: Position; style: React.CSSProperties }[] = [
-  { id: "tl", position: Position.Top, style: { left: HANDLE_INSET, transform: "translate(0, -50%)" } },
-  { id: "tr", position: Position.Top, style: { left: "auto", right: HANDLE_INSET, transform: "translate(0, -50%)" } },
-  { id: "bl", position: Position.Bottom, style: { left: HANDLE_INSET, transform: "translate(0, 50%)" } },
-  { id: "br", position: Position.Bottom, style: { left: "auto", right: HANDLE_INSET, transform: "translate(0, 50%)" } },
-];
+// A ring of grab points around the node's boundary, one every 22.5°
+// (16 total) — approximates "drag from any point on the edge" closely
+// enough to feel continuous while staying a finite, actually-renderable
+// set of React Flow Handles (a real drag gesture needs a real DOM
+// element to grab). Each is positioned via pointOnShapeBoundary against
+// the node's *current* shape, so switching shapes moves every handle to
+// sit exactly on the new silhouette. What actually gets persisted per
+// link (see DreamLink.sourceAngle/targetAngle) is the angle itself, not
+// which discrete handle index was used — so the rendered connection
+// line (AngleEdge, below) can still recompute to a precise point on the
+// boundary rather than snapping to one of these 16 positions.
+export const ANCHOR_ANGLE_STEP = 22.5;
+export const ANCHOR_ANGLES = Array.from({ length: 16 }, (_, i) => i * ANCHOR_ANGLE_STEP);
+
+export function parseAngleHandleId(handleId: string | null | undefined): number | null {
+  if (!handleId) return null;
+  const m = /^(?:out|in)-(-?\d+(?:\.\d+)?)$/.exec(handleId);
+  return m ? Number(m[1]) : null;
+}
+
+function angleRingHandles(shape: string) {
+  return ANCHOR_ANGLES.map((angle) => {
+    const pt = pointOnShapeBoundary(shape, angle);
+    return { angle, style: { left: `${pt.x}%`, top: `${pt.y}%`, transform: "translate(-50%, -50%)" } };
+  });
+}
+
+// One source + one target handle stacked at the same spot, so a drag
+// can both start and end at any ring position regardless of direction.
+// The handles themselves are invisible (see .dream-edge-handle in
+// DreamWebPage.css) — a big, overlapping hit area per handle is what
+// makes "grab from anywhere on the edge" actually work, since a real
+// drag gesture still needs a real element under the pointer; the node
+// itself shows a glowing outline on hover (see the shape layer's
+// .dream-node-shape-layer class below) as the visible affordance
+// instead of dots.
+function AngleHandleRing({ shape }: { shape: string }) {
+  return (
+    <>
+      {angleRingHandles(shape).map(({ angle, style }) => (
+        <Handle
+          key={`out-${angle}`}
+          id={`out-${angle}`}
+          type="source"
+          position={Position.Top}
+          className="dream-edge-handle"
+          style={style}
+        />
+      ))}
+      {angleRingHandles(shape).map(({ angle, style }) => (
+        <Handle
+          key={`in-${angle}`}
+          id={`in-${angle}`}
+          type="target"
+          position={Position.Top}
+          className="dream-edge-handle"
+          style={style}
+        />
+      ))}
+    </>
+  );
+}
+
+// Renders a link as a straight line between two boundary points that
+// are recomputed every time — not tied to wherever a Handle happens to
+// be — from each end's stored angle (see DreamLink.sourceAngle/
+// targetAngle) against that node's current shape and size. This is
+// what keeps a connection anchored correctly (and "very similarly
+// spaced," per the design goal) when a node's shape changes, instead of
+// the line staying pinned to a now-stale pixel position.
+export interface AngleEdgeData {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  [key: string]: unknown;
+}
+
+export function AngleEdge({ data, style, markerEnd }: EdgeProps) {
+  const d = data as AngleEdgeData | undefined;
+  if (!d) return null;
+  return <BaseEdge path={`M ${d.x1} ${d.y1} L ${d.x2} ${d.y2}`} style={style} markerEnd={markerEnd} />;
+}
+
+// Given a node's top-left canvas position and its box size, the exact
+// canvas-space point where `angleDeg` crosses `shape`'s boundary.
+export function anchorPoint(
+  nodePos: { x: number; y: number },
+  size: { width: number; height: number },
+  shape: string,
+  angleDeg: number
+): { x: number; y: number } {
+  const pct = pointOnShapeBoundary(shape, angleDeg);
+  return { x: nodePos.x + (pct.x / 100) * size.width, y: nodePos.y + (pct.y / 100) * size.height };
+}
 
 export function DreamNode({ data }: { data: DreamNodeData }) {
   const { theme } = useTheme();
   const { zoom } = useViewport();
-  const [menuOpen, setMenuOpen] = useState(false);
   const scale = (PRIORITY_SCALE[data.priority] ?? 1) * zoomCompensation(zoom);
   const width = DREAM_BASE_WIDTH * scale;
   const height = DREAM_BASE_HEIGHT * scale;
@@ -63,6 +161,7 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
 
   const hasRange =
     data.expectedDateStart && data.expectedDateEnd && data.expectedDateStart !== data.expectedDateEnd;
+  const inset = contentInsetFor(theme.dreamNodeShape);
 
   return (
     <div
@@ -70,31 +169,46 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
       style={{
         width: `${width}px`,
         height: `${height}px`,
-        borderRadius: "10px",
-        border: `2px solid ${theme.dreamNodeOutlineColor}`,
-        background: theme.dreamNodeBackground,
-        color: "#ffffff",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
-        clipPath: clipPathFor(theme.dreamNodeShape),
-        padding: "8px 10px",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
         position: "relative",
+        // Read by .dream-node-shape-layer's hover rule (DreamWebPage.css)
+        // — filter: drop-shadow() follows the clipped silhouette itself,
+        // unlike box-shadow (which would glow the rectangular box even
+        // for a hexagon/diamond/blob), so the "full border" hover effect
+        // actually traces the shape that's grabbable.
+        ["--dream-edge-glow-color" as string]: theme.dreamLinkColor,
       }}
     >
-      {cornerHandles.map((h) => (
-        <Handle
-          key={h.id}
-          id={h.id}
-          type="source"
-          position={h.position}
-          style={{ background: theme.dreamLinkColor, width: 9, height: 9, ...h.style }}
-        />
-      ))}
+      {/* Only this decorative layer is clipped to a non-rectangular
+          shape — the name/date below live in an unclipped layer so a
+          hexagon/diamond/blob never hides them. */}
+      <div
+        className="dream-node-shape-layer"
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "10px",
+          border: `2px solid ${theme.dreamNodeOutlineColor}`,
+          background: theme.dreamNodeBackground,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+          clipPath: clipPathFor(theme.dreamNodeShape),
+          pointerEvents: "none",
+        }}
+      />
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px" }}>
+      <AngleHandleRing shape={theme.dreamNodeShape} />
+
+      <div
+        style={{
+          position: "absolute",
+          inset: `${inset.y}% ${inset.x}%`,
+          padding: "8px 10px",
+          boxSizing: "border-box",
+          color: "#ffffff",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
           <span
             style={{
@@ -119,68 +233,118 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
           </span>
         </div>
 
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <button
-            className="dream-node-menu-trigger"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((v) => !v);
-            }}
-            title="Dream actions"
-          >
-            ⋯
-          </button>
-          {menuOpen && (
-            <>
-              <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
-              <div className="managed-row-dropdown dream-node-dropdown">
-                {data.onAddProject && (
-                  <button
-                    className="dropdown-item"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(false);
-                      data.onAddProject!();
-                    }}
-                  >
-                    Add Project
-                  </button>
-                )}
-                {data.onPutToBed && (
-                  <button
-                    className="dropdown-item"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(false);
-                      data.onPutToBed!();
-                    }}
-                  >
-                    Put dream to bed
-                  </button>
-                )}
-                {data.onDelete && (
-                  <button
-                    className="dropdown-item dropdown-item-danger"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(false);
-                      data.onDelete!();
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        <span
+          style={{
+            fontSize: "11px",
+            opacity: 0.85,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {hasRange
+            ? `${formatDate(data.expectedDateStart)} – ${formatDate(data.expectedDateEnd)}`
+            : formatDate(data.expectedDateStart) || "No date set"}
+        </span>
       </div>
+    </div>
+  );
+}
 
-      <span style={{ fontSize: "11px", opacity: 0.85 }}>
-        {hasRange
-          ? `${formatDate(data.expectedDateStart)} – ${formatDate(data.expectedDateEnd)}`
-          : formatDate(data.expectedDateStart) || "No date set"}
+// A goal auto-appears clustered under its parent dream's node as one of
+// these — smaller, differently colored, no priority/date system of its
+// own (goals don't have one). Clicking the node body opens the goal
+// (like a dream node opens the dream); the small "web" button opens
+// this goal's Goal Web instead — kept as a distinct control, not folded
+// into the body click, since the two destinations are genuinely
+// different pages. draggable/deletable are set false on the Node object
+// itself (see DreamWebPage.tsx) — goal nodes are purely computed from
+// their parent dream's position, not their own persisted x/y.
+// Doubled alongside the dream node above, same reasoning.
+export const GOAL_NODE_WIDTH = 216;
+export const GOAL_NODE_HEIGHT = 108;
+
+export interface DreamGoalNodeData {
+  name: string;
+  onOpenWeb: () => void;
+}
+
+// A goal node's whole rectangle boundary is its "shape" (goals don't
+// have their own shape setting) — this single source+target handle
+// pair is what a dream's connection ring (see AngleHandleRing above)
+// can drag onto or from, to re-parent a goal to a different dream (see
+// DreamWebPage.tsx's onConnect). Sits at top-center — angle 0 on a
+// rectangle, matching what DreamWebPage.tsx's goal-edge math uses for
+// the goal end, rather than the node's center — mostly so it doesn't
+// sit underneath the "Enter Goal Web" button. Invisible + oversized hit
+// box, same as AngleHandleRing's — see .dream-edge-handle.
+function GoalAttachHandle() {
+  const style = { left: "50%", top: "0%", transform: "translate(-50%, -50%)" };
+  return (
+    <>
+      <Handle id="out-0" type="source" position={Position.Top} className="dream-edge-handle" style={style} />
+      <Handle id="in-0" type="target" position={Position.Top} className="dream-edge-handle" style={style} />
+    </>
+  );
+}
+
+export function DreamGoalNode({ data }: { data: DreamGoalNodeData }) {
+  const { theme } = useTheme();
+
+  return (
+    <div
+      className="dream-goal-node-shape"
+      style={{
+        width: `${GOAL_NODE_WIDTH}px`,
+        height: `${GOAL_NODE_HEIGHT}px`,
+        borderRadius: "8px",
+        border: `2px solid ${theme.dreamGoalNodeOutlineColor}`,
+        background: theme.dreamGoalNodeBackground,
+        boxShadow: "0 3px 8px rgba(0,0,0,0.3)",
+        boxSizing: "border-box",
+        padding: "8px 10px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        ["--dream-edge-glow-color" as string]: theme.dreamGoalNodeOutlineColor,
+        color: "#ffffff",
+        cursor: "pointer",
+        position: "relative",
+      }}
+      title={`Goal: ${data.name}`}
+    >
+      <GoalAttachHandle />
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        🎯 {data.name}
       </span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onOpenWeb();
+        }}
+        title="Enter Goal Web"
+        style={{
+          alignSelf: "flex-end",
+          fontSize: "12px",
+          lineHeight: 1,
+          padding: "4px 8px",
+          borderRadius: "4px",
+          border: `1px solid ${theme.dreamGoalNodeOutlineColor}`,
+          background: "rgba(0,0,0,0.25)",
+          color: "#ffffff",
+          cursor: "pointer",
+        }}
+      >
+        🕸 Web
+      </button>
     </div>
   );
 }

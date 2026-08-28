@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { View } from "../types/nav";
 import {
   Responsibility,
+  ResponsibilityCompletion,
   DailySchedule,
   WeeklySchedule,
   YearlySchedule,
@@ -16,11 +17,14 @@ import {
   updateResponsibilitySound,
   updateResponsibilityPendingLeadTime,
   deleteResponsibility,
+  fetchCompletionsForResponsibility,
 } from "../db/responsibilities";
 import { RESPONSIBILITY_ICON_CHOICES } from "../responsibilities/iconChoices";
 import { SOUND_PRESETS, playSound } from "../responsibilities/soundChoices";
 import { WEEKDAY_LABELS } from "../responsibilities/scheduling";
 import { Breadcrumb } from "../components/Breadcrumb";
+import { useSaveFeedback } from "../hooks/useSaveFeedback";
+import { SaveStatusIndicator } from "../components/SaveStatusIndicator";
 import "./Page.css";
 import "./Responsibilities.css";
 
@@ -42,6 +46,8 @@ export function ResponsibilityDetailPage({
   const [reasoning, setReasoning] = useState("");
   const [leadTimeDraft, setLeadTimeDraft] = useState("0");
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [tab, setTab] = useState<"details" | "history">("details");
+  const scheduleSave = useSaveFeedback();
 
   useEffect(() => {
     setLoading(true);
@@ -64,7 +70,7 @@ export function ResponsibilityDetailPage({
   const saveSchedule = async (schedule: Responsibility["schedule"]) => {
     if (!resp) return;
     setResp({ ...resp, schedule });
-    await updateResponsibilitySchedule(responsibilityId, schedule);
+    await scheduleSave.run(() => updateResponsibilitySchedule(responsibilityId, schedule));
   };
 
   const pickIcon = async (icon: string) => {
@@ -142,6 +148,19 @@ export function ResponsibilityDetailPage({
         </button>
       </div>
 
+      <div className="resp-tab-bar">
+        <button className={tab === "details" ? "resp-tab active" : "resp-tab"} onClick={() => setTab("details")}>
+          Details
+        </button>
+        <button className={tab === "history" ? "resp-tab active" : "resp-tab"} onClick={() => setTab("history")}>
+          History
+        </button>
+      </div>
+
+      {tab === "history" ? (
+        <HistoryTab responsibilityId={responsibilityId} />
+      ) : (
+        <>
       <label className="resp-field-label">
         Description
         <textarea
@@ -176,7 +195,10 @@ export function ResponsibilityDetailPage({
       </details>
 
       <div className="resp-section">
-        <div className="resp-section-title">Schedule</div>
+        <div className="resp-section-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          Schedule
+          <SaveStatusIndicator status={scheduleSave.status} />
+        </div>
         {resp.category === "daily" && (
           <DailyScheduleEditor schedule={resp.schedule as DailySchedule} onChange={saveSchedule} />
         )}
@@ -223,6 +245,56 @@ export function ResponsibilityDetailPage({
           ))}
         </div>
       </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---- History ----------------------------------------------------------
+
+function formatCompletionDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatCompletedAt(iso: string): string {
+  const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+// Bare-foundation completion log — just a reverse-chronological list of
+// every occurrence this responsibility has been marked done for. No
+// streak stats or filtering yet, just visibility into the raw history.
+function HistoryTab({ responsibilityId }: { responsibilityId: number }) {
+  const [completions, setCompletions] = useState<ResponsibilityCompletion[] | null>(null);
+
+  useEffect(() => {
+    setCompletions(null);
+    fetchCompletionsForResponsibility(responsibilityId).then(setCompletions);
+  }, [responsibilityId]);
+
+  if (completions === null) {
+    return <p className="page-text">Loading…</p>;
+  }
+
+  if (completions.length === 0) {
+    return <p className="page-text">No completions recorded yet.</p>;
+  }
+
+  return (
+    <div className="resp-section">
+      <div className="resp-section-title">{completions.length} completion{completions.length === 1 ? "" : "s"}</div>
+      <ul className="resp-history-list">
+        {completions.map((c) => (
+          <li key={c.id} className="resp-history-row">
+            <span className="resp-history-date">{formatCompletionDate(c.occurrenceDate)}</span>
+            <span className="resp-history-completed-at">completed {formatCompletedAt(c.completedAt)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -318,6 +390,23 @@ function DailyScheduleEditor({
           type="time"
           value={schedule.suggestedTime}
           onChange={(e) => onChange({ ...schedule, suggestedTime: e.target.value })}
+        />
+      </label>
+      <label className="resp-field-label">
+        Task duration in hours (optional — for a real block of time, not just an instant)
+        <input
+          type="number"
+          min={0}
+          step={0.25}
+          className="resp-lead-time-input"
+          value={schedule.taskTimeHours ?? ""}
+          placeholder="none"
+          onChange={(e) =>
+            onChange({
+              ...schedule,
+              taskTimeHours: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)),
+            })
+          }
         />
       </label>
 

@@ -1,0 +1,111 @@
+.projects-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.projects-add-form .inline-add-input {
+  margin-bottom: 0;
+  width: auto;
+  flex: 1;
+  min-width: 160px;
+}
+
+.projects-add-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Each row is its own bordered card — a plain borderless button list
+   read as one undifferentiated block once there were more than a
+   couple of items. */
+.projects-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  margin-bottom: 6px;
+}
+
+.projects-list-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+}
+
+.projects-list-item:hover {
+  background: var(--color-bg-secondary);
+}
+
+.projects-list-item-name {
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.projects-list-item-dream {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.projects-list-enter-web {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 8px;
+}
+
+.passion-project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.passion-project-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.passion-project-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.passion-project-card-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+}
+
+.passion-project-card-name:hover {
+  color: var(--color-accent);
+}

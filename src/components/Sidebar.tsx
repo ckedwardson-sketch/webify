@@ -1,5 +1,7 @@
 import { sidebarItems } from "../data/appData";
 import { View } from "../types/nav";
+import { useRearrangeMode } from "../rearrange/RearrangeModeContext";
+import { isMobileLayoutActive } from "../theme/mobileLayout";
 import "./Sidebar.css";
 
 interface SidebarProps {
@@ -9,14 +11,16 @@ interface SidebarProps {
 }
 
 export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
+  const { active: rearranging, enter: enterRearrangeMode, exit: exitRearrangeMode } = useRearrangeMode();
   const isActive = (label: string) => {
     if (label === "Home") return view.type === "home";
     if (label === "Recipes") return view.type.startsWith("recipe");
     if (label === "Settings") return view.type.startsWith("settings");
     if (label === "Responsibilities") return view.type.startsWith("responsibilit");
     if (label === "Dreams") return view.type === "dreams-web" || view.type === "dream-detail";
-    if (label === "Projects") return view.type.startsWith("project");
-    if (label === "Progress Webs") return view.type.startsWith("progress");
+    if (label === "Projects") return view.type.startsWith("project") || view.type.startsWith("progress");
+    if (label === "Goals") return view.type.startsWith("goal");
+    if (label === "Notes") return view.type === "notes";
     if (view.type === "placeholder") return view.label === label;
     return false;
   };
@@ -28,13 +32,14 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
     if (label === "Responsibilities") return onNavigate({ type: "responsibilities-home" });
     if (label === "Dreams") return onNavigate({ type: "dreams-web" });
     if (label === "Projects") return onNavigate({ type: "projects-home" });
-    if (label === "Progress Webs") return onNavigate({ type: "progress-web" });
+    if (label === "Goals") return onNavigate({ type: "goals-home" });
+    if (label === "Notes") return onNavigate({ type: "notes" });
     if (isPlaceholder) return onNavigate({ type: "placeholder", label });
   };
 
   const handleNav = (label: string, isPlaceholder: boolean) => {
     handleClick(label, isPlaceholder);
-    if (window.matchMedia("(max-width: 768px)").matches) onToggle();
+    if (isMobileLayoutActive()) onToggle();
   };
 
   return (
@@ -62,6 +67,17 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
           </li>
         ))}
       </ul>
+      <button
+        className={`sidebar-item sidebar-rearrange-trigger${rearranging ? " active" : ""}`}
+        onClick={rearranging ? exitRearrangeMode : enterRearrangeMode}
+        title={
+          rearranging
+            ? "Exit rearrange mode"
+            : "Reorder, add, or save/load layouts of the widgets on a project or goal page"
+        }
+      >
+        ↕ Rearrange
+      </button>
     </nav>
   );
 }

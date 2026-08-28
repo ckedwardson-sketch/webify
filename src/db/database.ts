@@ -257,6 +257,17 @@ async function runMigrations(db: Database): Promise<void> {
     await markMigrationApplied(db, "create_dream_links_table");
   }
 
+  // Which point on each end's node boundary a link visually connects
+  // to, stored as a rotational angle (degrees, 0-360) around that node's
+  // center rather than a raw x/y — so the connection point recomputes
+  // correctly against the node's current shape (see theme/nodeShapes.ts
+  // and theme/nodeBoundary.ts) instead of drifting if the shape changes.
+  // Null means "no angle recorded" (a link created before this existed,
+  // or via the old fixed corner-handle system) — DreamWebPage falls back
+  // to a default angle for those.
+  await ensureColumn(db, "add_dream_links_source_angle", "dream_links", "source_angle", "REAL");
+  await ensureColumn(db, "add_dream_links_target_angle", "dream_links", "target_angle", "REAL");
+
   // Deep memory for dream pages: every time name/reasoning/expected
   // date/priority/notes changes, the prior value is appended here
   // before the update lands — so a dream page can show its own history
@@ -429,13 +440,49 @@ async function runMigrations(db: Database): Promise<void> {
     await markMigrationApplied(db, "create_project_board_items_table");
   }
 
+  // A project no longer has to hang off a dream — it can just exist on
+  // its own, linked later or never. SQLite can't drop a NOT NULL/change
+  // an ON DELETE clause with ALTER TABLE, so this rebuilds the table:
+  // new shape, copy every row over unchanged, swap it in. ON DELETE
+  // CASCADE becomes SET NULL — deleting a dream should detach its
+  // projects, not take them down with it.
+  if (!(await isMigrationApplied(db, "make_projects_dream_id_optional"))) {
+    await db.execute(`
+      CREATE TABLE projects_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dream_id INTEGER REFERENCES dreams(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        goals TEXT NOT NULL DEFAULT '',
+        reasoning TEXT NOT NULL DEFAULT '',
+        needs_doing TEXT NOT NULL DEFAULT '',
+        expected_date_start TEXT,
+        expected_date_end TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT
+      )
+    `);
+    await db.execute(`
+      INSERT INTO projects_new
+        (id, dream_id, name, goals, reasoning, needs_doing, expected_date_start, expected_date_end, sort_order, created_at, updated_at)
+      SELECT id, dream_id, name, goals, reasoning, needs_doing, expected_date_start, expected_date_end, sort_order, created_at, updated_at
+      FROM projects
+    `);
+    await db.execute(`DROP TABLE projects`);
+    await db.execute(`ALTER TABLE projects_new RENAME TO projects`);
+    await markMigrationApplied(db, "make_projects_dream_id_optional");
+  }
+
   // Progress web — baseline only, see types/models.ts's ProgressNode
   // comment. Free-drag position like an undated dream; no links table
-  // yet since there's no dependency logic to hang it off of.
+  // yet since there's no dependency logic to hang it off of. Belongs to
+  // exactly one project (see the design-notes course-correction: only
+  // projects have progress webs, not a single global one).
   if (!(await isMigrationApplied(db, "create_progress_nodes_table"))) {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS progress_nodes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
         category TEXT NOT NULL DEFAULT 'task',
         short_description TEXT NOT NULL DEFAULT '',
         description TEXT NOT NULL DEFAULT '',
@@ -452,6 +499,406 @@ async function runMigrations(db: Database): Promise<void> {
       )
     `);
     await markMigrationApplied(db, "create_progress_nodes_table");
+  }
+
+  // project_id didn't exist yet the first time create_progress_nodes_table
+  // ran on an already-migrated dev database — ensureColumn covers that
+  // database, a fresh one already gets it from the CREATE TABLE above.
+  await ensureColumn(db, "add_progress_nodes_project_id", "progress_nodes", "project_id", "INTEGER REFERENCES projects(id) ON DELETE CASCADE");
+
+  // Goals — one layer above projects: a bigger aim a handful of projects
+  // might serve, optionally (never automatically) tied to a dream, same
+  // as projects. Deliberately mirrors the projects table shape 1:1
+  // rather than needs_doing text hint reuse or a self join, so the two
+  // stay simple and independent. Widgets (journal/link-board) are
+  // shared with projects via project_widgets.goal_id below rather than
+  // a parallel goal_widgets table — the widget content tables
+  // (project_journal_entries/project_board_items) key off widget_id
+  // alone, so they don't need to know or care which owner it's for.
+  if (!(await isMigrationApplied(db, "create_goals_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dream_id INTEGER REFERENCES dreams(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        goals TEXT NOT NULL DEFAULT '',
+        reasoning TEXT NOT NULL DEFAULT '',
+        needs_doing TEXT NOT NULL DEFAULT '',
+        expected_date_start TEXT,
+        expected_date_end TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT
+      )
+    `);
+    await markMigrationApplied(db, "create_goals_table");
+  }
+
+  // Lets a widget (journal or link/image board) belong to a goal instead
+  // of a project — goals are otherwise formatted identically to
+  // projects, so they share this table rather than needing a parallel
+  // one. Same rebuild technique as make_projects_dream_id_optional:
+  // project_id can't just be widened with ALTER TABLE. Exactly one of
+  // project_id/goal_id is set per row (enforced at the app level, not a
+  // CHECK constraint, to keep this a plain rebuild).
+  if (!(await isMigrationApplied(db, "add_project_widgets_goal_id"))) {
+    await db.execute(`
+      CREATE TABLE project_widgets_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+        goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
+        widget_type TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.execute(`
+      INSERT INTO project_widgets_new (id, project_id, widget_type, title, sort_order, created_at)
+      SELECT id, project_id, widget_type, title, sort_order, created_at FROM project_widgets
+    `);
+    await db.execute(`DROP TABLE project_widgets`);
+    await db.execute(`ALTER TABLE project_widgets_new RENAME TO project_widgets`);
+    await markMigrationApplied(db, "add_project_widgets_goal_id");
+  }
+
+  // A single rough guess at when work begins — separate from the
+  // expected_date_start/end range above, which is about the target/done
+  // date, not the start. Deliberately just one date, not a range: it's
+  // an estimate, not something worth precision-picking like the done-by
+  // date is.
+  await ensureColumn(db, "add_projects_estimated_start_date", "projects", "estimated_start_date", "TEXT");
+  await ensureColumn(db, "add_goals_estimated_start_date", "goals", "estimated_start_date", "TEXT");
+
+  // A goal's horizontal position on the Dream Web, once the user has
+  // dragged it there — null means "not yet dragged, use the computed
+  // cluster position under its parent dream" (see DreamWebPage.tsx's
+  // goalPositionsFor). Goals have no free-form y of their own even once
+  // dragged — only x moves; y always tracks either the goal's own date
+  // or its parent dream, same rule as before.
+  await ensureColumn(db, "add_goals_pos_x", "goals", "pos_x", "REAL");
+
+  // The dream-side anchor angle for a goal's dashed "attached to its
+  // dream" edge (see DreamWebPage.tsx) — null means "not dragged yet,
+  // keep auto-pointing at the goal" (the original behavior); once
+  // dragged, this pins it so a reconnect gesture actually sticks
+  // instead of snapping back to the auto-computed angle on next render.
+  await ensureColumn(db, "add_goals_dream_attach_angle", "goals", "dream_attach_angle", "REAL");
+
+  // A "passion project" is just a goal with this flag set — same table,
+  // same fields, same Goal Web machinery (it "can have its own progress
+  // web" for free this way) — just shown on the Projects page instead
+  // of the Goals page (see ProjectsHomePage.tsx), with a lighter-weight
+  // creation flow and an auto-provisioned Image Dock widget.
+  await ensureColumn(db, "add_goals_is_passion_project", "goals", "is_passion_project", "INTEGER NOT NULL DEFAULT 0");
+
+  // Designer-defined slider controls (see theme/customSliders.ts) — a
+  // theme can declare its own continuously-adjustable knobs (e.g. "grain
+  // overlay opacity") instead of only the fixed fields on ThemeSettings.
+  // One row per slider; `value` is the app user's current live setting,
+  // separate from `default_value` (what the designer/import shipped),
+  // so dragging the slider doesn't require re-importing the theme.
+  if (!(await isMigrationApplied(db, "create_theme_custom_sliders_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS theme_custom_sliders (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        css_var TEXT NOT NULL,
+        min_value REAL NOT NULL,
+        max_value REAL NOT NULL,
+        step_value REAL NOT NULL,
+        default_value REAL NOT NULL,
+        value REAL NOT NULL,
+        unit TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await markMigrationApplied(db, "create_theme_custom_sliders_table");
+  }
+
+  // Lets a project belong to a goal — previously projects only linked to
+  // a dream (see make_projects_dream_id_optional above). SET NULL, not
+  // CASCADE, matching projects.dream_id's "optional, detach don't
+  // destroy" convention: deleting a goal shouldn't take its projects
+  // with it.
+  await ensureColumn(db, "add_projects_goal_id", "projects", "goal_id", "INTEGER REFERENCES goals(id) ON DELETE SET NULL");
+
+  // Progress Web was retired as its own routed screen — Goal Web now
+  // shows tasks directly (see GoalWebPage.tsx). A task can belong to
+  // exactly one of project_id/goal_id, same dual-ownership convention as
+  // project_widgets: a goal with no project layer can still have tasks
+  // directly on it, and a project's own tasks still cascade-delete with
+  // it either way.
+  await ensureColumn(db, "add_progress_nodes_goal_id", "progress_nodes", "goal_id", "INTEGER REFERENCES goals(id) ON DELETE CASCADE");
+
+  // Lets a responsibility optionally be linked onto a goal's web too
+  // (see GoalWebPage.tsx's "Link Responsibility" flow) — SET NULL, same
+  // "optional, detach don't destroy" convention as projects.goal_id.
+  await ensureColumn(db, "add_responsibilities_goal_id", "responsibilities", "goal_id", "INTEGER REFERENCES goals(id) ON DELETE SET NULL");
+
+  // Remembers exactly where a web canvas (Dream Web, or one goal's Goal
+  // Web) was panned/zoomed to, so reopening it lands back where you left
+  // off instead of always re-fitting the whole canvas. One row per
+  // scope_key ("dream-web", or "goal-web:<id>"); overwritten wholesale on
+  // every viewport change rather than accumulating history.
+  if (!(await isMigrationApplied(db, "create_saved_viewports_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS saved_viewports (
+        scope_key TEXT PRIMARY KEY,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        zoom REAL NOT NULL
+      )
+    `);
+    await markMigrationApplied(db, "create_saved_viewports_table");
+  }
+
+  // Named zoom bookmarks within one goal's web — the replacement for
+  // "open a separate screen for this project": save the current pan/
+  // zoom under a label (e.g. a project's task cluster), then jump back
+  // to it later without leaving the canvas. Purely a viewport snapshot,
+  // not a data relationship — deleting a bookmark touches nothing else.
+  if (!(await isMigrationApplied(db, "create_goal_web_bookmarks_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS goal_web_bookmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        zoom REAL NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_goal_web_bookmarks_table");
+  }
+
+  // Three new widget types alongside journal/linkboard (see
+  // types/project.ts's ProjectWidgetType) — each keyed by widget_id,
+  // cascading with its owning project_widgets row like the existing
+  // content tables do.
+
+  // Table — one JSON blob per widget (columns + rows), not one row per
+  // cell: there's no formula/relational need, just a flexible grid.
+  if (!(await isMigrationApplied(db, "create_project_tables_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS project_tables (
+        widget_id INTEGER PRIMARY KEY REFERENCES project_widgets(id) ON DELETE CASCADE,
+        data_json TEXT NOT NULL DEFAULT '{}'
+      )
+    `);
+    await markMigrationApplied(db, "create_project_tables_table");
+  }
+
+  // Quick Photo — one settings row per widget (display mode, intervals,
+  // orientation, capture behavior) plus many photo_entries rows.
+  if (!(await isMigrationApplied(db, "create_photo_widget_settings_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS photo_widget_settings (
+        widget_id INTEGER PRIMARY KEY REFERENCES project_widgets(id) ON DELETE CASCADE,
+        display_mode TEXT NOT NULL DEFAULT 'carddeck',
+        slideshow_interval_seconds INTEGER NOT NULL DEFAULT 5,
+        carddeck_interval_seconds INTEGER NOT NULL DEFAULT 0,
+        orientation TEXT NOT NULL DEFAULT 'landscape',
+        ask_for_caption INTEGER NOT NULL DEFAULT 0,
+        capture_location INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await markMigrationApplied(db, "create_photo_widget_settings_table");
+  }
+
+  // Which camera slideshow/carddeck's tap-to-capture uses — added after
+  // the table above already existed for some installs, hence ensureColumn.
+  await ensureColumn(db, "add_photo_settings_preferred_camera", "photo_widget_settings", "preferred_camera", "TEXT NOT NULL DEFAULT 'rear'");
+
+  if (!(await isMigrationApplied(db, "create_photo_entries_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS photo_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        widget_id INTEGER NOT NULL REFERENCES project_widgets(id) ON DELETE CASCADE,
+        image_data TEXT NOT NULL,
+        caption TEXT,
+        latitude REAL,
+        longitude REAL,
+        taken_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await markMigrationApplied(db, "create_photo_entries_table");
+  }
+
+  // Image Dock — free-drag/resize images within one widget's box,
+  // percent-based coordinates so the layout holds up at any dock size.
+  if (!(await isMigrationApplied(db, "create_dock_images_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS dock_images (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        widget_id INTEGER NOT NULL REFERENCES project_widgets(id) ON DELETE CASCADE,
+        image_data TEXT NOT NULL,
+        x REAL NOT NULL DEFAULT 8,
+        y REAL NOT NULL DEFAULT 8,
+        width REAL NOT NULL DEFAULT 28,
+        height REAL NOT NULL DEFAULT 28,
+        z_index INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await markMigrationApplied(db, "create_dock_images_table");
+  }
+
+  // Rearrange mode's saved layouts (see components/RearrangeToolbar.tsx)
+  // — a snapshot of one page's widget list (types + titles, optionally
+  // content) that can be loaded back onto any page whose widget types
+  // it's compatible with. `category` records where it was saved from
+  // (e.g. "project", "goal") for the load browser's grouping — not an
+  // access restriction, just organization.
+  if (!(await isMigrationApplied(db, "create_saved_layouts_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS saved_layouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        include_content INTEGER NOT NULL DEFAULT 0,
+        data_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_saved_layouts_table");
+  }
+
+  // A responsibility can belong to any number of goals (previously a
+  // single responsibilities.goal_id FK) — this junction table replaces
+  // that, backfilled below from whatever single links already existed.
+  // The old column is left in place, unused, rather than dropped.
+  if (!(await isMigrationApplied(db, "create_goal_responsibility_links_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS goal_responsibility_links (
+        goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+        responsibility_id INTEGER NOT NULL REFERENCES responsibilities(id) ON DELETE CASCADE,
+        PRIMARY KEY (goal_id, responsibility_id)
+      )
+    `);
+    await db.execute(`
+      INSERT OR IGNORE INTO goal_responsibility_links (goal_id, responsibility_id)
+      SELECT goal_id, id FROM responsibilities WHERE goal_id IS NOT NULL
+    `);
+    await markMigrationApplied(db, "create_goal_responsibility_links_table");
+  }
+
+  // Likewise, a goal can attach to any number of dreams (previously a
+  // single goals.dream_id FK) so it can render as more than one node on
+  // the Dream Web — one per dream it's attached to. attach_angle/pos_x
+  // are per-link, not per-goal, since each rendered instance sits at a
+  // different spot relative to its own parent dream. Backfilled from
+  // whatever single attachment already existed; goals.dream_id itself is
+  // left in place afterward as the "originally created under" dream used
+  // by other pages (Goals list, breadcrumbs) — it isn't kept in sync
+  // with later Dream Web attach/detach actions.
+  if (!(await isMigrationApplied(db, "create_goal_dream_links_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS goal_dream_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+        dream_id INTEGER NOT NULL REFERENCES dreams(id) ON DELETE CASCADE,
+        attach_angle REAL,
+        pos_x REAL,
+        UNIQUE(goal_id, dream_id)
+      )
+    `);
+    await db.execute(`
+      INSERT OR IGNORE INTO goal_dream_links (goal_id, dream_id, attach_angle, pos_x)
+      SELECT id, dream_id, dream_attach_angle, pos_x FROM goals WHERE dream_id IS NOT NULL
+    `);
+    await markMigrationApplied(db, "create_goal_dream_links_table");
+  }
+
+  // Generalized field rearrangement (see rearrange/RearrangeModeContext.tsx
+  // and db/fieldLayout.ts) — Project/Goal Detail pages used to render
+  // their fields (Goals text, Reasoning, dates, the widget grid...) in a
+  // fixed hardcoded order. This table makes that order per-owner and
+  // draggable, same as the widget grid already was. A fresh owner has no
+  // rows here yet — db/fieldLayout.ts lazily backfills the original
+  // hardcoded order the first time it's read, so nothing regresses for
+  // existing projects/goals. freetext_fields backs the one genuinely new
+  // field kind this system adds (a plain label+textarea box, unlimited
+  // per owner, unlike the fixed structured fields).
+  if (!(await isMigrationApplied(db, "create_field_layout_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS freetext_fields (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL DEFAULT 'Notes',
+        content TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS field_layout (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL,
+        owner_id INTEGER NOT NULL,
+        field_type TEXT NOT NULL,
+        ref_id INTEGER,
+        sort_order REAL NOT NULL
+      )
+    `);
+    await markMigrationApplied(db, "create_field_layout_table");
+  }
+
+  // Notes — a Notion-lite workspace of pages (optionally nested,
+  // grouped by a free-text category) each made of ordered blocks. See
+  // db/notes.ts and pages/NotesPage.tsx.
+  if (!(await isMigrationApplied(db, "create_notes_tables"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS notes_pages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        parent_id INTEGER REFERENCES notes_pages(id) ON DELETE CASCADE,
+        category TEXT NOT NULL DEFAULT 'General',
+        title TEXT NOT NULL DEFAULT 'Untitled',
+        icon TEXT NOT NULL DEFAULT '📄',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS notes_blocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_id INTEGER NOT NULL REFERENCES notes_pages(id) ON DELETE CASCADE,
+        block_type TEXT NOT NULL DEFAULT 'paragraph',
+        content TEXT NOT NULL DEFAULT '',
+        checked INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await markMigrationApplied(db, "create_notes_tables");
+  }
+
+  // Bugfix: fetchFieldLayout's lazy backfill (see db/fieldLayout.ts) was
+  // a plain "if no rows, insert the defaults" check with no protection
+  // against two concurrent calls both seeing zero rows and both
+  // inserting — which React's StrictMode double-invoked effects made
+  // easy to trigger in practice, leaving every singleton field (Goals,
+  // Reasoning, the widget slot, etc.) duplicated for anyone who'd
+  // already opened a project/goal/dream page. This dedupes existing
+  // damage (keeping the lowest id per owner+field_type) and adds a
+  // partial unique index so it can't happen again — see the now
+  // "INSERT OR IGNORE" backfill/addBuiltinField in fieldLayout.ts.
+  if (!(await isMigrationApplied(db, "dedupe_and_constrain_field_layout"))) {
+    await db.execute(`
+      DELETE FROM field_layout
+      WHERE field_type != 'freetext'
+      AND id NOT IN (
+        SELECT MIN(id) FROM field_layout
+        WHERE field_type != 'freetext'
+        GROUP BY category, owner_id, field_type
+      )
+    `);
+    await db.execute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_field_layout_singleton
+      ON field_layout(category, owner_id, field_type)
+      WHERE field_type != 'freetext'
+    `);
+    await markMigrationApplied(db, "dedupe_and_constrain_field_layout");
   }
 }
 

@@ -2,7 +2,7 @@ import { getDb } from "./database";
 import { ProgressCategory, ProgressDifficulty, ProgressNode } from "../types/models";
 
 const PROGRESS_COLUMNS = `
-  id, category, short_description as shortDescription, description,
+  id, project_id as projectId, goal_id as goalId, category, short_description as shortDescription, description,
   difficulty, reason, instructions, image_data as imageData,
   is_complete as isComplete, is_read as isRead,
   pos_x as posX, pos_y as posY, created_at as createdAt, updated_at as updatedAt
@@ -10,6 +10,8 @@ const PROGRESS_COLUMNS = `
 
 type RawProgressRow = {
   id: number;
+  projectId: number | null;
+  goalId: number | null;
   category: ProgressCategory;
   shortDescription: string;
   description: string;
@@ -36,9 +38,36 @@ function mapRow(row: RawProgressRow): ProgressNode {
   };
 }
 
-export async function fetchProgressNodes(): Promise<ProgressNode[]> {
+export async function fetchProgressNodes(projectId: number): Promise<ProgressNode[]> {
   const db = await getDb();
-  const rows = await db.select<RawProgressRow[]>(`SELECT ${PROGRESS_COLUMNS} FROM progress_nodes ORDER BY id`);
+  const rows = await db.select<RawProgressRow[]>(
+    `SELECT ${PROGRESS_COLUMNS} FROM progress_nodes WHERE project_id = $1 ORDER BY id`,
+    [projectId]
+  );
+  return rows.map(mapRow);
+}
+
+// Tasks attached directly to a goal (no project layer) — see
+// GoalWebPage.tsx, the "not every goal needs a project" case.
+export async function fetchProgressNodesForGoal(goalId: number): Promise<ProgressNode[]> {
+  const db = await getDb();
+  const rows = await db.select<RawProgressRow[]>(
+    `SELECT ${PROGRESS_COLUMNS} FROM progress_nodes WHERE goal_id = $1 ORDER BY id`,
+    [goalId]
+  );
+  return rows.map(mapRow);
+}
+
+// Every task belonging to any project linked to this goal, in one
+// query — Goal Web needs this alongside the goal's own direct tasks to
+// render its full merged canvas without one round trip per project.
+export async function fetchProgressNodesForProjectsOfGoal(goalId: number): Promise<ProgressNode[]> {
+  const db = await getDb();
+  const rows = await db.select<RawProgressRow[]>(
+    `SELECT ${PROGRESS_COLUMNS} FROM progress_nodes
+     WHERE project_id IN (SELECT id FROM projects WHERE goal_id = $1) ORDER BY id`,
+    [goalId]
+  );
   return rows.map(mapRow);
 }
 
@@ -51,14 +80,22 @@ export async function fetchProgressNode(id: number): Promise<ProgressNode | null
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
-// New nodes start unread and incomplete, placed wherever the user was
-// looking on the canvas when they clicked "+".
-export async function addProgressNode(x: number, y: number): Promise<number> {
+// New nodes start unread and incomplete, placed wherever the caller
+// chose on the canvas when "+ Task" was clicked. Belongs to exactly one
+// of owner.projectId/owner.goalId — see ProgressNode's dual-ownership
+// comment in types/models.ts.
+export async function addProgressNode(
+  owner: { projectId: number } | { goalId: number },
+  x: number,
+  y: number
+): Promise<number> {
   const db = await getDb();
+  const projectId = "projectId" in owner ? owner.projectId : null;
+  const goalId = "goalId" in owner ? owner.goalId : null;
   const result = await db.execute(
-    `INSERT INTO progress_nodes (short_description, pos_x, pos_y, created_at, updated_at)
-     VALUES ('New task', $1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [x, y]
+    `INSERT INTO progress_nodes (project_id, goal_id, short_description, pos_x, pos_y, created_at, updated_at)
+     VALUES ($1, $2, 'New task', $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [projectId, goalId, x, y]
   );
   return result.lastInsertId as number;
 }

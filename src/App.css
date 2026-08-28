@@ -30,8 +30,26 @@ body {
   flex-direction: column;
 }
 
+/* A faint reminder you're in rearrange mode (see
+   rearrange/RearrangeModeContext.tsx) — the toolbar itself is the real
+   affordance, this just keeps the content area from looking completely
+   business-as-usual while it's active. */
+.rearrange-mode-active .app-content {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.app-main-column {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background-color: var(--color-bg);
   /* Two layers: an optional user-uploaded image on top, a generative

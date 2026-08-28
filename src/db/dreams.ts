@@ -53,7 +53,9 @@ export async function fetchDreamGraphData(): Promise<DreamGraphData> {
   const db = await getDb();
   const rawDreams = await db.select<RawDreamRow[]>(`SELECT ${DREAM_COLUMNS} FROM dreams ORDER BY id`);
   const links = await db.select<DreamLink[]>(
-    `SELECT id, source_dream_id as sourceDreamId, target_dream_id as targetDreamId FROM dream_links`
+    `SELECT id, source_dream_id as sourceDreamId, target_dream_id as targetDreamId,
+            source_angle as sourceAngle, target_angle as targetAngle
+     FROM dream_links`
   );
   return { dreams: rawDreams.map(mapDreamRow), links };
 }
@@ -79,6 +81,14 @@ export async function addDream(name: string, x: number, y: number): Promise<numb
 
 export async function deleteDream(id: number): Promise<void> {
   const db = await getDb();
+  // field_layout.owner_id can't be a real FK (it means a project, goal,
+  // or dream id depending on category) — clean up by hand, same as
+  // deleteProject/deleteGoal do.
+  await db.execute(
+    "DELETE FROM freetext_fields WHERE id IN (SELECT ref_id FROM field_layout WHERE category = 'dream' AND owner_id = $1 AND field_type = 'freetext')",
+    [id]
+  );
+  await db.execute("DELETE FROM field_layout WHERE category = 'dream' AND owner_id = $1", [id]);
   await db.execute("DELETE FROM dreams WHERE id = $1", [id]);
 }
 
@@ -205,12 +215,23 @@ export async function fetchDreamHistory(dreamId: number): Promise<DreamHistoryEn
   );
 }
 
-export async function addDreamLink(sourceDreamId: number, targetDreamId: number): Promise<void> {
+// sourceAngle/targetAngle are the rotational anchor points the link was
+// dragged from/to (see DreamLink's comment) — omitted (left null) when
+// a link is created some other way than dragging between two boundary
+// handles, e.g. a future non-visual link-creation path.
+export async function addDreamLink(
+  sourceDreamId: number,
+  targetDreamId: number,
+  sourceAngle: number | null = null,
+  targetAngle: number | null = null
+): Promise<void> {
   if (sourceDreamId === targetDreamId) return;
   const db = await getDb();
   await db.execute(
-    `INSERT OR IGNORE INTO dream_links (source_dream_id, target_dream_id) VALUES ($1, $2)`,
-    [sourceDreamId, targetDreamId]
+    `INSERT INTO dream_links (source_dream_id, target_dream_id, source_angle, target_angle)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT(source_dream_id, target_dream_id) DO UPDATE SET source_angle = excluded.source_angle, target_angle = excluded.target_angle`,
+    [sourceDreamId, targetDreamId, sourceAngle, targetAngle]
   );
 }
 
@@ -241,4 +262,22 @@ export async function fetchLinkedDreams(dreamId: number): Promise<LinkedDream[]>
     [dreamId]
   );
   return rows.map((row) => ({ linkId: row.linkId, dream: mapDreamRow(row) }));
+}
+
+// Loosely parses things like "6 months", "2 years", "3 weeks" into a
+// target ISO date from today. Returns null if it can't make sense of it.
+// Shared by DreamDetailPage's "put to bed" menu action — colocated here
+// with putDreamToBed rather than in a page file, since both belong to
+// the same feature.
+export function parseSleepDuration(input: string): string | null {
+  const match = input.trim().match(/^(\d+)\s*(day|week|month|year)s?$/i);
+  if (!match) return null;
+  const n = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  const d = new Date();
+  if (unit === "day") d.setDate(d.getDate() + n);
+  else if (unit === "week") d.setDate(d.getDate() + n * 7);
+  else if (unit === "month") d.setMonth(d.getMonth() + n);
+  else if (unit === "year") d.setFullYear(d.getFullYear() + n);
+  return d.toISOString().slice(0, 10);
 }

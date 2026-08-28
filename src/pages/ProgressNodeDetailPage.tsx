@@ -8,6 +8,7 @@ import {
   markProgressRead,
   deleteProgressNode,
 } from "../db/progress";
+import { fetchProject } from "../db/projects";
 import { ProgressNode, ProgressCategory, ProgressDifficulty } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
@@ -19,16 +20,26 @@ import "./ProgressNodeDetailPage.css";
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as ProgressCategory[];
 const DIFFICULTIES = Object.keys(DIFFICULTY_LABELS) as ProgressDifficulty[];
 
+// A task belongs to exactly one of projectId/goalId (see ProgressNode's
+// dual-ownership comment in types/models.ts). Its "back to the web" and
+// "delete" destinations both need to resolve to a Goal Web — if the
+// task hangs off a project instead of a goal directly, that means
+// looking up which goal (if any) that project belongs to.
 export function ProgressNodeDetailPage({
   nodeId,
+  projectId,
+  goalId,
   onNavigate,
 }: {
   nodeId: number;
+  projectId?: number;
+  goalId?: number;
   onNavigate: (view: View) => void;
 }) {
   const { theme } = useTheme();
   const [node, setNode] = useState<ProgressNode | null>(null);
   const [loading, setLoading] = useState(true);
+  const [backView, setBackView] = useState<View | null>(null);
   const [shortDescDraft, setShortDescDraft] = useState("");
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [reasonDraft, setReasonDraft] = useState("");
@@ -37,8 +48,20 @@ export function ProgressNodeDetailPage({
 
   useEffect(() => {
     setLoading(true);
-    fetchProgressNode(nodeId).then((n) => {
+    const resolveBackView = async (): Promise<View> => {
+      if (goalId !== undefined) return { type: "goal-web", goalId };
+      if (projectId !== undefined) {
+        const project = await fetchProject(projectId);
+        return project?.goalId != null
+          ? { type: "goal-web", goalId: project.goalId }
+          : { type: "project-detail", projectId };
+      }
+      return { type: "goals-home" };
+    };
+
+    Promise.all([fetchProgressNode(nodeId), resolveBackView()]).then(([n, back]) => {
       setNode(n);
+      setBackView(back);
       setShortDescDraft(n?.shortDescription ?? "");
       setDescriptionDraft(n?.description ?? "");
       setReasonDraft(n?.reason ?? "");
@@ -46,7 +69,7 @@ export function ProgressNodeDetailPage({
       setLoading(false);
       if (n && !n.isRead) markProgressRead(nodeId);
     });
-  }, [nodeId]);
+  }, [nodeId, projectId, goalId]);
 
   const saveShortDesc = async () => {
     if (!node || shortDescDraft === node.shortDescription) return;
@@ -114,7 +137,7 @@ export function ProgressNodeDetailPage({
     if (!node) return;
     if (!confirm(`Delete "${node.shortDescription || "this task"}"?`)) return;
     await deleteProgressNode(node.id);
-    onNavigate({ type: "progress-web" });
+    onNavigate(backView ?? { type: "goals-home" });
   };
 
   if (loading) {
@@ -139,7 +162,7 @@ export function ProgressNodeDetailPage({
     <div className="page">
       <Breadcrumb
         crumbs={[
-          { label: "Progress Web", onClick: () => onNavigate({ type: "progress-web" }) },
+          { label: "Goal Web", onClick: () => onNavigate(backView ?? { type: "goals-home" }) },
           { label: node.shortDescription || "Untitled" },
         ]}
       />

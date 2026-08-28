@@ -1,5 +1,7 @@
 // src/components/DreamDateRangeField.tsx
 import { useEffect, useState } from "react";
+import { useSaveFeedback } from "../hooks/useSaveFeedback";
+import { SaveStatusIndicator } from "./SaveStatusIndicator";
 import "./DreamDateRangeField.css";
 
 type Precision = "none" | "day" | "month" | "year" | "range";
@@ -62,8 +64,9 @@ export function DreamDateRangeField({
   start?: string;
   end?: string;
   resetToken: number;
-  onSave: (start: string | null, end: string | null) => void;
+  onSave: (start: string | null, end: string | null) => void | Promise<void>;
 }) {
+  const { status, run } = useSaveFeedback();
   const [mode, setMode] = useState<Precision>(() => inferPrecision(start, end));
   const [day, setDay] = useState(start && start === end ? start : "");
   const [month, setMonth] = useState(start ? start.slice(0, 7) : "");
@@ -87,7 +90,7 @@ export function DreamDateRangeField({
 
   const handleSave = () => {
     const computed = computeRange(mode, day, month, year, rangeStart, rangeEnd);
-    onSave(computed.start, computed.end);
+    run(() => onSave(computed.start, computed.end));
   };
 
   return (
@@ -137,9 +140,12 @@ export function DreamDateRangeField({
         </div>
       )}
 
-      <button className="add-button secondary" onClick={handleSave}>
-        Save date
-      </button>
+      <div className="save-row">
+        <button className="add-button secondary" onClick={handleSave} disabled={status === "saving"}>
+          {status === "saving" ? "Saving…" : "Save date"}
+        </button>
+        <SaveStatusIndicator status={status === "saving" ? "idle" : status} />
+      </div>
     </div>
   );
 }

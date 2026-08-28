@@ -1,12 +1,13 @@
 // src/pages/RecipesGraphPage.tsx
 import React, { useEffect, useState } from "react";
-import { ReactFlow, Node, Edge, Background, Controls, Panel } from "@xyflow/react";
+import { ReactFlow, Node, Edge, Background, Panel } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { fetchAllGraphData, GraphRecipeNode } from "../db/recipes";
 import { CategoryNode, RecipeCardNode, IterationNode } from "../components/GraphNodes";
 import { FilterState } from "../types/models";
 import { View } from "../types/nav";
 import { StyledButton } from "../icons/StyledButton";
+import { WebControls } from "../components/WebControls";
 import { useTheme } from "../theme/ThemeContext";
 import "./Page.css";
 
@@ -346,6 +347,9 @@ export function RecipesGraphPage({
           nodeTypes={nodeTypes}
           onNodeClick={handleNodeClick}
           fitView
+          minZoom={0.05}
+          maxZoom={4}
+          proOptions={{ hideAttribution: true }}
         >
           {/* Zoom Out & Reset Controls embedded inside Canvas Top-Left */}
           <Panel position="top-left">
@@ -361,7 +365,7 @@ export function RecipesGraphPage({
             bgColor={theme.webBackgroundImage ? "transparent" : theme.webBackground}
             gap={16}
           />
-          <Controls />
+          <WebControls />
         </ReactFlow>
       </div>
     </div>

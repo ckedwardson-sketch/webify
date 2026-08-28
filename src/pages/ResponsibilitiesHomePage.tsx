@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "../types/nav";
-import { Responsibility, ResponsibilityCompletion } from "../types/responsibility";
+import { Responsibility, ResponsibilityCompletion, DailySchedule } from "../types/responsibility";
 import {
   fetchResponsibilities,
   fetchAllCompletions,
@@ -77,7 +77,7 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
 
   return (
     <div className="page resp-page">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="resp-home-header">
         <h1 className="page-title">Responsibilities</h1>
         <button
           className="add-button secondary"
@@ -96,36 +96,19 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
             {currentTasks.map((r) => {
               const done = isCompletedForCurrentPeriod(r, completions);
               return (
-                <li
-                  key={r.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 4px",
-                    borderBottom: "1px solid #eee",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={done}
-                    onChange={() => handleToggleComplete(r, done)}
-                    title={done ? "Mark not done" : "Mark done"}
-                  />
+                <li key={r.id}>
+                  {/* The whole bar is the completion toggle — responsibilities
+                      rarely change, so editing one (via Manage) doesn't need
+                      to be one accidental tap away on a list meant purely for
+                      checking things off, especially on mobile. */}
                   <button
-                    onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
-                    style={{
-                      flex: 1,
-                      textAlign: "left",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: "0.9rem",
-                      color: done ? "#999" : "#222",
-                      textDecoration: done ? "line-through" : "none",
-                    }}
+                    className={`resp-task-row${done ? " done" : ""}`}
+                    onClick={() => handleToggleComplete(r, done)}
+                    title={done ? "Mark not done" : "Mark done"}
                   >
-                    <span className="resp-icon">{r.icon}</span> {r.name}
+                    <input type="checkbox" checked={done} readOnly tabIndex={-1} />
+                    <span className="resp-icon">{r.icon}</span>
+                    <span className="resp-task-row-name">{r.name}</span>
                   </button>
                 </li>
               );
@@ -146,22 +129,56 @@ export function ResponsibilitiesHomePage({ onNavigate }: { onNavigate: (view: Vi
               </div>
             ))}
             {daily
-              .filter((r) => (r.schedule as { activeDays: number[] }).activeDays.includes(now.getDay()))
-              .map((r) => {
-                const sched = r.schedule as { suggestedTime: string };
-                const pct = (minutesFromTimeString(sched.suggestedTime) / 1440) * 100;
+              .filter((r) => (r.schedule as DailySchedule).activeDays.includes(now.getDay()))
+              .flatMap((r) => {
+                const sched = r.schedule as DailySchedule;
                 const done = isCompletedForCurrentPeriod(r, completions);
-                return (
+                // A duration-having task anchors to the latest-acceptable
+                // (must-start-by) time instead of the suggested one — see
+                // DailySchedule.taskTimeHours's comment. Only draw the
+                // connecting line/second marker once it's long enough to
+                // actually read as a block of time.
+                const hasDuration = !!sched.taskTimeHours && sched.taskTimeHours > 0;
+                const startTime = hasDuration ? sched.rangeEnd : sched.suggestedTime;
+                const startMin = minutesFromTimeString(startTime);
+                const startPct = (startMin / 1440) * 100;
+                const showsRange = hasDuration && sched.taskTimeHours! >= 1.5;
+                const endMin = showsRange ? Math.min(1440, startMin + sched.taskTimeHours! * 60) : startMin;
+                const endPct = (endMin / 1440) * 100;
+
+                const startMarker = (
                   <button
                     key={r.id}
                     className={`resp-hourly-marker ${done ? "done" : ""}`}
-                    style={{ left: `${pct}%` }}
-                    title={`${r.name} — ${sched.suggestedTime}`}
+                    style={{ left: `${startPct}%` }}
+                    title={`${r.name} — ${startTime}`}
                     onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
                   >
                     {r.icon}
                   </button>
                 );
+
+                if (!showsRange) return [startMarker];
+
+                return [
+                  <div
+                    key={`${r.id}-range`}
+                    className="resp-hourly-range-line"
+                    style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
+                  />,
+                  startMarker,
+                  <button
+                    key={`${r.id}-end`}
+                    className={`resp-hourly-marker ${done ? "done" : ""}`}
+                    style={{ left: `${endPct}%` }}
+                    title={`${r.name} — until ${Math.floor(endMin / 60)
+                      .toString()
+                      .padStart(2, "0")}:${(endMin % 60).toString().padStart(2, "0")}`}
+                    onClick={() => onNavigate({ type: "responsibility-detail", responsibilityId: r.id })}
+                  >
+                    {r.icon}
+                  </button>,
+                ];
               })}
           </div>
         </div>

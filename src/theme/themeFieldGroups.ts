@@ -15,6 +15,10 @@ export interface ThemeColorField {
   options?: { value: string; label: string }[]; // required for "select"
   placeholder?: string; // used by "code"
   help?: string; // short explanatory line shown under a "code" field
+  // "number" only — defaults to 0/60/1 (webCardRadius's range) when unset.
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export interface ThemeColorGroup {
@@ -48,6 +52,12 @@ const NAV_LAYOUT_OPTIONS = [
   { value: "left", label: "Sidebar, left (default)" },
   { value: "right", label: "Sidebar, right" },
   { value: "top", label: "Top navigation bar" },
+];
+
+const MOBILE_MODE_OPTIONS = [
+  { value: "auto", label: "Auto — follow window size (default)" },
+  { value: "on", label: "Always on — force mobile layout" },
+  { value: "off", label: "Always off — force desktop layout" },
 ];
 
 const SURFACE_STYLE_LABELS: Record<string, string> = {
@@ -112,6 +122,24 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
     title: "Big layout & feel",
     fields: [
       { key: "navLayout", label: "Navigation position", kind: "select", options: NAV_LAYOUT_OPTIONS },
+      { key: "mobileMode", label: "Mobile layout", kind: "select", options: MOBILE_MODE_OPTIONS },
+      { key: "sidebarWidth", label: "Sidebar width (px)", kind: "number", min: 140, max: 400, step: 5 },
+      {
+        key: "pageMaxWidth",
+        label: "Page reading width (px)",
+        kind: "number",
+        min: 400,
+        max: 1400,
+        step: 10,
+      },
+      {
+        key: "pageTitleSize",
+        label: "Page heading size (rem)",
+        kind: "number",
+        min: 1,
+        max: 3.5,
+        step: 0.1,
+      },
       {
         key: "surfaceStyle",
         label: "Surface style (buttons, cards, rows)",

@@ -1,0 +1,209 @@
+/* A normal flex item, not fixed — App.tsx renders it as a sibling
+   between <Sidebar/> and <main>, inside .app-shell's flex row, so it
+   naturally sits to the right of the sidebar regardless of the
+   sidebar's width or collapsed state (fixed positioning at a
+   hardcoded left offset would either overlap the sidebar or need to
+   track its width by hand). position: relative here just gives its own
+   popovers (the add menu, the hint) a sane anchor — see below. */
+.rearrange-toolbar {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 100%;
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 4px;
+  z-index: 40;
+}
+
+.rearrange-toolbar-spacer {
+  flex: 1;
+}
+
+.rearrange-tool-button {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-sidebar-text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rearrange-tool-button:hover {
+  background: var(--color-sidebar-hover-bg);
+}
+
+.rearrange-tool-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rearrange-tool-button:disabled:hover {
+  background: transparent;
+}
+
+.rearrange-tool-button-active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* The Delete tool specifically gets red instead of the generic accent
+   — starting red, as asked, rather than looking like every other tool. */
+.rearrange-tool-button-danger {
+  background: var(--color-danger);
+}
+
+.rearrange-tool-tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.rearrange-tool-button:hover .rearrange-tool-tooltip {
+  opacity: 1;
+}
+
+.rearrange-hint {
+  position: absolute;
+  top: 10px;
+  left: calc(100% + 10px);
+  z-index: 250;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.rearrange-add-menu {
+  position: absolute;
+  top: 50px;
+  left: calc(100% + 10px);
+  z-index: 251;
+  width: 220px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.rearrange-add-menu-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-secondary);
+  padding: 4px 8px;
+}
+
+.rearrange-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 251;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.rearrange-load-browser {
+  width: 420px;
+}
+
+.rearrange-load-category {
+  margin-top: 10px;
+}
+
+.rearrange-load-category-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.rearrange-load-item {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.rearrange-load-item-button {
+  flex: 1;
+  position: relative;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.rearrange-load-item-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.rearrange-load-item-meta {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.rearrange-load-item-unavailable {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+}
+
+.rearrange-load-item-delete {
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.rearrange-load-item-delete:hover {
+  color: var(--color-danger);
+}

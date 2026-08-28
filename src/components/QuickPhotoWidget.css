@@ -1,0 +1,294 @@
+.quick-photo-widget {
+  position: relative;
+  width: 100%;
+  max-height: 320px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+
+.quick-photo-menu-wrapper {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+}
+
+.quick-photo-menu-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.quick-photo-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #111;
+}
+
+.quick-photo-empty {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.quick-photo-error {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: rgba(127, 29, 29, 0.85);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  z-index: 6;
+}
+
+/* Camera */
+.quick-photo-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.quick-photo-orientation-portrait .quick-photo-camera-video {
+  object-fit: contain;
+}
+
+.quick-photo-camera-controls {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.quick-photo-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Slideshow */
+.quick-photo-slideshow-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+@keyframes quickPhotoSlideInNext {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes quickPhotoSlideInPrev {
+  from {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.quick-photo-slide-in-next {
+  animation: quickPhotoSlideInNext 0.35s ease-out;
+}
+
+.quick-photo-slide-in-prev {
+  animation: quickPhotoSlideInPrev 0.35s ease-out;
+}
+
+/* Stacked bottom-to-top: controls row, then dots, then the caption —
+   each offset from the last so they don't overlap. The base +5% on the
+   controls row (below) is the "move up 5%, it was getting clipped"
+   fix; these two just stack further up from there. */
+.quick-photo-slideshow-caption {
+  position: absolute;
+  bottom: calc(8px + 5% + 46px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 0.75rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.quick-photo-slideshow-dots {
+  position: absolute;
+  bottom: calc(8px + 5% + 26px);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.quick-photo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 0;
+}
+
+.quick-photo-dot-active {
+  background: #fff;
+  width: 8px;
+  height: 8px;
+}
+
+.quick-photo-stage-controls {
+  position: absolute;
+  /* Same +5% nudge — same clipping issue against the deck bar/controls
+     row underneath it. */
+  bottom: calc(8px + 5%);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Card deck */
+.quick-photo-carddeck {
+  flex-direction: column;
+}
+
+.quick-photo-deck {
+  position: relative;
+  width: 78%;
+  height: 75%;
+}
+
+.quick-photo-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  /* Every card pivots around the same point, well below the deck — see
+     CardDeckStage's comment. A longer, spring-flavored easing is what
+     actually reads as "smooth circular rotation" rather than a snap. */
+  transform-origin: 50% 340%;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, z-index 0s;
+  cursor: pointer;
+}
+
+.quick-photo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.quick-photo-card-front {
+  border-color: var(--color-accent);
+}
+
+.quick-photo-card-caption {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.quick-photo-deck-bar {
+  width: 100%;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin-top: -4px;
+}
+
+/* Caption prompt */
+.quick-photo-caption-prompt {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 301;
+  width: 320px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.quick-photo-caption-preview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* Settings panel */
+.quick-photo-settings-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 301;
+  width: 320px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.quick-photo-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.quick-photo-dialog-close:hover {
+  background: var(--color-danger);
+  color: #fff;
+}

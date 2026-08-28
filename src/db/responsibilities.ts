@@ -31,7 +31,7 @@ const COLUMNS = `
   created_at as createdAt, updated_at as updatedAt
 `;
 
-function mapRow(row: RawRow): Responsibility {
+function mapRow(row: RawRow, goalIds: number[]): Responsibility {
   let schedule: ResponsibilitySchedule;
   try {
     schedule = normalizeSchedule(row.category, JSON.parse(row.scheduleJson));
@@ -51,28 +51,58 @@ function mapRow(row: RawRow): Responsibility {
     schedule,
     sortOrder: row.sortOrder,
     pendingLeadTimeHours: row.pendingLeadTimeHours ?? 0,
+    goalIds,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
   };
+}
+
+// Every (goal_id, responsibility_id) link in one query — cheaper than
+// one query per responsibility. Callers group this by responsibility_id.
+async function fetchAllLinks(): Promise<{ goalId: number; responsibilityId: number }[]> {
+  const db = await getDb();
+  return db.select<{ goalId: number; responsibilityId: number }[]>(
+    "SELECT goal_id as goalId, responsibility_id as responsibilityId FROM goal_responsibility_links"
+  );
+}
+
+function groupLinksByResponsibility(links: { goalId: number; responsibilityId: number }[]): Map<number, number[]> {
+  const map = new Map<number, number[]>();
+  for (const link of links) {
+    const list = map.get(link.responsibilityId);
+    if (list) list.push(link.goalId);
+    else map.set(link.responsibilityId, [link.goalId]);
+  }
+  return map;
 }
 
 export async function fetchResponsibilities(
   category?: ResponsibilityCategory
 ): Promise<Responsibility[]> {
   const db = await getDb();
-  const rows = category
-    ? await db.select<RawRow[]>(
-        `SELECT ${COLUMNS} FROM responsibilities WHERE category = $1 ORDER BY sort_order`,
-        [category]
-      )
-    : await db.select<RawRow[]>(`SELECT ${COLUMNS} FROM responsibilities ORDER BY sort_order`);
-  return rows.map(mapRow);
+  const [rows, links] = await Promise.all([
+    category
+      ? db.select<RawRow[]>(
+          `SELECT ${COLUMNS} FROM responsibilities WHERE category = $1 ORDER BY sort_order`,
+          [category]
+        )
+      : db.select<RawRow[]>(`SELECT ${COLUMNS} FROM responsibilities ORDER BY sort_order`),
+    fetchAllLinks(),
+  ]);
+  const byResp = groupLinksByResponsibility(links);
+  return rows.map((row) => mapRow(row, byResp.get(row.id) ?? []));
 }
 
 export async function fetchResponsibility(id: number): Promise<Responsibility | null> {
   const db = await getDb();
-  const rows = await db.select<RawRow[]>(`SELECT ${COLUMNS} FROM responsibilities WHERE id = $1`, [id]);
-  return rows[0] ? mapRow(rows[0]) : null;
+  const [rows, links] = await Promise.all([
+    db.select<RawRow[]>(`SELECT ${COLUMNS} FROM responsibilities WHERE id = $1`, [id]),
+    db.select<{ goalId: number }[]>(
+      "SELECT goal_id as goalId FROM goal_responsibility_links WHERE responsibility_id = $1",
+      [id]
+    ),
+  ]);
+  return rows[0] ? mapRow(rows[0], links.map((l) => l.goalId)) : null;
 }
 
 export async function addResponsibility(
@@ -152,6 +182,38 @@ export async function updateResponsibilityPendingLeadTime(id: number, hours: num
   );
 }
 
+export async function linkResponsibilityToGoal(responsibilityId: number, goalId: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT OR IGNORE INTO goal_responsibility_links (goal_id, responsibility_id) VALUES ($1, $2)",
+    [goalId, responsibilityId]
+  );
+}
+
+export async function unlinkResponsibilityFromGoal(responsibilityId: number, goalId: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "DELETE FROM goal_responsibility_links WHERE goal_id = $1 AND responsibility_id = $2",
+    [goalId, responsibilityId]
+  );
+}
+
+// Backs Goal Web's list of responsibilities already linked to this goal.
+export async function fetchResponsibilitiesForGoal(goalId: number): Promise<Responsibility[]> {
+  const db = await getDb();
+  const [rows, links] = await Promise.all([
+    db.select<RawRow[]>(
+      `SELECT ${COLUMNS} FROM responsibilities
+       WHERE id IN (SELECT responsibility_id FROM goal_responsibility_links WHERE goal_id = $1)
+       ORDER BY sort_order`,
+      [goalId]
+    ),
+    fetchAllLinks(),
+  ]);
+  const byResp = groupLinksByResponsibility(links);
+  return rows.map((row) => mapRow(row, byResp.get(row.id) ?? []));
+}
+
 export async function deleteResponsibility(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM responsibility_completions WHERE responsibility_id = $1", [id]);
@@ -170,6 +232,21 @@ export async function fetchAllCompletions(): Promise<ResponsibilityCompletion[]>
      FROM responsibility_completions`
   );
   return rows;
+}
+
+// Backs the responsibility detail page's History tab — see item 11.
+export async function fetchCompletionsForResponsibility(
+  responsibilityId: number
+): Promise<ResponsibilityCompletion[]> {
+  const db = await getDb();
+  return db.select<ResponsibilityCompletion[]>(
+    `SELECT id, responsibility_id as responsibilityId, occurrence_date as occurrenceDate,
+            completed_at as completedAt
+     FROM responsibility_completions
+     WHERE responsibility_id = $1
+     ORDER BY occurrence_date DESC`,
+    [responsibilityId]
+  );
 }
 
 export async function markComplete(responsibilityId: number, occurrenceDate: string): Promise<void> {

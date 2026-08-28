@@ -59,6 +59,22 @@ export interface LayoutThemeSettings {
   headingStyle: string; // see headingPresets.ts
   backgroundStyle: string; // see backgroundPresets.ts
   motionStyle: string; // see motionPresets.ts
+  // "auto" follows the actual viewport (see theme/mobileLayout.ts);
+  // "on"/"off" force the mobile layout regardless of window size — lets
+  // someone preview it on a desktop window, or pin the roomier desktop
+  // layout on a small/split-screen window. Drives html.mobile-layout /
+  // html.mobile-landscape, which CSS keys off directly instead of a raw
+  // @media query, since that's the only way a forced value can actually
+  // change rendering.
+  mobileMode: string; // "auto" | "on" | "off"
+  // Raw pixel/rem values (not named presets, unlike the fields above) —
+  // three knobs that were flatly hardcoded in CSS until now and touch
+  // nearly every page: the reading-width cap every .page uses, the
+  // sidebar's fixed width, and every page's h1.page-title size. See
+  // --page-max-width / --sidebar-width / --page-title-size in theme.css.
+  pageMaxWidth: string; // px, numeric string
+  sidebarWidth: string; // px, numeric string
+  pageTitleSize: string; // rem, numeric string
 }
 
 // Recipe web colors + card chrome. Not backed by CSS variables — the
@@ -120,6 +136,21 @@ export interface DreamWebThemeSettings {
   dreamPriorityMedium: string;
   dreamPriorityHigh: string;
   dreamNodeShape: string; // "rectangle" | "hexagon" | "blob" | "diamond" — see nodeShapes.ts, also drives project nodes
+  // A goal auto-appears on its parent dream's node as a smaller,
+  // distinctly-colored node (see DreamGoalNode in DreamGraphNodes.tsx) —
+  // these two colors are that node's whole visual identity.
+  dreamGoalNodeBackground: string;
+  dreamGoalNodeOutlineColor: string;
+}
+
+// Goal Web — one per goal, auto-populated with every project linked to
+// it (Project.goalId). Same flat "background + a couple of node colors"
+// shape as ProgressWebThemeSettings, for the same reason: read directly
+// by plain React components via useTheme(), not CSS variables.
+export interface GoalWebThemeSettings {
+  goalWebBackground: string;
+  goalProjectNodeBackground: string;
+  goalProjectNodeOutlineColor: string;
 }
 
 export interface ThemeSettings
@@ -129,7 +160,8 @@ export interface ThemeSettings
     AdvancedThemeSettings,
     WebThemeSettings,
     ProgressWebThemeSettings,
-    DreamWebThemeSettings {
+    DreamWebThemeSettings,
+    GoalWebThemeSettings {
   mode: ThemeMode;
 }
 
@@ -163,6 +195,10 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "headingStyle",
   "backgroundStyle",
   "motionStyle",
+  "mobileMode",
+  "pageMaxWidth",
+  "sidebarWidth",
+  "pageTitleSize",
   "customCss",
   "recipeThemeOverrides",
   "dreamThemeOverrides",
@@ -193,6 +229,11 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "dreamPriorityMedium",
   "dreamPriorityHigh",
   "dreamNodeShape",
+  "dreamGoalNodeBackground",
+  "dreamGoalNodeOutlineColor",
+  "goalWebBackground",
+  "goalProjectNodeBackground",
+  "goalProjectNodeOutlineColor",
 ];
 
 // Maps each general-theme key to the CSS custom property it drives.
@@ -302,6 +343,10 @@ export const LAYOUT_DEFAULTS: LayoutThemeSettings = {
   headingStyle: DEFAULT_HEADING_STYLE,
   backgroundStyle: DEFAULT_BACKGROUND_STYLE,
   motionStyle: DEFAULT_MOTION_STYLE,
+  mobileMode: "auto",
+  pageMaxWidth: "640",
+  sidebarWidth: "220",
+  pageTitleSize: "1.6",
 };
 
 export const ADVANCED_DEFAULTS: AdvancedThemeSettings = {
@@ -330,6 +375,14 @@ export const DREAM_WEB_DEFAULTS: DreamWebThemeSettings = {
   dreamPriorityMedium: "#eab308",
   dreamPriorityHigh: "#ef4444",
   dreamNodeShape: DEFAULT_NODE_SHAPE,
+  dreamGoalNodeBackground: "#0f766e",
+  dreamGoalNodeOutlineColor: "#5eead4",
+};
+
+export const GOAL_WEB_DEFAULTS: GoalWebThemeSettings = {
+  goalWebBackground: "#0f2027",
+  goalProjectNodeBackground: "#155e75",
+  goalProjectNodeOutlineColor: "#67e8f9",
 };
 
 export function defaultsForMode(mode: ThemeMode): GeneralThemeSettings {
@@ -345,4 +398,5 @@ export const DEFAULT_THEME: ThemeSettings = {
   ...WEB_DEFAULTS,
   ...PROGRESS_WEB_DEFAULTS,
   ...DREAM_WEB_DEFAULTS,
+  ...GOAL_WEB_DEFAULTS,
 };

@@ -1,0 +1,50 @@
+/* Embedded flush into the canvas's own bottom-right corner (the canvas
+   container already has border-radius + overflow:hidden — see
+   .dream-canvas / .goal-web-canvas / the recipe web's canvas wrapper —
+   so 0 offset here sits right on the rounded corner wall instead of
+   floating above it like React Flow's default Controls/Attribution
+   did). Themed with the app's own CSS variables so it follows whatever
+   theme is active, instead of a hardcoded white box. */
+.web-controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: stretch;
+  background: var(--color-bg-elevated);
+  border-top: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+  border-top-left-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.web-controls-button {
+  border: none;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.web-controls-button:first-child {
+  border-left: none;
+}
+
+.web-controls-button:hover {
+  background: var(--color-bg-secondary);
+}
+
+.web-controls-fit {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  color: var(--color-accent);
+}

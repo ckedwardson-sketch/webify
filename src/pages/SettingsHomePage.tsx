@@ -4,20 +4,14 @@ import { useIcons } from "../icons/IconContext";
 import { useTextElements } from "../icons/TextElementContext";
 import { useButtonStyles } from "../icons/ButtonStyleContext";
 import { useTheme } from "../theme/ThemeContext";
-import { TextElementOverride } from "../db/textElements";
-import { ButtonStyleOverride } from "../db/buttonStyles";
-import { ThemeSettings } from "../theme/themeDefaults";
 import { fetchPresets, savePreset, deletePreset, fetchPresetData, ThemePresetRow } from "../db/themePresets";
 import { buildSettingsSearchIndex } from "./settingsSearchIndex";
+import { ThemeExport } from "../theme/themeExport";
+import { isValidCustomSliderDef } from "../theme/customSliders";
+import { ExportToAiModal } from "../components/ExportToAiModal";
+import { CustomThemeSliders } from "../components/CustomThemeSliders";
 import "./Page.css";
 import "./SettingsShared.css";
-
-interface ThemeExport {
-  icons: Record<string, string>;
-  textElements: Record<string, TextElementOverride>;
-  buttonStyles: Record<string, ButtonStyleOverride>;
-  themeSettings: Partial<ThemeSettings>;
-}
 
 const NAV_CARDS: { view: View; title: string; desc: string }[] = [
   { view: { type: "settings-icons" }, title: "Icons", desc: "Replace any glyph with a custom image" },
@@ -40,13 +34,14 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     setOverride: setButtonOverride,
     clearOverride: clearButtonOverride,
   } = useButtonStyles();
-  const { overrides: themeOverrides, replaceTheme } = useTheme();
+  const { overrides: themeOverrides, replaceTheme, customSliders, replaceCustomSliders } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [presets, setPresets] = useState<ThemePresetRow[]>([]);
   const [presetNameDraft, setPresetNameDraft] = useState("");
   const [savingPreset, setSavingPreset] = useState(false);
+  const [showExportToAi, setShowExportToAi] = useState(false);
 
   const searchIndex = useMemo(() => buildSettingsSearchIndex(), []);
   const results = useMemo(() => {
@@ -77,6 +72,11 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     textElements: textOverrides,
     buttonStyles: buttonOverrides,
     themeSettings: themeOverrides,
+    // Export each slider's *current* value as its default, so
+    // re-importing this exact file reproduces what's on screen now
+    // rather than resetting sliders back to whatever the original
+    // designer shipped.
+    customSliders: customSliders.map(({ value, ...def }) => ({ ...def, default: value })),
   });
 
   // Shared by file import and preset-apply: full replace, not merge —
@@ -88,11 +88,15 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     const textElements = parsed.textElements ?? {};
     const buttonStyles = parsed.buttonStyles ?? {};
     const themeSettings = parsed.themeSettings ?? {};
+    const customSliderDefs = Array.isArray(parsed.customSliders)
+      ? parsed.customSliders.filter(isValidCustomSliderDef)
+      : [];
 
     for (const key of Object.keys(iconOverrides)) await clearIconOverride(key);
     for (const key of Object.keys(textOverrides)) await clearTextOverride(key);
     for (const key of Object.keys(buttonOverrides)) await clearButtonOverride(key);
     await replaceTheme(themeSettings);
+    await replaceCustomSliders(customSliderDefs);
 
     let iconCount = 0,
       textCount = 0,
@@ -117,7 +121,13 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
       }
     }
 
-    return { iconCount, textCount, buttonCount, themeCount: Object.keys(themeSettings).length };
+    return {
+      iconCount,
+      textCount,
+      buttonCount,
+      themeCount: Object.keys(themeSettings).length,
+      sliderCount: customSliderDefs.length,
+    };
   };
 
   const handleExport = () => {
@@ -157,7 +167,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
       try {
         const counts = await applyThemeExport(parsed);
         setStatus(
-          `Imported: ${counts.iconCount} icons, ${counts.textCount} text elements, ${counts.buttonCount} button styles, ${counts.themeCount} theme settings.`
+          `Imported: ${counts.iconCount} icons, ${counts.textCount} text elements, ${counts.buttonCount} button styles, ${counts.themeCount} theme settings, ${counts.sliderCount} custom sliders.`
         );
       } catch (err) {
         console.error("Theme import error:", err);
@@ -197,7 +207,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
       const parsed = JSON.parse(raw) as Partial<ThemeExport>;
       const counts = await applyThemeExport(parsed);
       setStatus(
-        `Applied "${preset.name}": ${counts.iconCount} icons, ${counts.textCount} text elements, ${counts.buttonCount} button styles, ${counts.themeCount} theme settings.`
+        `Applied "${preset.name}": ${counts.iconCount} icons, ${counts.textCount} text elements, ${counts.buttonCount} button styles, ${counts.themeCount} theme settings, ${counts.sliderCount} custom sliders.`
       );
     } catch (err) {
       console.error("Apply preset error:", err);
@@ -307,10 +317,28 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
         />
       </div>
 
+      <div style={{ marginTop: "10px" }}>
+        <button className="add-button" onClick={() => setShowExportToAi(true)}>
+          Export to AI
+        </button>
+      </div>
+
       {status && (
         <p style={{ marginTop: "12px", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
           {status}
         </p>
+      )}
+
+      <div style={{ marginTop: "20px" }}>
+        <CustomThemeSliders />
+      </div>
+
+      {showExportToAi && (
+        <ExportToAiModal
+          getThemeExport={captureCurrentExport}
+          onNavigate={onNavigate}
+          onClose={() => setShowExportToAi(false)}
+        />
       )}
     </div>
   );

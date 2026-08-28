@@ -39,6 +39,13 @@
   --space-page-x: 48px;
   --space-page-y: 40px;
 
+  /* Three previously-hardcoded structural knobs, now settable from
+     Settings > Theme > Big layout & feel (see themeFieldGroups.ts /
+     ThemeContext.tsx). */
+  --page-max-width: 640px;
+  --sidebar-width: 220px;
+  --page-title-size: 1.6rem;
+
   /* Baseline values for the surface/heading/background/motion presets
      below (surfacePresets.ts / headingPresets.ts / backgroundPresets.ts
      / motionPresets.ts) — the "default" entry of each, so surfaces look
@@ -60,6 +67,32 @@
   --motion-easing: ease;
   --hover-lift: -1px;
   --hover-scale: 1.01;
+}
+
+/* Forced or auto-detected mobile layout (see theme/mobileLayout.ts /
+   ThemeContext.tsx, and Settings > Theme > Mobile layout). The
+   comfortable-desktop page padding above (48px/40px) eats a huge chunk
+   of a phone-width screen, so mobile gets its own, much tighter values —
+   higher specificity than :root above, so this wins whenever the class
+   is present. An explicit Density override from Settings still wins over
+   both (inline style beats any stylesheet rule regardless of
+   specificity), which is intentional: it's an explicit user choice on
+   both platforms. */
+html.mobile-layout {
+  --space-md: 10px;
+  --space-lg: 18px;
+  --space-page-x: 16px;
+  --space-page-y: 18px;
+}
+
+/* Mobile + landscape (see theme/mobileLayout.ts) — a landscape phone is
+   short (~350-430px tall) but reasonably wide, so vertical space is the
+   scarce resource here, not horizontal. Currently used by Dream Web,
+   Goal Web, Projects and Goals (see their own CSS) — see
+   Settings > Theme > Mobile layout. */
+html.mobile-landscape {
+  --space-page-y: 10px;
+  --space-page-x: 20px;
 }
 
 :root[data-theme="dark"] {

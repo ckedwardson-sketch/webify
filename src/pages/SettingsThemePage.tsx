@@ -68,8 +68,9 @@ export function SettingsThemePage({
       return (
         <input
           type="number"
-          min={0}
-          max={60}
+          min={field.min ?? 0}
+          max={field.max ?? 60}
+          step={field.step ?? 1}
           value={value}
           onChange={(e) => setThemeValue(key, e.target.value)}
           className="theme-number-input"

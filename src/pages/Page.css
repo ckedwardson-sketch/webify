@@ -1,10 +1,10 @@
 .page {
   padding: var(--space-page-y) var(--space-page-x);
-  max-width: 640px;
+  max-width: var(--page-max-width);
 }
 
 .page-title {
-  font-size: 1.6rem;
+  font-size: var(--page-title-size);
   margin: 0 0 20px;
   color: var(--color-text);
   font-family: var(--heading-font);
@@ -23,6 +23,12 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
+}
+
+/* Mobile landscape (see theme/mobileLayout.ts) — a short viewport can't
+   spare as much vertical rhythm before the page's actual content. */
+html.mobile-landscape .page-header {
+  margin-bottom: 12px;
 }
 
 .page-header .page-title {
@@ -115,6 +121,22 @@
 .save-status {
   font-size: 0.85rem;
   color: var(--color-text-secondary);
+  animation: save-status-in 0.15s ease-out;
+}
+
+.save-status-success {
+  color: #22c55e;
+}
+
+@keyframes save-status-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .add-button {
@@ -287,7 +309,7 @@
 }
 
 .title-rename-input {
-  font-size: 1.6rem;
+  font-size: var(--page-title-size);
   font-family: inherit;
   font-weight: inherit;
   color: var(--color-input-text);

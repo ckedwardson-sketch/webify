@@ -198,3 +198,56 @@ export function minutesFromTimeString(time: string): number {
 }
 
 export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// What fraction of its own applicable occasions this responsibility was
+// actually checked off, over the last 30 days — daily/weekly only (a
+// yearly task's "period" usually isn't even within a 30-day window, so
+// a rolling-30-day rate isn't a meaningful number for it). Used by the
+// responsibility card on Goal Web (see GoalWebPage.tsx).
+export function consistencyPercent(
+  r: Responsibility,
+  completions: ResponsibilityCompletion[],
+  referenceDate = new Date()
+): number | null {
+  const mine = completionsFor(r.id, completions);
+
+  if (r.category === "daily") {
+    const s = r.schedule as DailySchedule;
+    const doneDates = new Set(mine.map((c) => c.occurrenceDate));
+    let applicable = 0;
+    let done = 0;
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(referenceDate);
+      d.setDate(d.getDate() - i);
+      if (!s.activeDays.includes(d.getDay())) continue;
+      applicable++;
+      if (doneDates.has(todayISO(d))) done++;
+    }
+    return applicable === 0 ? null : Math.round((done / applicable) * 100);
+  }
+
+  if (r.category === "weekly") {
+    let weeks = 0;
+    let doneWeeks = 0;
+    for (let i = 0; i < 30; i += 7) {
+      const d = new Date(referenceDate);
+      d.setDate(d.getDate() - i);
+      const start = startOfWeekISO(d);
+      const end = endOfWeekISO(d);
+      weeks++;
+      if (mine.some((c) => c.occurrenceDate >= start && c.occurrenceDate <= end)) doneWeeks++;
+    }
+    return weeks === 0 ? null : Math.round((doneWeeks / weeks) * 100);
+  }
+
+  return null; // yearly
+}
+
+// How many days a week this is actually scheduled for — derived from
+// the schedule's own day-set, not a separate stored field. Null for
+// yearly, where "days per week" isn't a meaningful concept.
+export function daysPerWeek(r: Responsibility): number | null {
+  if (r.category === "daily") return (r.schedule as DailySchedule).activeDays.length;
+  if (r.category === "weekly") return (r.schedule as WeeklySchedule).allowedDays.length;
+  return null;
+}

@@ -1,21 +1,16 @@
 import { useEffect, useState } from "react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import { View } from "../types/nav";
 import { buildCaptureTargets, CaptureTarget } from "./captureTargetList";
 import { fetchCaptureSelection, setCaptureTargetSelected } from "../db/captureTargets";
 import { ReportIssueModal } from "../components/ReportIssueModal";
-
-interface Capture {
-  dataUrl: string;
-  width: number;
-  height: number;
-  label: string;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import {
+  CAPTURE_WIDGET_HIDE_ID,
+  Capture,
+  capturesToPdfBlob,
+  captureViewport,
+  downloadBlob,
+  runCaptureBatch,
+} from "./captureEngine";
 
 export function ScreenCaptureWidget({
   view,
@@ -49,44 +44,54 @@ export function ScreenCaptureWidget({
     });
   };
 
+  const [batchError, setBatchError] = useState<string | null>(null);
+
   const captureCurrentPage = async (label: string) => {
-    const canvas = await html2canvas(document.body, { backgroundColor: null });
-    const dataUrl = canvas.toDataURL("image/png");
-    setCaptures((prev) => [...prev, { dataUrl, width: canvas.width, height: canvas.height, label }]);
+    const shot = await captureViewport();
+    setCaptures((prev) => [...prev, { ...shot, label }]);
   };
 
   const captureThisPageNow = async () => {
-    await captureCurrentPage(`Current page (${new Date().toLocaleTimeString()})`);
+    setBatchError(null);
+    try {
+      await captureCurrentPage(`Current page (${new Date().toLocaleTimeString()})`);
+    } catch (err) {
+      console.error("Capture failed:", err);
+      setBatchError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   // Same raw screenshot mechanism as captureCurrentPage, just handed
   // to the ReportIssueModal instead of added to the batch list.
   const captureForIssueReport = async (): Promise<string> => {
-    const canvas = await html2canvas(document.body, { backgroundColor: null });
-    return canvas.toDataURL("image/png");
+    const shot = await captureViewport();
+    return shot.dataUrl;
   };
 
   const runBatchCapture = async () => {
     const selectedTargets = targets.filter((t) => selected.has(t.key));
     if (selectedTargets.length === 0) return;
 
-    const originalView = view;
+    setBatchError(null);
     setCaptures([]);
+    setBatchProgress(`Capturing 1 / ${selectedTargets.length}...`);
 
-    for (let i = 0; i < selectedTargets.length; i++) {
-      const target = selectedTargets[i];
-      setBatchProgress(`Capturing ${i + 1} / ${selectedTargets.length}: ${target.label}`);
-      onNavigate(target.view);
-      // Give React + the page's own data-loading effects time to
-      // finish rendering before we capture. Not a guaranteed "ready"
-      // signal, just a practical delay — SQLite reads are fast, so
-      // this is generous for the current page set.
-      await sleep(900);
-      await captureCurrentPage(target.label);
-    }
+    const { captures: results, errors } = await runCaptureBatch({
+      targets: selectedTargets,
+      currentView: view,
+      onNavigate,
+      onProgress: (message) => setBatchProgress(message),
+    });
 
-    onNavigate(originalView);
+    setCaptures(results);
     setBatchProgress(null);
+    if (errors.length > 0) {
+      setBatchError(
+        `${errors.length} of ${selectedTargets.length} page(s) failed to capture: ${errors
+          .map((e) => e.label)
+          .join(", ")}`
+      );
+    }
   };
 
   const removeCapture = (idx: number) => {
@@ -97,35 +102,23 @@ export function ScreenCaptureWidget({
 
   const exportPdf = () => {
     if (captures.length === 0) return;
-    const first = captures[0];
-    const pdf = new jsPDF({
-      orientation: first.width >= first.height ? "landscape" : "portrait",
-      unit: "px",
-      format: [first.width, first.height],
-    });
-
-    captures.forEach((cap, i) => {
-      if (i > 0) {
-        pdf.addPage([cap.width, cap.height], cap.width >= cap.height ? "landscape" : "portrait");
-      }
-      pdf.addImage(cap.dataUrl, "PNG", 0, 0, cap.width, cap.height);
-    });
-
-    const blob = pdf.output("blob");
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `webify-screenshots-${new Date().toISOString().slice(0, 10)}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const blob = capturesToPdfBlob(captures);
+    downloadBlob(blob, `webify-screenshots-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  const groups: CaptureTarget["group"][] = ["App Pages", "Categories", "Recipes"];
+  const groups: CaptureTarget["group"][] = [
+    "App Pages",
+    "Categories",
+    "Recipes",
+    "Dreams",
+    "Goals",
+    "Projects",
+    "Responsibilities",
+  ];
 
   return (
     <div
+      id={CAPTURE_WIDGET_HIDE_ID}
       style={{
         position: "fixed",
         bottom: "calc(16px + env(safe-area-inset-bottom))",
@@ -222,6 +215,22 @@ export function ScreenCaptureWidget({
           >
             {batchProgress ?? `Batch Capture (${selected.size})`}
           </button>
+
+          {batchError && (
+            <div
+              style={{
+                fontSize: 11,
+                color: "#b91c1c",
+                background: "#fef2f2",
+                border: "1px solid #fca5a5",
+                borderRadius: 4,
+                padding: 6,
+                marginBottom: 6,
+              }}
+            >
+              {batchError}
+            </div>
+          )}
 
           <button
             onClick={captureThisPageNow}

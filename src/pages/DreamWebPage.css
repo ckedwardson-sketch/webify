@@ -105,6 +105,18 @@
   background-position: center;
 }
 
+/* Mobile landscape: a phone-height viewport can't spare 240px + 16px
+   padding on chrome around the canvas, so both shrink. */
+html.mobile-landscape .dream-timeline {
+  width: 160px;
+  min-width: 160px;
+  padding: 10px 8px;
+}
+
+html.mobile-landscape .dream-canvas-area {
+  padding: 8px;
+}
+
 .dream-canvas-hint {
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
@@ -123,23 +135,45 @@
   color: var(--color-text-secondary);
 }
 
-.dream-node-menu-trigger {
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 4px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  padding: 0;
+/* The angle-ring connection points (see AngleHandleRing in
+   DreamGraphNodes.tsx) — fully invisible; the node's whole outline
+   glowing on hover (below) is the visible "you can grab this" cue
+   instead. A large, generously overlapping hit box per handle (56px,
+   vs. the ~60-70px gap between 16 handles spaced around the doubled
+   dream node's perimeter) is what makes "grab from anywhere on the
+   edge" actually work — clicking near the boundary always lands inside
+   at least one handle's box even though there's no dot to aim at.
+   !important overrides React Flow's own default handle background/
+   border/size, which the .style prop alone doesn't fully clear. */
+.dream-edge-handle {
+  width: 56px !important;
+  height: 56px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 50% !important;
+  opacity: 0 !important;
+  cursor: crosshair;
 }
 
-.dream-node-dropdown {
-  right: 0;
-  min-width: 150px;
+/* filter: drop-shadow() (not box-shadow) so the glow traces the node's
+   actual clipped silhouette — a hexagon/diamond/blob glows in its own
+   shape, not a rectangle around it. */
+.dream-node-shape-layer {
+  transition: filter 0.12s ease;
 }
+
+.react-flow__node:hover .dream-node-shape-layer {
+  filter: drop-shadow(0 0 3px var(--dream-edge-glow-color)) drop-shadow(0 0 8px var(--dream-edge-glow-color));
+}
+
+/* Same glow treatment for a goal node's single attach point — it IS
+   its own shape layer (a plain rounded box), so this targets it
+   directly rather than a separate child. */
+.dream-goal-node-shape {
+  transition: filter 0.12s ease;
+}
+
+.react-flow__node:hover .dream-goal-node-shape {
+  filter: drop-shadow(0 0 2px var(--dream-edge-glow-color)) drop-shadow(0 0 6px var(--dream-edge-glow-color));
+}
+

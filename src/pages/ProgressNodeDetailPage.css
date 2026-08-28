@@ -29,10 +29,8 @@
   margin-bottom: 16px;
 }
 
-@media (max-width: 600px) {
-  .progress-field-grid {
-    grid-template-columns: 1fr;
-  }
+html.mobile-layout .progress-field-grid {
+  grid-template-columns: 1fr;
 }
 
 .progress-detail-image-wrapper {

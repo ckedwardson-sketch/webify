@@ -10,6 +10,20 @@
   margin-bottom: 4px;
 }
 
+/* A freetext field's label is user-editable (see FreetextFieldEditor)
+   — same visual weight as a normal <label>, just interactive. */
+.freetext-field-label-input {
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  padding: 0;
+}
+
+.freetext-field-label-input:focus {
+  outline: 1px solid var(--color-accent);
+}
+
 .project-widgets-section {
   margin-top: 24px;
   padding-top: 16px;
@@ -42,6 +56,61 @@
 .project-widget-card {
   position: relative;
   width: 140px;
+}
+
+/* Image Dock / Quick Photo render their live content directly in the
+   grid tile (see ProjectDetailPage.tsx) instead of a nav-button card —
+   they need real room to be worth looking at instantly, not just an
+   icon + label. */
+.project-widget-card-inline {
+  width: 220px;
+}
+
+.project-widget-card-rearranging {
+  cursor: grab;
+  outline: 1px dashed var(--color-border-strong);
+  outline-offset: 3px;
+  border-radius: var(--radius-lg);
+}
+
+.project-widget-card-drop-target {
+  outline: 2px solid var(--color-accent);
+}
+
+/* Red hover preview while the Delete tool is armed — matches the
+   generalized field system's same affordance. */
+.project-widget-card-delete-armed:hover {
+  outline: 2px solid var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border-radius: var(--radius-lg);
+}
+
+/* Only this handle is the real native drag source (not the whole card)
+   — same reasoning as RearrangeableField.css's field-slot-drag-handle:
+   this card sits nested inside the "widgets" field's own draggable
+   structure, and nested draggable ancestors are a well-known way to
+   break HTML5 drag-and-drop in Chromium/WebView2. It needs to actually
+   receive pointer events for that, unlike before when the whole card
+   was the drag source and this was purely decorative. */
+.project-widget-card-drag-handle {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 2;
+  cursor: grab;
+}
+
+.project-widget-card-drag-handle:active {
+  cursor: grabbing;
 }
 
 .project-widget-card-open {
@@ -88,4 +157,188 @@
   color: #fff;
   cursor: pointer;
   font-size: 11px;
+  z-index: 3;
+}
+
+/* Inline cards (Image Dock / Quick Photo / Table) render their own
+   top-right control — Quick Photo's "⋯" settings button in particular
+   sits at almost the exact same spot as the card's own delete button
+   above, so the two visually merge into one unclickable icon. Moving
+   the card-level delete to the top-left corner instead keeps it clear
+   of every widget's own chrome (which all live top-right). */
+.project-widget-card-inline .project-widget-card-delete {
+  top: 4px;
+  right: auto;
+  left: 4px;
+}
+
+/* ---------------------------------------------------------------------
+   "Wii menu" widget grid — a redesign of the widget grid ABOVE, used
+   only by ProjectDetailPage.tsx (GoalDetailPage.tsx still uses the
+   classes above and is deliberately untouched). Every tile — whether it
+   navigates to its own page (journal/board) or renders its live content
+   right here (table/photo/dock) — gets the exact same rounded-square
+   shell with an icon+title header, so the grid reads as one uniform
+   menu of tiles instead of a mix of button sizes. See
+   ProjectDetailPage.tsx's widgetsSection. */
+
+.project-wii-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.project-wii-tile {
+  position: relative;
+  border: var(--surface-border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-secondary) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: var(--surface-backdrop-filter);
+  overflow: hidden;
+  transition: transform var(--motion-speed) var(--motion-easing),
+    border-color var(--motion-speed) var(--motion-easing);
+}
+
+.project-wii-tile:hover {
+  border-color: var(--color-accent);
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
+}
+
+.project-wii-tile-rearranging {
+  cursor: grab;
+  outline: 1px dashed var(--color-border-strong);
+  outline-offset: 3px;
+}
+
+.project-wii-tile-drop-target {
+  outline: 2px solid var(--color-accent);
+}
+
+.project-wii-tile-delete-armed:hover {
+  outline: 2px solid var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+}
+
+.project-wii-tile-drag-handle {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 2;
+  cursor: grab;
+}
+
+.project-wii-tile-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Always top-left, for both tile flavors below — table/photo/dock each
+   render their own top-right control (e.g. Quick Photo's "⋯" menu), so
+   the tile's own delete button stays out of their way by living on the
+   opposite corner everywhere, not just where it happens to collide. */
+.project-wii-tile-delete {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  z-index: 3;
+}
+
+.project-wii-tile-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 0;
+}
+
+.project-wii-tile-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.project-wii-tile-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Journal / board — no content of its own to show inline, so this is a
+   plain nav button styled as one more tile in the grid: header on top,
+   a fetched one-line preview underneath standing in for a thumbnail. */
+.project-wii-tile-open {
+  width: 100%;
+  height: 100%;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 0 0 10px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.project-wii-tile-open .project-wii-tile-header {
+  padding: 10px 10px 0;
+}
+
+.project-wii-tile-preview-text {
+  flex: 1;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* Table / photo / dock — these already render their own live,
+   interactive content (drag-and-drop images, a camera, a mini table),
+   so the header sits above it rather than wrapping it in a second
+   button — nesting one clickable surface inside another breaks their
+   own click handling. */
+.project-wii-tile-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+
+.project-wii-tile-preview-body {
+  padding: 0 10px;
+}
+
+.project-wii-tile-preview-body .image-dock-preview,
+.project-wii-tile-preview-body .table-widget-preview {
+  border: none;
+  border-radius: var(--radius-md);
+}
+
+html.mobile-layout .project-wii-grid {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
 }

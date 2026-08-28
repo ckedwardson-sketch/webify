@@ -9,6 +9,15 @@ export interface DailySchedule {
   // "daily" task that's really Monday-Friday only. 0 = Sun .. 6 = Sat.
   // Defaults to every day for anything created before this existed.
   activeDays: number[];
+  // Optional — how long the task itself actually takes, once started.
+  // When set, the "Today" timeline (ResponsibilitiesHomePage) anchors
+  // its start marker to rangeEnd (the latest-acceptable/must-start-by
+  // time) instead of suggestedTime, and — if this is at least 90
+  // minutes — draws a line out to a second marker at rangeEnd +
+  // taskTimeHours, so a task with real duration reads as a block of
+  // time rather than a single instant. Undefined/0 means "no duration,"
+  // the original single-marker-at-suggestedTime behavior.
+  taskTimeHours?: number;
 }
 
 export interface WeeklySchedule {
@@ -57,6 +66,11 @@ export interface Responsibility {
   // date range — matching the original behavior. Set higher to narrow
   // the window closer to the actual due moment.
   pendingLeadTimeHours: number;
+  // Links this responsibility onto any number of goals' webs (see
+  // GoalWebPage.tsx's "Link Responsibility" flow) so it shows up
+  // alongside each goal's projects/tasks. Never required or automatic —
+  // can be empty, or shared across multiple goals at once.
+  goalIds: number[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -103,6 +117,7 @@ export function normalizeSchedule(
       suggestedTime: s.suggestedTime ?? "09:00",
       alarms: s.alarms ?? [],
       activeDays: s.activeDays ?? [0, 1, 2, 3, 4, 5, 6],
+      taskTimeHours: s.taskTimeHours,
     };
   }
   if (category === "weekly") {

@@ -57,6 +57,13 @@ export interface DreamLink {
   id: number;
   sourceDreamId: number;
   targetDreamId: number;
+  // Rotational anchor points (degrees, 0-360, clockwise from the node's
+  // top/12-o'clock) — where on each end's node boundary the link
+  // visually connects, recomputed against whatever shape that node
+  // currently has (see theme/nodeBoundary.ts). Null = not recorded
+  // (legacy link), falls back to a default angle.
+  sourceAngle: number | null;
+  targetAngle: number | null;
 }
 
 export type DreamHistoryField = "name" | "reasoning" | "expectedDate" | "priority" | "notes" | "sleep";
@@ -71,10 +78,11 @@ export interface DreamHistoryEntry {
   changedAt: string;
 }
 
-// Progress web — a free-form board of individual pieces of work ("dots"),
-// each colored by what kind of work it is and sized by how big a bite it
-// is. Baseline only: no dependency/ordering logic between nodes yet
-// (see ProgressWebPage.tsx) — that's meant to layer on top of this later.
+// Tasks — a free-form set of individual pieces of work ("dots"), each
+// colored by what kind of work it is and sized by how big a bite it is.
+// Rendered directly on Goal Web now (see GoalWebPage.tsx) rather than a
+// separate Progress Web screen. Baseline only: no dependency/ordering
+// logic between nodes yet — that's meant to layer on top of this later.
 export type ProgressCategory = "labor" | "purchase" | "design" | "conceive" | "task";
 
 // Drives node size on the web — a rough "how big a bite is this" signal
@@ -83,6 +91,12 @@ export type ProgressDifficulty = "quick" | "moderate" | "involved" | "major";
 
 export interface ProgressNode {
   id: number;
+  // A task belongs to exactly one of projectId/goalId — never both,
+  // never neither (mirrors ProjectWidget's dual ownership). A task
+  // attached directly to a goal (no project layer) is the "some goals
+  // only need tasks, not a whole project" case.
+  projectId: number | null;
+  goalId: number | null;
   category: ProgressCategory;
   shortDescription: string; // shown on the node itself
   description: string; // full description, shown on the detail page

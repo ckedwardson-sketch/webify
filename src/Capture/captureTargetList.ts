@@ -1,11 +1,15 @@
 import { View } from "../types/nav";
 import { fetchCategories } from "../db/categories";
 import { fetchAllRecipesFlat } from "../db/recipes";
+import { fetchDreamGraphData } from "../db/dreams";
+import { fetchAllGoals } from "../db/goals";
+import { fetchAllProjects } from "../db/projects";
+import { fetchResponsibilities } from "../db/responsibilities";
 
 export interface CaptureTarget {
   key: string;
   label: string;
-  group: "App Pages" | "Categories" | "Recipes";
+  group: "App Pages" | "Categories" | "Recipes" | "Dreams" | "Goals" | "Projects" | "Responsibilities";
   view: View;
 }
 
@@ -19,6 +23,11 @@ export async function buildCaptureTargets(): Promise<CaptureTarget[]> {
     { key: "static:settings-text", label: "Settings: Text Elements", group: "App Pages", view: { type: "settings-text" } },
     { key: "static:settings-buttons", label: "Settings: Buttons", group: "App Pages", view: { type: "settings-buttons" } },
     { key: "static:settings-theme", label: "Settings: Theme", group: "App Pages", view: { type: "settings-theme" } },
+    { key: "static:dreams-web", label: "Dream Web", group: "App Pages", view: { type: "dreams-web" } },
+    { key: "static:goals-home", label: "Goals Home", group: "App Pages", view: { type: "goals-home" } },
+    { key: "static:projects-home", label: "Projects Home", group: "App Pages", view: { type: "projects-home" } },
+    { key: "static:responsibilities-home", label: "Responsibilities Home", group: "App Pages", view: { type: "responsibilities-home" } },
+    { key: "static:responsibilities-manage", label: "Responsibilities: Manage", group: "App Pages", view: { type: "responsibilities-manage" } },
   ];
 
   const categories = await fetchCategories();
@@ -43,6 +52,46 @@ export async function buildCaptureTargets(): Promise<CaptureTarget[]> {
         categoryName: rec.categoryName,
         recipeId: rec.id,
       },
+    });
+  }
+
+  const { dreams } = await fetchDreamGraphData();
+  for (const dream of dreams) {
+    targets.push({
+      key: `dream:${dream.id}`,
+      label: `Dream: ${dream.name}`,
+      group: "Dreams",
+      view: { type: "dream-detail", dreamId: dream.id },
+    });
+  }
+
+  const goals = await fetchAllGoals();
+  for (const goal of goals) {
+    targets.push({
+      key: `goal:${goal.id}`,
+      label: `Goal: ${goal.name}`,
+      group: "Goals",
+      view: { type: "goal-detail", goalId: goal.id },
+    });
+  }
+
+  const projects = await fetchAllProjects();
+  for (const project of projects) {
+    targets.push({
+      key: `project:${project.id}`,
+      label: `Project: ${project.name}`,
+      group: "Projects",
+      view: { type: "project-detail", projectId: project.id },
+    });
+  }
+
+  const responsibilities = await fetchResponsibilities();
+  for (const resp of responsibilities) {
+    targets.push({
+      key: `responsibility:${resp.id}`,
+      label: `Responsibility: ${resp.name}`,
+      group: "Responsibilities",
+      view: { type: "responsibility-detail", responsibilityId: resp.id },
     });
   }
 

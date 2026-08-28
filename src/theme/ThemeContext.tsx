@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { fetchThemeSettings, setThemeSetting, clearThemeSetting } from "../db/themeSettings";
 import {
+  fetchCustomSliders,
+  replaceCustomSliders as replaceCustomSlidersInDb,
+  setCustomSliderValue as setCustomSliderValueInDb,
+} from "../db/customSliders";
+import {
   CSS_VAR_MAP,
   DEFAULT_THEME,
   GeneralThemeSettings,
@@ -13,6 +18,8 @@ import { surfaceFor } from "./surfacePresets";
 import { headingFor } from "./headingPresets";
 import { backgroundPatternFor } from "./backgroundPresets";
 import { motionFor } from "./motionPresets";
+import { clampSliderValue, CustomSliderDef, CustomSliderState } from "./customSliders";
+import { computeMobileLayout, computeMobileLandscape, MobileMode } from "./mobileLayout";
 
 interface ThemeContextValue {
   theme: ThemeSettings;
@@ -20,6 +27,10 @@ interface ThemeContextValue {
   setThemeValue: (key: keyof ThemeSettings, value: string) => Promise<void>;
   resetThemeValue: (key: keyof ThemeSettings) => Promise<void>;
   replaceTheme: (overrides: Partial<ThemeSettings>) => Promise<void>;
+  // Designer-defined slider controls — see theme/customSliders.ts.
+  customSliders: CustomSliderState[];
+  setCustomSliderValue: (id: string, value: number) => Promise<void>;
+  replaceCustomSliders: (defs: CustomSliderDef[]) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -29,11 +40,15 @@ const IMAGE_KEYS = new Set(IMAGE_GENERAL_KEYS);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [overrides, setOverrides] = useState<Partial<ThemeSettings>>({});
+  const [customSliders, setCustomSlidersState] = useState<CustomSliderState[]>([]);
 
   useEffect(() => {
     fetchThemeSettings()
       .then(setOverrides)
       .catch((err) => console.warn("Failed to load theme settings:", err));
+    fetchCustomSliders()
+      .then(setCustomSlidersState)
+      .catch((err) => console.warn("Failed to load custom theme sliders:", err));
   }, []);
 
   const theme: ThemeSettings = { ...DEFAULT_THEME, ...overrides };
@@ -51,6 +66,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute("data-nav-layout", theme.navLayout);
   }, [theme.navLayout]);
+
+  // Mobile layout: html.mobile-layout / html.mobile-landscape, kept live
+  // against the actual window in "auto" mode and re-applied whenever the
+  // Settings toggle changes — see theme/mobileLayout.ts for why this is a
+  // class rather than a plain @media query.
+  useEffect(() => {
+    const mode = (theme.mobileMode as MobileMode) || "auto";
+    const apply = () => {
+      const mobile = computeMobileLayout(mode);
+      const landscape = computeMobileLandscape(mobile);
+      document.documentElement.classList.toggle("mobile-layout", mobile);
+      document.documentElement.classList.toggle("mobile-landscape", landscape);
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, [theme.mobileMode]);
 
   useEffect(() => {
     const root = document.documentElement.style;
@@ -72,6 +108,29 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (overrides.fontFamily) root.setProperty("--font-body", fontStackFor(overrides.fontFamily));
     else root.removeProperty("--font-body");
   }, [overrides.fontFamily]);
+
+  // Three previously-hardcoded structural knobs — see
+  // --page-max-width/--sidebar-width/--page-title-size in theme.css and
+  // their fields in themeFieldGroups.ts. Each is a raw numeric string
+  // with its own fixed unit (px/px/rem), unlike fontFamily/radiusScale/
+  // density above, which are named preset keys.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.pageMaxWidth) root.setProperty("--page-max-width", `${overrides.pageMaxWidth}px`);
+    else root.removeProperty("--page-max-width");
+  }, [overrides.pageMaxWidth]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.sidebarWidth) root.setProperty("--sidebar-width", `${overrides.sidebarWidth}px`);
+    else root.removeProperty("--sidebar-width");
+  }, [overrides.sidebarWidth]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.pageTitleSize) root.setProperty("--page-title-size", `${overrides.pageTitleSize}rem`);
+    else root.removeProperty("--page-title-size");
+  }, [overrides.pageTitleSize]);
 
   useEffect(() => {
     const root = document.documentElement.style;
@@ -169,6 +228,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [overrides.motionStyle]);
 
+  // Designer-defined sliders (see theme/customSliders.ts) — each just
+  // writes its current numeric value + unit straight onto the matching
+  // CSS custom property, same mechanism as every other theme knob here.
+  // Runs whenever any slider's value changes (not just on mount), so
+  // dragging a slider in SettingsHomePage updates the live page
+  // immediately.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    for (const slider of customSliders) {
+      root.setProperty(slider.cssVar, `${slider.value}${slider.unit}`);
+    }
+  }, [customSliders]);
+
   // The raw-CSS escape hatch. Kept as the last child of <body> — rather
   // than in <head>, and re-appended (which moves an existing node)
   // every time this runs — so it always sits after every other
@@ -213,9 +285,34 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setOverrides(next);
   };
 
+  const setCustomSliderValue = async (id: string, rawValue: number) => {
+    const slider = customSliders.find((s) => s.id === id);
+    if (!slider) return;
+    const value = clampSliderValue(slider, rawValue);
+    await setCustomSliderValueInDb(id, value);
+    setCustomSlidersState((prev) => prev.map((s) => (s.id === id ? { ...s, value } : s)));
+  };
+
+  // Full replace, mirroring replaceTheme — used when a theme
+  // export/preset/AI-designed theme is applied. Every slider resets to
+  // its authored default value.
+  const replaceCustomSliders = async (defs: CustomSliderDef[]) => {
+    await replaceCustomSlidersInDb(defs);
+    setCustomSlidersState(defs.map((d) => ({ ...d, value: d.default })));
+  };
+
   return (
     <ThemeContext.Provider
-      value={{ theme, overrides, setThemeValue, resetThemeValue, replaceTheme }}
+      value={{
+        theme,
+        overrides,
+        setThemeValue,
+        resetThemeValue,
+        replaceTheme,
+        customSliders,
+        setCustomSliderValue,
+        replaceCustomSliders,
+      }}
     >
       {children}
     </ThemeContext.Provider>

@@ -8,10 +8,11 @@ import {
   Connection,
   NodeChange,
   Background,
-  Controls,
   Panel,
   ViewportPortal,
   ConnectionMode,
+  ConnectionLineType,
+  Viewport,
   applyNodeChanges,
   useViewport,
 } from "@xyflow/react";
@@ -19,32 +20,110 @@ import "@xyflow/react/dist/style.css";
 import {
   fetchDreamGraphData,
   addDream,
-  deleteDream,
   updateDreamPosition,
   updateDreamPositionX,
   addDreamLink,
   removeDreamLink,
-  putDreamToBed,
 } from "../db/dreams";
-import { fetchAllProjects, addProject } from "../db/projects";
-import { Dream, DreamPriority } from "../types/models";
-import { Project } from "../types/project";
-import { DreamNode, DREAM_BASE_WIDTH, DREAM_BASE_HEIGHT, zoomCompensation } from "../components/DreamGraphNodes";
-import { ProjectNode } from "../components/ProjectGraphNodes";
+import { fetchAllGoals } from "../db/goals";
+import {
+  fetchAllGoalDreamLinks,
+  addOrUpdateGoalDreamLink,
+  removeGoalDreamLink,
+  updateGoalDreamLinkPosX,
+  updateGoalDreamLinkAngle,
+  GoalDreamLink,
+} from "../db/goalDreamLinks";
+import { fetchViewport, saveViewport } from "../db/viewports";
+import { Dream, DreamLink, DreamPriority } from "../types/models";
+import { Goal } from "../types/project";
+import {
+  DreamNode,
+  DREAM_BASE_WIDTH,
+  DREAM_BASE_HEIGHT,
+  zoomCompensation,
+  PRIORITY_SCALE,
+  DreamGoalNode,
+  GOAL_NODE_WIDTH,
+  GOAL_NODE_HEIGHT,
+  AngleEdge,
+  AngleEdgeData,
+  anchorPoint,
+  parseAngleHandleId,
+  ANCHOR_ANGLE_STEP,
+} from "../components/DreamGraphNodes";
+import { angleFromDirection } from "../theme/nodeBoundary";
 import { View } from "../types/nav";
+import { WebControls } from "../components/WebControls";
 import { StyledButton } from "../icons/StyledButton";
 import { useTheme } from "../theme/ThemeContext";
 import "./Page.css";
 import "./DreamWebPage.css";
 
-const nodeTypes = { dreamNode: DreamNode, projectNode: ProjectNode };
+const nodeTypes = { dreamNode: DreamNode, dreamGoalNode: DreamGoalNode };
+const edgeTypes = { angleEdge: AngleEdge };
 
 const dreamNodeId = (id: number) => `d-${id}`;
 const parseDreamNodeId = (nodeId: string) => Number(nodeId.slice(2));
-const projectNodeId = (id: number) => `p-${id}`;
-const parseProjectNodeId = (nodeId: string) => Number(nodeId.slice(2));
+// Keyed by goal_dream_links.id (not goal id) — a goal attached to
+// several dreams renders one node per link, so the link id is what's
+// actually unique per rendered instance.
+const goalNodeId = (linkId: number) => `g-${linkId}`;
+const parseGoalNodeId = (nodeId: string) => Number(nodeId.slice(2));
+const goalEdgeId = (linkId: number) => `goal-edge-${linkId}`;
+const parseGoalEdgeId = (edgeId: string) => Number(edgeId.slice("goal-edge-".length));
 const linkEdgeId = (id: number) => `link-${id}`;
 const parseLinkEdgeId = (edgeId: string) => Number(edgeId.slice(5));
+
+// Snaps any angle (including a continuously-computed default — see
+// edges below) to one of the 16 actually-rendered ring handles, so a
+// sourceHandle/targetHandle id set on an edge always references a real
+// handle. The *visual* line itself (data.x1/y1/... below) still uses
+// the precise, unsnapped angle — this snapping only affects which
+// handle id gets referenced, which our custom AngleEdge component
+// otherwise ignores for positioning anyway.
+function snapToAnchor(angle: number): number {
+  return (Math.round(angle / ANCHOR_ANGLE_STEP) * ANCHOR_ANGLE_STEP + 360) % 360;
+}
+
+const GOAL_SHAPE = "rectangle";
+const GOAL_SIZE = { width: GOAL_NODE_WIDTH, height: GOAL_NODE_HEIGHT };
+
+// A goal-dream link's x is either wherever the user has dragged that
+// particular attachment (link.posX), or — until then — clustered
+// horizontally under the dream it's attached to. Y follows the *goal's
+// own* date, same mechanism as a dated dream, when it has one; only an
+// undated goal falls back to sitting just below whichever dream this
+// instance is attached to. This means a dated goal can end up far from
+// its parent vertically (it's tracking its own place in time, not just
+// "attached to the dream visually") — the dashed edge (see edges below)
+// is what keeps the parent relationship visible regardless of how far
+// apart they land.
+const GOAL_CLUSTER_GAP = 28;
+const GOAL_CLUSTER_Y_OFFSET = DREAM_BASE_HEIGHT + 50;
+
+function goalClusterXs(dreamX: number, count: number): number[] {
+  const totalWidth = count * GOAL_NODE_WIDTH + (count - 1) * GOAL_CLUSTER_GAP;
+  const startX = dreamX + DREAM_BASE_WIDTH / 2 - totalWidth / 2;
+  return Array.from({ length: count }, (_, i) => startX + i * (GOAL_NODE_WIDTH + GOAL_CLUSTER_GAP));
+}
+
+function goalPositionsFor(
+  dreamPos: { x: number; y: number },
+  dreamLinks: GoalDreamLink[],
+  goalById: Map<number, Goal>
+): { x: number; y: number }[] {
+  const xs = goalClusterXs(dreamPos.x, dreamLinks.length);
+  return dreamLinks.map((link, i) => {
+    const goal = goalById.get(link.goalId);
+    return {
+      x: link.posX ?? xs[i],
+      y: goal?.expectedDateStart
+        ? rangeMidY(goal.expectedDateStart, goal.expectedDateEnd)
+        : dreamPos.y + GOAL_CLUSTER_Y_OFFSET,
+    };
+  });
+}
 
 // ---- Date <-> canvas-Y mapping ---------------------------------------
 // Vertical timeline: today sits at y=0, the future runs up (negative
@@ -59,13 +138,6 @@ const PIXELS_PER_DAY = 1;
 const DAY_MS = 86400000;
 const MONTH_ZOOM_THRESHOLD = 0.6;
 const UNDATED_LANE_X = -650;
-
-// Projects render as a small vertical stack to the right of their
-// parent dream. Position isn't stored anywhere — it's recomputed from
-// the dream's current position every render, so a project always
-// stays visually attached to its dream even as the dream moves.
-const PROJECT_OFFSET_X = 200;
-const PROJECT_STACK_GAP = 60;
 
 function isoToY(iso: string): number {
   const t = new Date(`${iso}T00:00:00`).getTime();
@@ -103,24 +175,48 @@ function buildGridLines(): GridLine[] {
   return lines;
 }
 
-function nodeSizeFor(priority: DreamPriority, zoom: number): { width: number; height: number } {
-  const scale = (priority === "high" ? 1.3 : priority === "low" ? 0.8 : 1) * zoomCompensation(zoom);
-  return { width: DREAM_BASE_WIDTH * scale, height: DREAM_BASE_HEIGHT * scale };
+function formatShortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-// Loosely parses things like "6 months", "2 years", "3 weeks" into a
-// target ISO date from today. Returns null if it can't make sense of it.
-function parseSleepDuration(input: string): string | null {
-  const match = input.trim().match(/^(\d+)\s*(day|week|month|year)s?$/i);
-  if (!match) return null;
-  const n = parseInt(match[1], 10);
-  const unit = match[2].toLowerCase();
-  const d = new Date();
-  if (unit === "day") d.setDate(d.getDate() + n);
-  else if (unit === "week") d.setDate(d.getDate() + n * 7);
-  else if (unit === "month") d.setMonth(d.getMonth() + n);
-  else if (unit === "year") d.setFullYear(d.getFullYear() + n);
-  return d.toISOString().slice(0, 10);
+// A vertical "flagpole" spanning a dream's date range — flared,
+// beveled caps at each end (rather than the old flat T-bar) so it
+// reads as one connected piece growing out of the node's edge instead
+// of a disconnected line floating beside it. Widths/lengths clamp to
+// the actual bar height so a short range (a few days) doesn't turn the
+// taper sections inside-out.
+const RANGE_BAR_WIDTH = 5;
+const RANGE_BAR_FLARE_WIDTH = 22;
+const RANGE_BAR_FLARE_LENGTH = 16;
+const RANGE_BAR_CAP_THICKNESS = 4;
+
+function rangeBarPath(cx: number, yTop: number, yBottom: number): string {
+  const barHalf = RANGE_BAR_WIDTH / 2;
+  const flareHalf = RANGE_BAR_FLARE_WIDTH / 2;
+  const flareLen = Math.max(2, Math.min(RANGE_BAR_FLARE_LENGTH, (yBottom - yTop) / 2 - 2));
+  const capThick = Math.min(RANGE_BAR_CAP_THICKNESS, flareLen - 1);
+  return [
+    `M ${cx - flareHalf} ${yTop}`,
+    `L ${cx + flareHalf} ${yTop}`,
+    `L ${cx + flareHalf} ${yTop + capThick}`,
+    `L ${cx + barHalf} ${yTop + flareLen}`,
+    `L ${cx + barHalf} ${yBottom - flareLen}`,
+    `L ${cx + flareHalf} ${yBottom - capThick}`,
+    `L ${cx + flareHalf} ${yBottom}`,
+    `L ${cx - flareHalf} ${yBottom}`,
+    `L ${cx - flareHalf} ${yBottom - capThick}`,
+    `L ${cx - barHalf} ${yBottom - flareLen}`,
+    `L ${cx - barHalf} ${yTop + flareLen}`,
+    `L ${cx - flareHalf} ${yTop + capThick}`,
+    "Z",
+  ].join(" ");
+}
+
+function nodeSizeFor(priority: DreamPriority, zoom: number): { width: number; height: number } {
+  const scale = PRIORITY_SCALE[priority] * zoomCompensation(zoom);
+  return { width: DREAM_BASE_WIDTH * scale, height: DREAM_BASE_HEIGHT * scale };
 }
 
 function timelineSort(a: Dream, b: Dream) {
@@ -134,54 +230,39 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const { theme } = useTheme();
   const { zoom } = useViewport();
   const [dreams, setDreams] = useState<Dream[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [links, setLinks] = useState<{ id: number; sourceDreamId: number; targetDreamId: number }[]>([]);
+  const [links, setLinks] = useState<DreamLink[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalDreamLinks, setGoalDreamLinks] = useState<GoalDreamLink[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [initialViewport, setInitialViewport] = useState<Viewport | null>(null);
 
   const gridLines = useMemo(buildGridLines, []);
 
   const load = () => {
-    Promise.all([fetchDreamGraphData(), fetchAllProjects()]).then(([{ dreams, links }, allProjects]) => {
+    Promise.all([
+      fetchDreamGraphData(),
+      fetchAllGoals(),
+      fetchAllGoalDreamLinks(),
+      fetchViewport("dream-web"),
+    ]).then(([{ dreams, links }, goals, goalDreamLinks, viewport]) => {
       setDreams(dreams);
       setLinks(links);
-      setProjects(allProjects);
+      setGoals(goals);
+      setGoalDreamLinks(goalDreamLinks);
+      setInitialViewport(viewport);
       setLoading(false);
     });
   };
 
   useEffect(load, []);
 
+  const handleMoveEnd = (_: unknown, viewport: Viewport) => {
+    saveViewport("dream-web", viewport);
+  };
+
   const dreamById = useMemo(() => new Map(dreams.map((d) => [d.id, d])), [dreams]);
-
-  const handleDelete = async (dream: Dream) => {
-    if (!confirm(`Delete "${dream.name}"? This also removes its links, history, and any projects attached to it.`)) return;
-    await deleteDream(dream.id);
-    setDreams((prev) => prev.filter((d) => d.id !== dream.id));
-    setLinks((prev) => prev.filter((l) => l.sourceDreamId !== dream.id && l.targetDreamId !== dream.id));
-    setProjects((prev) => prev.filter((p) => p.dreamId !== dream.id));
-  };
-
-  const handlePutToBed = async (dream: Dream) => {
-    const input = window.prompt(
-      `How far out do you want to put "${dream.name}" to bed? (e.g. "6 months", "2 years", "3 weeks")`,
-      "1 year"
-    );
-    if (!input) return;
-    const sleepUntil = parseSleepDuration(input);
-    if (!sleepUntil) {
-      alert('Couldn\'t understand that — try something like "6 months" or "2 years".');
-      return;
-    }
-    await putDreamToBed(dream.id, sleepUntil);
-    load();
-  };
-
-  const handleAddProject = async (dream: Dream) => {
-    const id = await addProject(dream.id, "New Project");
-    onNavigate({ type: "project-detail", projectId: id });
-  };
 
   const activeDreams = useMemo(() => dreams.filter((d) => !d.isAsleep), [dreams]);
   const sleepingDreams = useMemo(() => dreams.filter((d) => d.isAsleep), [dreams]);
@@ -193,12 +274,61 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     return { x: dream.posX, y: dream.posY };
   };
 
-  // Nodes are rebuilt from `activeDreams` and `projects` whenever
+  // A stale link (goal deleted, or is now a passion project and no
+  // longer in fetchAllGoals' result) simply doesn't render — same rule
+  // dreams themselves already follow (sleeping dreams are excluded from
+  // the canvas entirely).
+  const goalById = useMemo(() => new Map(goals.map((g) => [g.id, g])), [goals]);
+
+  const linksByDream = useMemo(() => {
+    const map = new Map<number, GoalDreamLink[]>();
+    for (const link of goalDreamLinks) {
+      if (!goalById.has(link.goalId)) continue;
+      const list = map.get(link.dreamId) ?? [];
+      list.push(link);
+      map.set(link.dreamId, list);
+    }
+    return map;
+  }, [goalDreamLinks, goalById]);
+
+  const linkById = useMemo(() => new Map(goalDreamLinks.map((l) => [l.id, l])), [goalDreamLinks]);
+
+  // Y for a given attachment, independent of any live drag — same rule
+  // goalPositionsFor uses, factored out so onNodesChange can snap a
+  // node's y back to it on every drag tick (mirroring how a dated
+  // dream's y is locked below).
+  const goalYFor = (link: GoalDreamLink): number => {
+    const goal = goalById.get(link.goalId);
+    if (goal?.expectedDateStart) return rangeMidY(goal.expectedDateStart, goal.expectedDateEnd);
+    const dream = dreamById.get(link.dreamId);
+    return (dream ? positionFor(dream).y : 0) + GOAL_CLUSTER_Y_OFFSET;
+  };
+
+  // Computed once here and reused by both the node-building effect and
+  // the edges useMemo below, rather than each recomputing it separately
+  // — recomputing goalPositionsFor with just one link at a time (as an
+  // earlier version of this did, for the edge endpoint) gives a
+  // different x than the real node whenever that dream has more than
+  // one attached goal, since the cluster is centered based on the
+  // *whole* sibling group.
+  const goalPositionById = useMemo(() => {
+    const map = new Map<number, { x: number; y: number }>();
+    for (const dream of activeDreams) {
+      const dreamLinks = linksByDream.get(dream.id) ?? [];
+      if (dreamLinks.length === 0) continue;
+      const positions = goalPositionsFor(positionFor(dream), dreamLinks, goalById);
+      dreamLinks.forEach((link, i) => map.set(link.id, positions[i]));
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDreams, linksByDream, goalById]);
+
+  // Nodes are rebuilt from `activeDreams`/`goalDreamLinks` whenever
   // either changes. A dated dream's y always comes from its date —
   // dragging can only ever move x (see onNodesChange) — so there's no
-  // "live drag position" for y to preserve here. Project nodes are
-  // derived the same way each time: a small stack offset from their
-  // parent dream's current position, never independently dragged.
+  // "live drag position" for y to preserve here. Goal attachments are
+  // draggable horizontally too (see item 10) — same x-only rule, y
+  // always computed via goalYFor.
   useEffect(() => {
     const dreamNodes: Node[] = activeDreams.map((dream) => ({
       id: dreamNodeId(dream.id),
@@ -209,60 +339,126 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         priority: dream.priority,
         expectedDateStart: dream.expectedDateStart,
         expectedDateEnd: dream.expectedDateEnd,
-        onDelete: () => handleDelete(dream),
-        onPutToBed: () => handlePutToBed(dream),
-        onAddProject: () => handleAddProject(dream),
       },
     }));
 
-    const projectNodes: Node[] = [];
-    activeDreams.forEach((dream) => {
-      const dreamPos = positionFor(dream);
-      const dreamProjects = projects.filter((p) => p.dreamId === dream.id);
-      dreamProjects.forEach((project, i) => {
-        const offsetY = (i - (dreamProjects.length - 1) / 2) * PROJECT_STACK_GAP;
-        projectNodes.push({
-          id: projectNodeId(project.id),
-          type: "projectNode",
-          position: { x: dreamPos.x + PROJECT_OFFSET_X, y: dreamPos.y + offsetY },
-          draggable: false,
-          data: { name: project.name },
-        });
+    // One node per attachment — a goal linked to three dreams renders
+    // three separate nodes, one clustered under each.
+    const goalNodes: Node[] = goalDreamLinks
+      .filter((link) => goalPositionById.has(link.id))
+      .map((link) => {
+        const goal = goalById.get(link.goalId)!;
+        return {
+          id: goalNodeId(link.id),
+          type: "dreamGoalNode",
+          position: goalPositionById.get(link.id)!,
+          deletable: false,
+          data: {
+            name: goal.name,
+            onOpenWeb: () => onNavigate({ type: "goal-web", goalId: goal.id }),
+          },
+        };
       });
-    });
 
-    setNodes([...dreamNodes, ...projectNodes]);
+    setNodes([...dreamNodes, ...goalNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDreams, projects]);
+  }, [activeDreams, goalDreamLinks, goalById, goalPositionById, onNavigate]);
 
   const edges: Edge[] = useMemo(() => {
     const activeIds = new Set(activeDreams.map((d) => d.id));
+    const dreamPos = new Map(activeDreams.map((d) => [d.id, positionFor(d)]));
+    const dreamSize = new Map(activeDreams.map((d) => [d.id, nodeSizeFor(d.priority, 1)]));
+
     const linkEdges: Edge[] = links
       .filter((l) => activeIds.has(l.sourceDreamId) && activeIds.has(l.targetDreamId))
-      .map((link) => ({
-        id: linkEdgeId(link.id),
-        source: dreamNodeId(link.sourceDreamId),
-        target: dreamNodeId(link.targetDreamId),
-        style: { stroke: theme.dreamLinkColor, strokeWidth: 2 },
-      }));
+      .map((link) => {
+        const sp = dreamPos.get(link.sourceDreamId)!;
+        const ss = dreamSize.get(link.sourceDreamId)!;
+        const tp = dreamPos.get(link.targetDreamId)!;
+        const ts = dreamSize.get(link.targetDreamId)!;
+        const sCenter = { x: sp.x + ss.width / 2, y: sp.y + ss.height / 2 };
+        const tCenter = { x: tp.x + ts.width / 2, y: tp.y + ts.height / 2 };
+        const sourceAngle = link.sourceAngle ?? angleFromDirection(tCenter.x - sCenter.x, tCenter.y - sCenter.y);
+        const targetAngle = link.targetAngle ?? angleFromDirection(sCenter.x - tCenter.x, sCenter.y - tCenter.y);
+        const p1 = anchorPoint(sp, ss, theme.dreamNodeShape, sourceAngle);
+        const p2 = anchorPoint(tp, ts, theme.dreamNodeShape, targetAngle);
+        return {
+          id: linkEdgeId(link.id),
+          source: dreamNodeId(link.sourceDreamId),
+          target: dreamNodeId(link.targetDreamId),
+          sourceHandle: `out-${snapToAnchor(sourceAngle)}`,
+          targetHandle: `in-${snapToAnchor(targetAngle)}`,
+          reconnectable: true,
+          type: "angleEdge",
+          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } satisfies AngleEdgeData,
+          style: { stroke: theme.dreamLinkColor, strokeWidth: 2 },
+        };
+      });
 
-    const projectEdges: Edge[] = projects
-      .filter((p) => activeIds.has(p.dreamId))
-      .map((project) => ({
-        id: `proj-edge-${project.id}`,
-        source: dreamNodeId(project.dreamId),
-        target: projectNodeId(project.id),
-        style: { stroke: "#f59e0b", strokeWidth: 1.5, strokeDasharray: "3,3" },
-      }));
+    // Thin dashed lines from a dream to each goal attached to it —
+    // purely visual "attached to parent" indicators for real
+    // goal_dream_links rows, but (unlike the old single-attachment
+    // version) genuinely deletable/reconnectable now: removing one just
+    // detaches that one instance, since a goal can have others. The
+    // dream end still uses real shape-boundary math; the goal end is
+    // always angle 0 on a plain rectangle (goals have no shape system).
+    const goalEdges: Edge[] = activeDreams.flatMap((dream) => {
+      const dreamLinks = linksByDream.get(dream.id) ?? [];
+      const dp = positionFor(dream);
+      const ds = nodeSizeFor(dream.priority, 1);
+      return dreamLinks.map((link) => {
+        // Same map the node itself is positioned from (goalPositionById,
+        // built once above) — not recomputed per-link, so a dream with
+        // multiple attached goals gets the exact same x every sibling
+        // actually renders at, not a stand-alone "just this one" position.
+        const resolved = goalPositionById.get(link.id)!;
+        const dCenter = { x: dp.x + ds.width / 2, y: dp.y + ds.height / 2 };
+        const gCenter = { x: resolved.x + GOAL_SIZE.width / 2, y: resolved.y + GOAL_SIZE.height / 2 };
+        // A dragged attachment point (see item 4's fix) sticks instead
+        // of snapping back to auto-pointing at the goal every render.
+        const dreamAngle = link.attachAngle ?? angleFromDirection(gCenter.x - dCenter.x, gCenter.y - dCenter.y);
+        const p1 = anchorPoint(dp, ds, theme.dreamNodeShape, dreamAngle);
+        const p2 = anchorPoint(resolved, GOAL_SIZE, GOAL_SHAPE, 0);
+        return {
+          id: goalEdgeId(link.id),
+          source: dreamNodeId(dream.id),
+          target: goalNodeId(link.id),
+          sourceHandle: `out-${snapToAnchor(dreamAngle)}`,
+          targetHandle: "in-0",
+          deletable: true,
+          selectable: true,
+          reconnectable: true,
+          type: "angleEdge",
+          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } satisfies AngleEdgeData,
+          style: { stroke: theme.dreamGoalNodeOutlineColor, strokeWidth: 1.5, strokeDasharray: "4 3", opacity: 0.7 },
+        };
+      });
+    });
 
-    return [...linkEdges, ...projectEdges];
-  }, [links, projects, activeDreams, theme.dreamLinkColor]);
+    return [...linkEdges, ...goalEdges];
+  }, [
+    links,
+    activeDreams,
+    linksByDream,
+    goalPositionById,
+    theme.dreamLinkColor,
+    theme.dreamGoalNodeOutlineColor,
+    theme.dreamNodeShape,
+  ]);
 
   const onNodesChange = (changes: NodeChange[]) => {
     const adjusted = changes
       .filter((c) => c.type !== "remove")
       .map((c) => {
         if (c.type !== "position" || !c.position) return c;
+        if (c.id.startsWith("g-")) {
+          const link = linkById.get(parseGoalNodeId(c.id));
+          if (!link) return c;
+          // Goal attachments only ever move horizontally — y snaps back
+          // to its computed value every change, same "locked axis" trick
+          // dated dreams use.
+          return { ...c, position: { x: c.position.x, y: goalYFor(link) } };
+        }
         const dream = dreamById.get(parseDreamNodeId(c.id));
         if (!dream?.expectedDateStart) return c;
         // Dated dreams can only move horizontally — y snaps back to the
@@ -274,7 +470,14 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   };
 
   const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
-    if (node.type === "projectNode") return; // not independently draggable
+    if (node.id.startsWith("g-")) {
+      const linkId = parseGoalNodeId(node.id);
+      if (!linkById.has(linkId)) return;
+      const x = node.position.x;
+      updateGoalDreamLinkPosX(linkId, x);
+      setGoalDreamLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, posX: x } : l)));
+      return;
+    }
     const id = parseDreamNodeId(node.id);
     const dream = dreamById.get(id);
     if (!dream) return;
@@ -289,23 +492,102 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
 
   const onConnect = (connection: Connection) => {
     if (!connection.source || !connection.target) return;
-    if (!connection.source.startsWith("d-") || !connection.target.startsWith("d-")) return;
-    const sourceId = parseDreamNodeId(connection.source);
-    const targetId = parseDreamNodeId(connection.target);
-    if (sourceId === targetId) return;
-    addDreamLink(sourceId, targetId).then(load);
+    const sourceIsDream = connection.source.startsWith("d-");
+    const targetIsDream = connection.target.startsWith("d-");
+    const sourceIsGoal = connection.source.startsWith("g-");
+    const targetIsGoal = connection.target.startsWith("g-");
+
+    if (sourceIsDream && targetIsDream) {
+      const sourceId = parseDreamNodeId(connection.source);
+      const targetId = parseDreamNodeId(connection.target);
+      if (sourceId === targetId) return;
+      const sourceAngle = parseAngleHandleId(connection.sourceHandle);
+      const targetAngle = parseAngleHandleId(connection.targetHandle);
+      addDreamLink(sourceId, targetId, sourceAngle, targetAngle).then(load);
+      return;
+    }
+
+    // Dragging a fresh connection between a dream's boundary and an
+    // already-rendered goal node attaches that goal to this dream too
+    // (see item 9) — works either direction, since a drag can start
+    // from either side. If the goal is already attached to this exact
+    // dream, this just updates the pinned attachment angle (see item 4's
+    // fix) instead of duplicating the link; otherwise it's a brand new
+    // attachment and the goal will render one more node here.
+    if ((sourceIsDream && targetIsGoal) || (sourceIsGoal && targetIsDream)) {
+      const dreamHandle = sourceIsDream ? connection.sourceHandle : connection.targetHandle;
+      const dreamId = parseDreamNodeId(sourceIsDream ? connection.source : connection.target);
+      const linkId = parseGoalNodeId(sourceIsGoal ? connection.source : connection.target);
+      const link = linkById.get(linkId);
+      if (!link) return;
+      const angle = parseAngleHandleId(dreamHandle);
+      addOrUpdateGoalDreamLink(link.goalId, dreamId, angle).then(load);
+    }
+  };
+
+  // Grabbing an existing edge's endpoint and dropping it somewhere else
+  // (a different angle on the same node, or a different node entirely)
+  // — without this, edges built from a custom edge type (AngleEdge) and
+  // rendered with data-driven points aren't reconnectable by default,
+  // which was item 4's actual bug: dragging did nothing because there
+  // was no handler wired up to react to it at all.
+  const onReconnect = (oldEdge: Edge, newConnection: Connection) => {
+    if (oldEdge.id.startsWith("link-")) {
+      if (!newConnection.source?.startsWith("d-") || !newConnection.target?.startsWith("d-")) return;
+      const sourceId = parseDreamNodeId(newConnection.source);
+      const targetId = parseDreamNodeId(newConnection.target);
+      if (sourceId === targetId) return;
+      const sourceAngle = parseAngleHandleId(newConnection.sourceHandle);
+      const targetAngle = parseAngleHandleId(newConnection.targetHandle);
+      // Old pair may differ from the new one (dragged to a different
+      // dream entirely) — remove the old row first so a retarget
+      // doesn't leave a stale link behind alongside the new one.
+      removeDreamLink(parseLinkEdgeId(oldEdge.id))
+        .then(() => addDreamLink(sourceId, targetId, sourceAngle, targetAngle))
+        .then(load);
+      return;
+    }
+
+    if (oldEdge.id.startsWith("goal-edge-")) {
+      if (!newConnection.source || !newConnection.target) return;
+      const sourceIsDream = newConnection.source.startsWith("d-");
+      const targetIsDream = newConnection.target.startsWith("d-");
+      if (!sourceIsDream && !targetIsDream) return;
+      const linkId = parseGoalEdgeId(oldEdge.id);
+      const link = linkById.get(linkId);
+      if (!link) return;
+      const dreamHandle = sourceIsDream ? newConnection.sourceHandle : newConnection.targetHandle;
+      const newDreamId = parseDreamNodeId(sourceIsDream ? newConnection.source : newConnection.target);
+      const angle = parseAngleHandleId(dreamHandle);
+      if (newDreamId === link.dreamId) {
+        // Same dream, just a different angle on it.
+        updateGoalDreamLinkAngle(linkId, angle).then(load);
+      } else {
+        // Dragged this specific edge's end to a different dream — moves
+        // that one attachment rather than adding a new one (a fresh
+        // connect gesture from the dream's boundary is what adds a new
+        // attachment; see onConnect above).
+        Promise.all([removeGoalDreamLink(linkId), addOrUpdateGoalDreamLink(link.goalId, newDreamId, angle)]).then(
+          load
+        );
+      }
+    }
   };
 
   const onEdgesDelete = (deleted: Edge[]) => {
     for (const edge of deleted) {
-      if (edge.id.startsWith("proj-edge-")) continue; // project links aren't user-removable this way
-      removeDreamLink(parseLinkEdgeId(edge.id)).then(load);
+      if (edge.id.startsWith("link-")) {
+        removeDreamLink(parseLinkEdgeId(edge.id)).then(load);
+      } else if (edge.id.startsWith("goal-edge-")) {
+        removeGoalDreamLink(parseGoalEdgeId(edge.id)).then(load);
+      }
     }
   };
 
   const onNodeClick = (_: React.MouseEvent, node: Node) => {
-    if (node.type === "projectNode") {
-      onNavigate({ type: "project-detail", projectId: parseProjectNodeId(node.id) });
+    if (node.id.startsWith("g-")) {
+      const link = linkById.get(parseGoalNodeId(node.id));
+      if (link) onNavigate({ type: "goal-detail", goalId: link.goalId });
       return;
     }
     onNavigate({ type: "dream-detail", dreamId: parseDreamNodeId(node.id) });
@@ -403,17 +685,29 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onNodeDragStop={onNodeDragStop}
             onConnect={onConnect}
+            onReconnect={onReconnect}
             onEdgesDelete={onEdgesDelete}
             onNodeClick={onNodeClick}
+            onMoveEnd={handleMoveEnd}
+            defaultViewport={initialViewport ?? undefined}
+            fitView={!initialViewport}
             connectionMode={ConnectionMode.Loose}
+            connectionLineType={ConnectionLineType.Straight}
             deleteKeyCode={["Backspace", "Delete"]}
-            fitView
+            minZoom={0.05}
+            maxZoom={4}
+            proOptions={{ hideAttribution: true }}
           >
             <ViewportPortal>
-              <div style={{ position: "absolute", top: 0, left: 0 }}>
+              {/* zIndex: -1 — without it this portal's content (grid
+                  lines + the date range bars below) paints on top of the
+                  dream/goal node layer instead of behind it, since it's
+                  appended to the DOM after them. */}
+              <div style={{ position: "absolute", top: 0, left: 0, zIndex: -1 }}>
                 {gridLines
                   .filter((l) => l.isYear || showMonthLines)
                   .map((l, i) => (
@@ -450,71 +744,71 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                     </div>
                   ))}
 
-                {activeDreams
-                  .filter((d) => d.expectedDateStart && d.expectedDateEnd && d.expectedDateStart !== d.expectedDateEnd)
-                  .map((dream) => {
-                    const startY = isoToY(dream.expectedDateStart!);
-                    const endY = isoToY(dream.expectedDateEnd!);
-                    const { width } = nodeSizeFor(dream.priority, zoom);
-                    const centerX = dream.posX + width / 2;
-                    const color = priorityColorFor(dream.priority);
-                    const top = Math.min(startY, endY);
-                    const barHeight = Math.abs(endY - startY);
-                    return (
-                      <React.Fragment key={dream.id}>
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: centerX - 1,
-                            top,
-                            width: 2,
-                            height: barHeight,
-                            background: color,
-                            opacity: 0.6,
-                            pointerEvents: "none",
-                          }}
-                        />
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: centerX - 8,
-                            top: startY - 1,
-                            width: 16,
-                            height: 2,
-                            background: color,
-                            opacity: 0.6,
-                            pointerEvents: "none",
-                          }}
-                        />
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: centerX - 8,
-                            top: endY - 1,
-                            width: 16,
-                            height: 2,
-                            background: color,
-                            opacity: 0.6,
-                            pointerEvents: "none",
-                          }}
-                        />
-                      </React.Fragment>
-                    );
-                  })}
+                <svg style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}>
+                  {activeDreams
+                    .filter(
+                      (d) => d.expectedDateStart && d.expectedDateEnd && d.expectedDateStart !== d.expectedDateEnd
+                    )
+                    .map((dream) => {
+                      // Future is up (see isoToY) — the later/end date
+                      // always ends up with the smaller y, so it's the
+                      // top of the bar regardless of which literal field
+                      // (start/end) that is.
+                      const startY = isoToY(dream.expectedDateStart!);
+                      const endY = isoToY(dream.expectedDateEnd!);
+                      const { width } = nodeSizeFor(dream.priority, zoom);
+                      const centerX = dream.posX + width / 2;
+                      // Matches the dream node's own outline color (a
+                      // single theme setting, not per-priority) rather
+                      // than the priority dot color — see item 10.
+                      const color = theme.dreamNodeOutlineColor;
+                      const yTop = Math.min(startY, endY);
+                      const yBottom = Math.max(startY, endY);
+                      const topLabel = yTop === endY ? dream.expectedDateEnd! : dream.expectedDateStart!;
+                      const bottomLabel = yTop === endY ? dream.expectedDateStart! : dream.expectedDateEnd!;
+                      return (
+                        <g key={dream.id}>
+                          <path d={rangeBarPath(centerX, yTop, yBottom)} fill={color} opacity={0.75} />
+                          <text
+                            x={centerX}
+                            y={yTop - 8}
+                            textAnchor="middle"
+                            fontSize={12}
+                            fontWeight={700}
+                            fill={color}
+                            style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                          >
+                            {formatShortDate(topLabel)}
+                          </text>
+                          <text
+                            x={centerX}
+                            y={yBottom + 18}
+                            textAnchor="middle"
+                            fontSize={12}
+                            fontWeight={700}
+                            fill={color}
+                            style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                          >
+                            {formatShortDate(bottomLabel)}
+                          </text>
+                        </g>
+                      );
+                    })}
+                </svg>
               </div>
             </ViewportPortal>
 
             <Panel position="top-right" className="dream-canvas-hint">
-              Future is up, past is down. Drag between the corner dots to link dreams. Dated dreams
-              only move left/right — change the date to move them in time. Amber nodes are projects —
-              add one from a dream's ⋯ menu.
+              Future is up, past is down. Drag from anywhere along a node's edge to link dreams, or to
+              attach a goal to a dream. Dated dreams and goals only move left/right — change the date
+              to move them in time.
             </Panel>
             <Background
               color="#64748b"
               bgColor={theme.dreamWebBackgroundImage ? "transparent" : theme.dreamWebBackground}
               gap={16}
             />
-            <Controls />
+            <WebControls />
           </ReactFlow>
         </div>
       </div>

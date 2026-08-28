@@ -3,7 +3,7 @@ import React from "react";
 import { Handle, Position } from "@xyflow/react";
 import { Icon } from "../icons/Icon";
 import { useTheme } from "../theme/ThemeContext";
-import { clipPathFor } from "../theme/nodeShapes";
+import { clipPathFor, contentInsetFor } from "../theme/nodeShapes";
 
 const CARD_SHADOWS: Record<string, string> = {
   none: "none",
@@ -53,22 +53,35 @@ export function RecipeCardNode({
   const { theme } = useTheme();
   const isFill = theme.webCardImageStyle === "fill" && hasImage;
   const radius = `${theme.webCardRadius || 10}px`;
+  const inset = contentInsetFor(theme.webCardShape);
 
-  const cardStyle: React.CSSProperties = {
-    width: "210px",
-    height: "144px",
+  // Split in two: shapeBgStyle is the only thing clipped to a
+  // non-rectangular silhouette (background/border/shadow, plus the photo
+  // for the "fill" style — a cropped photo edge isn't lost information
+  // the way clipped text or an icon would be). contentStyle holds every
+  // bit of actual information (name, iteration button, status icons)
+  // and is never clipped, just inset far enough to visually sit inside
+  // the shape instead of overhanging past a cut corner.
+  const shapeBgStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
     borderRadius: radius,
     overflow: "hidden",
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
     backgroundColor: isProven ? theme.webNodeProvenBackground : theme.webNodeUnprovenBackground,
     border: isFavorite ? "3px solid #facc15" : `2px solid ${theme.webNodeOutlineColor}`, // Gold lining for favorite
     boxShadow: isFavorite
       ? "0 0 12px rgba(250, 204, 21, 0.5)"
       : CARD_SHADOWS[theme.webCardShadow] ?? CARD_SHADOWS.soft,
-    color: "#ffffff",
     clipPath: clipPathFor(theme.webCardShape),
+    pointerEvents: "none",
+  };
+
+  const contentStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: `${inset.y}% ${inset.x}%`,
+    display: "flex",
+    flexDirection: "column",
+    color: "#ffffff",
   };
 
   const iterationButton = (
@@ -115,39 +128,89 @@ export function RecipeCardNode({
 
   if (isFill) {
     return (
-      <div style={cardStyle}>
+      <div style={{ width: "210px", height: "144px", position: "relative" }}>
         <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
 
-        <img
-          src={data.imageData}
-          alt=""
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
-        />
+        <div style={shapeBgStyle}>
+          <img
+            src={data.imageData}
+            alt=""
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+          {/* Scrim so the header/status icons stay legible over an arbitrary photo */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.05) 70%, rgba(0,0,0,0.5) 100%)",
+            }}
+          />
+        </div>
 
-        {/* Scrim so the header/status icons stay legible over an arbitrary photo */}
+        <div style={contentStyle}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "6px",
+            }}
+          >
+            <span
+              style={{
+                fontWeight: "bold",
+                fontSize: "12px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                textShadow: "0 1px 3px rgba(0,0,0,0.8)",
+              }}
+            >
+              {data.label}
+            </span>
+            {iterationButton}
+          </div>
+
+          <div
+            style={{
+              marginTop: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "14px",
+            }}
+          >
+            {statusIcons}
+          </div>
+        </div>
+
+        <Handle type="source" position={Position.Top} style={{ opacity: 0 }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ width: "210px", height: "144px", position: "relative" }}>
+      <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
+
+      <div style={shapeBgStyle} />
+
+      <div style={contentStyle}>
+        {/* Header row: recipe name left, iteration button top-right */}
         <div
           style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.05) 70%, rgba(0,0,0,0.5) 100%)",
-          }}
-        />
-
-        <div
-          style={{
-            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "5px 6px",
             gap: "6px",
+            flexShrink: 0,
           }}
         >
           <span
@@ -157,7 +220,6 @@ export function RecipeCardNode({
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              textShadow: "0 1px 3px rgba(0,0,0,0.8)",
             }}
           >
             {data.label}
@@ -165,100 +227,52 @@ export function RecipeCardNode({
           {iterationButton}
         </div>
 
+        {/* Body row: frozen/homegrown icon sidebar left, image box right */}
         <div
           style={{
-            position: "relative",
-            marginTop: "auto",
             display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "0 6px 6px",
-            fontSize: "14px",
-          }}
-        >
-          {statusIcons}
-        </div>
-
-        <Handle type="source" position={Position.Top} style={{ opacity: 0 }} />
-      </div>
-    );
-  }
-
-  return (
-    <div style={cardStyle}>
-      <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
-
-      {/* Header row: recipe name left, iteration button top-right */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "5px 6px",
-          gap: "6px",
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            fontWeight: "bold",
-            fontSize: "12px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {data.label}
-        </span>
-        {iterationButton}
-      </div>
-
-      {/* Body row: frozen/homegrown icon sidebar left, image box right */}
-      <div
-        style={{
-          display: "flex",
-          flex: 1,
-          padding: "0 6px 6px",
-          gap: "6px",
-          minHeight: 0,
-        }}
-      >
-        <div
-          style={{
-            width: "22px",
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "6px",
-            paddingTop: "4px",
-            fontSize: "14px",
-          }}
-        >
-          {statusIcons}
-        </div>
-
-        <div
-          style={{
             flex: 1,
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid rgba(255,255,255,0.3)",
-            overflow: "hidden",
-            backgroundColor: "rgba(0,0,0,0.2)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            paddingTop: "4px",
+            gap: "6px",
+            minHeight: 0,
           }}
         >
-          {hasImage ? (
-            <img
-              src={data.imageData}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          ) : (
-            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)" }}>Image</span>
-          )}
+          <div
+            style={{
+              width: "22px",
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "14px",
+            }}
+          >
+            {statusIcons}
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid rgba(255,255,255,0.3)",
+              overflow: "hidden",
+              backgroundColor: "rgba(0,0,0,0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {hasImage ? (
+              <img
+                src={data.imageData}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)" }}>Image</span>
+            )}
+          </div>
         </div>
       </div>
 

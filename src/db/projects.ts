@@ -6,20 +6,26 @@ import {
   ProjectJournalEntry,
   ProjectBoardItem,
 } from "../types/project";
+import { fetchTable, saveTable } from "./tables";
+import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto } from "./photos";
+import { fetchDockImages, addDockImage } from "./dockImages";
 
 const PROJECT_COLUMNS = `
-  id, dream_id as dreamId, name, goals, reasoning, needs_doing as needsDoing,
+  id, dream_id as dreamId, goal_id as goalId, name, goals, reasoning, needs_doing as needsDoing,
+  estimated_start_date as estimatedStartDate,
   expected_date_start as expectedDateStart, expected_date_end as expectedDateEnd,
   sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt
 `;
 
 type RawProjectRow = {
   id: number;
-  dreamId: number;
+  dreamId: number | null;
+  goalId: number | null;
   name: string;
   goals: string;
   reasoning: string;
   needsDoing: string;
+  estimatedStartDate: string | null;
   expectedDateStart: string | null;
   expectedDateEnd: string | null;
   sortOrder: number;
@@ -30,6 +36,7 @@ type RawProjectRow = {
 function mapProjectRow(row: RawProjectRow): Project {
   return {
     ...row,
+    estimatedStartDate: row.estimatedStartDate ?? undefined,
     expectedDateStart: row.expectedDateStart ?? undefined,
     expectedDateEnd: row.expectedDateEnd ?? undefined,
     createdAt: row.createdAt ?? undefined,
@@ -54,6 +61,17 @@ export async function fetchProjectsForDream(dreamId: number): Promise<Project[]>
   return rows.map(mapProjectRow);
 }
 
+// Backs the Goal Web (GoalWebPage) — every project linked to a goal
+// auto-populates there as a node.
+export async function fetchProjectsForGoal(goalId: number): Promise<Project[]> {
+  const db = await getDb();
+  const rows = await db.select<RawProjectRow[]>(
+    `SELECT ${PROJECT_COLUMNS} FROM projects WHERE goal_id = $1 ORDER BY sort_order`,
+    [goalId]
+  );
+  return rows.map(mapProjectRow);
+}
+
 export async function fetchProject(id: number): Promise<Project | null> {
   const db = await getDb();
   const rows = await db.select<RawProjectRow[]>(
@@ -63,10 +81,13 @@ export async function fetchProject(id: number): Promise<Project | null> {
   return rows[0] ? mapProjectRow(rows[0]) : null;
 }
 
-export async function addProject(dreamId: number, name: string): Promise<number> {
+// dreamId is optional — a project can just exist on its own, linked
+// later or never. "IS $1" (not "=") since SQL equality never matches
+// NULL, and dreamId is frequently NULL now.
+export async function addProject(dreamId: number | null, name: string): Promise<number> {
   const db = await getDb();
   const existing = await db.select<{ maxOrder: number | null }[]>(
-    "SELECT MAX(sort_order) as maxOrder FROM projects WHERE dream_id = $1",
+    "SELECT MAX(sort_order) as maxOrder FROM projects WHERE dream_id IS $1",
     [dreamId]
   );
   const nextOrder = (existing[0].maxOrder ?? -1) + 1;
@@ -103,15 +124,46 @@ export async function updateProjectExpectedDate(
   );
 }
 
+export async function updateProjectEstimatedStartDate(id: number, date: string | null): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE projects SET estimated_start_date = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    [date, id]
+  );
+}
+
+// "IS $1" (not "=") — same reasoning as addProject's dreamId lookup:
+// SQL equality never matches NULL, and goalId (unassigning a project
+// from a goal) is a real, common value here.
+export async function updateProjectGoalId(id: number, goalId: number | null): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE projects SET goal_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    [goalId, id]
+  );
+}
+
 export async function deleteProject(id: number): Promise<void> {
   const db = await getDb();
+  // field_layout.owner_id can't be a real FK (it means either a project
+  // or a goal id depending on category), so it isn't covered by
+  // projects' ON DELETE CASCADE the way project_widgets is — clean up
+  // by hand, same as freetext_fields it may reference.
+  await db.execute(
+    "DELETE FROM freetext_fields WHERE id IN (SELECT ref_id FROM field_layout WHERE category = 'project' AND owner_id = $1 AND field_type = 'freetext')",
+    [id]
+  );
+  await db.execute("DELETE FROM field_layout WHERE category = 'project' AND owner_id = $1", [id]);
   await db.execute("DELETE FROM projects WHERE id = $1", [id]);
 }
 
 // ---- Widgets ----------------------------------------------------------
 
-const WIDGET_COLUMNS = `
-  id, project_id as projectId, widget_type as widgetType, title,
+// Exported so db/goals.ts's goal-scoped widget functions can select the
+// same shape — a widget belongs to exactly one of project_id/goal_id,
+// but both owners read it identically.
+export const WIDGET_COLUMNS = `
+  id, project_id as projectId, goal_id as goalId, widget_type as widgetType, title,
   sort_order as sortOrder, created_at as createdAt
 `;
 
@@ -153,6 +205,79 @@ export async function addWidget(
 export async function deleteWidget(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM project_widgets WHERE id = $1", [id]);
+}
+
+// Rearrange mode's drag-reorder (see components/RearrangeToolbar.tsx) —
+// takes the widget ids in their new order and just writes 0..N-1 as
+// sort_order, same "whole-list rewrite" approach used for board items'
+// insert-order rather than a shuffle-in-place algorithm.
+export async function updateWidgetOrder(orderedIds: number[]): Promise<void> {
+  const db = await getDb();
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db.execute("UPDATE project_widgets SET sort_order = $1 WHERE id = $2", [i, orderedIds[i]]);
+  }
+}
+
+// Rearrange mode's "Duplicate field" — clones the widget row and its
+// content. Content-cloning is type-specific but all funnel through
+// each type's own fetch/add functions rather than raw SQL here, so
+// this stays correct if any of those tables' shapes ever change.
+export async function duplicateWidget(id: number): Promise<number | null> {
+  const original = await fetchWidget(id);
+  if (!original) return null;
+  const db = await getDb();
+
+  const ownerColumn = original.projectId !== null ? "project_id" : "goal_id";
+  const ownerValue = original.projectId !== null ? original.projectId : original.goalId;
+  const existing = await db.select<{ maxOrder: number | null }[]>(
+    `SELECT MAX(sort_order) as maxOrder FROM project_widgets WHERE ${ownerColumn} = $1`,
+    [ownerValue]
+  );
+  const nextOrder = (existing[0].maxOrder ?? -1) + 1;
+
+  const result = await db.execute(
+    "INSERT INTO project_widgets (project_id, goal_id, widget_type, title, sort_order) VALUES ($1, $2, $3, $4, $5)",
+    [original.projectId, original.goalId, original.widgetType, `${original.title} (copy)`, nextOrder]
+  );
+  const newId = result.lastInsertId as number;
+
+  switch (original.widgetType) {
+    case "journal": {
+      const entries = await fetchJournalEntries(id);
+      for (const e of entries) await addJournalEntry(newId, e.content);
+      break;
+    }
+    case "linkboard": {
+      const items = await fetchBoardItems(id);
+      for (const it of items) {
+        if (it.itemType === "text" && it.textContent) await addTextBoardItem(newId, it.textContent);
+        else if (it.itemType === "link" && it.linkHref) await addLinkBoardItem(newId, it.linkHref, it.linkLabel ?? "");
+        else if (it.itemType === "image" && it.imageData) await addImageBoardItem(newId, it.imageData);
+      }
+      break;
+    }
+    case "table": {
+      const data = await fetchTable(id);
+      await saveTable(newId, data);
+      break;
+    }
+    case "photo": {
+      const settings = await fetchPhotoSettings(id);
+      await savePhotoSettings(newId, settings);
+      const photos = await fetchPhotos(id);
+      for (const p of photos) {
+        await addPhoto(newId, p.imageData, p.caption ?? null, p.latitude ?? null, p.longitude ?? null);
+      }
+      break;
+    }
+    case "dock": {
+      const images = await fetchDockImages(id);
+      for (const img of images) await addDockImage(newId, img.imageData);
+      break;
+    }
+  }
+
+  return newId;
 }
 
 // ---- Journal ------------------------------------------------------------

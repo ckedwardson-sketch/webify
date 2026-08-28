@@ -22,9 +22,19 @@ export type View =
   | { type: "responsibility-detail"; responsibilityId: number }
   | { type: "dreams-web" }
   | { type: "dream-detail"; dreamId: number }
+  | { type: "goals-home" }
+  | { type: "goal-detail"; goalId: number }
+  | { type: "goal-web"; goalId: number }
   | { type: "projects-home" }
   | { type: "project-detail"; projectId: number }
-  | { type: "project-journal"; widgetId: number; projectId: number }
-  | { type: "project-board"; widgetId: number; projectId: number }
-  | { type: "progress-web" }
-  | { type: "progress-node-detail"; nodeId: number };
+  // Belongs to a project or a goal, never both — same widget system.
+  | { type: "project-journal"; widgetId: number; projectId?: number; goalId?: number }
+  | { type: "project-board"; widgetId: number; projectId?: number; goalId?: number }
+  | { type: "project-table"; widgetId: number; projectId?: number; goalId?: number }
+  // Progress Web was retired as its own screen — tasks now render
+  // directly on Goal Web (see GoalWebPage.tsx). A task's detail page is
+  // still its own route, scoped back to whichever owner it belongs to
+  // (exactly one of projectId/goalId, same dual-ownership rule as the
+  // task itself) so "back" can return to the right Goal Web.
+  | { type: "progress-node-detail"; nodeId: number; projectId?: number; goalId?: number }
+  | { type: "notes"; pageId?: number };
