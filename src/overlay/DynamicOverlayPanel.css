@@ -1,0 +1,223 @@
+.dyn-overlay-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 90vw;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--color-bg-elevated);
+  border-left: var(--surface-border-width) solid var(--color-border);
+  box-shadow: var(--surface-shadow);
+  overflow-y: auto;
+}
+
+.dyn-overlay-panel.side-left {
+  right: auto;
+  left: 0;
+  border-left: none;
+  border-right: var(--surface-border-width) solid var(--color-border);
+}
+
+.dyn-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dyn-overlay-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dyn-overlay-side-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.dyn-overlay-side-toggle:hover {
+  color: var(--color-text);
+}
+
+.dyn-overlay-quickedit {
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dyn-overlay-quickedit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.dyn-overlay-title {
+  font-weight: 600;
+  font-family: var(--heading-font);
+}
+
+.dyn-overlay-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.dyn-overlay-filter {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.dyn-overlay-hint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.dyn-overlay-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.dyn-overlay-page {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.dyn-overlay-page.current {
+  border-color: var(--color-accent);
+}
+
+.dyn-overlay-page-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dyn-overlay-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.dyn-overlay-location-title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin: 4px 0 2px;
+}
+
+.dyn-overlay-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--color-text);
+}
+
+.dyn-overlay-item:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.dyn-overlay-item.pinned {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.dyn-overlay-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 299;
+  border-radius: 999px;
+  padding: 10px 16px;
+  border: var(--surface-border-width) solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  box-shadow: var(--surface-shadow);
+}
+
+.dyn-overlay-toggle.active {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast, #fff);
+  border-color: var(--color-accent);
+}
+
+.dyn-overlay-gutter {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  z-index: 298;
+  pointer-events: none;
+}
+
+.dyn-overlay-gutter.side-left {
+  right: auto;
+  left: 0;
+}
+
+.dyn-overlay-gutter-tick {
+  position: absolute;
+  right: 0;
+  width: 6px;
+  height: 4px;
+  background: var(--color-accent);
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 2px 0 0 2px;
+}
+
+.dyn-overlay-gutter.side-left .dyn-overlay-gutter-tick {
+  right: auto;
+  left: 0;
+  border-radius: 0 2px 2px 0;
+}

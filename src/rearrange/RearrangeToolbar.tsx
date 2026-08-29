@@ -17,15 +17,15 @@ export function RearrangeToolbar() {
     toggleDeleteTool,
     copyToolActive,
     toggleCopyTool,
-    pasteToolActive,
-    togglePasteTool,
     clipboard,
     target,
     showAddMenu,
     toggleAddMenu,
     closeAddMenu,
     undoStack,
+    redoStack,
     popUndo,
+    popRedo,
   } = useRearrangeMode();
   const [showSave, setShowSave] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
@@ -45,15 +45,19 @@ export function RearrangeToolbar() {
         onClick={popUndo}
         disabled={undoStack.length === 0}
       />
+      <ToolButton
+        icon="↪"
+        label={redoStack.length > 0 ? `Redo (${redoStack.length})` : "Redo"}
+        onClick={popRedo}
+        disabled={redoStack.length === 0}
+      />
       <ToolButton icon="🗑" label="Delete" active={deleteToolActive} danger onClick={toggleDeleteTool} />
       <ToolButton icon="➕" label="Add new area" active={showAddMenu} onClick={toggleAddMenu} />
-      <ToolButton icon="📋" label="Copy field" active={copyToolActive} onClick={toggleCopyTool} />
       <ToolButton
-        icon="📌"
-        label="Paste field"
-        active={pasteToolActive}
-        onClick={togglePasteTool}
-        disabled={!clipboard}
+        icon="📋"
+        label={clipboard ? `Copy field (holding "${clipboard.label}")` : "Copy field"}
+        active={copyToolActive}
+        onClick={toggleCopyTool}
       />
       {hasWidgetSystem && (
         <>
@@ -70,20 +74,20 @@ export function RearrangeToolbar() {
           the sidebar now, not a fixed x:0 overlay, so its screen
           position moves with sidebar width/collapse state, and these
           need to track it. */}
-      {deleteToolActive && <div className="rearrange-hint">Hover a removable field/widget — red means it'll delete.</div>}
-      {copyToolActive && (
-        <div className="rearrange-hint">
-          Click a field to copy it (widgets duplicate instantly instead). Copied fields glow green.
-        </div>
+      {deleteToolActive && <div className="rearrange-hint">Hover a field/widget — red means it'll delete.</div>}
+      {copyToolActive && !clipboard && (
+        <div className="rearrange-hint">Click a text field to copy it (widgets duplicate instantly instead).</div>
       )}
-      {pasteToolActive && (
+      {clipboard && (
         <div className="rearrange-hint">
-          {clipboard ? "Click a blue line between fields to paste there." : "Copy something first."}
+          Holding "{clipboard.label}" — click any blue line between fields to paste it there, or the green field to
+          cancel.
         </div>
       )}
       {showAddMenu && (
         <div className="rearrange-hint">
-          Hover the blue line between any two fields for a "+", or pick below to add at the end.
+          Hover the blue line between any two fields for a "+", the thin bar on a field's right edge to place one
+          beside it, or pick below to add at the end.
         </div>
       )}
 

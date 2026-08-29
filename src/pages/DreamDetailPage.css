@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--field-spacing);
 }
 
 .dream-field-label {
@@ -30,104 +30,9 @@
   text-decoration: underline;
 }
 
-.dream-history-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dream-history-entry {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-sm) var(--space-xs);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.dream-history-field {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-secondary);
-}
-
-.dream-history-change {
-  font-size: 0.9rem;
-  color: var(--color-text);
-}
-
-.dream-history-time {
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
-}
-
-.dream-history-reason {
-  font-size: 0.8rem;
-  font-style: italic;
-  color: var(--color-text-secondary);
-}
-
-.dream-memory-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.dream-memory-header .theme-section-title {
-  margin-bottom: 0;
-}
-
-.dream-filter-dropdown {
-  position: absolute;
-  right: 0;
-  top: 40px;
-  width: 220px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  padding: 12px;
-  z-index: 100;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-}
-
-.dream-filter-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.dream-filter-checkbox {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: var(--color-text);
-}
-
-.dream-filter-date {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  gap: 8px;
-}
-
-.dream-filter-date input {
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-input-bg);
-  color: var(--color-input-text);
-  font-size: 0.8rem;
-  padding: 3px 6px;
-}
+/* Memory's own list/filter/history classes moved to
+   components/MemoryField.css — that component is now shared by
+   Project/Goal/Dream Detail instead of living only here. */
 
 .dream-sleeping-banner {
   display: flex;

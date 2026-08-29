@@ -5,9 +5,17 @@
      re-measuring its own 100vh, which would overflow past the shell's
      padded (inset-clear) content box. */
   height: 100%;
-  background: var(--color-sidebar-bg);
+  background-color: var(--color-sidebar-bg);
+  /* Color Mode's optional sidebar background image (see
+     overlay/ColorModePanel.tsx) — none of these three vars are set
+     unless the user picks an image there, same "none"/"cover"/
+     "no-repeat" defaults as every other Color Mode target. */
+  background-image: var(--bg-image-sidebar);
+  background-size: var(--bg-image-sidebar-size);
+  background-repeat: var(--bg-image-sidebar-repeat);
+  background-position: center;
   border-right: 1px solid var(--color-border);
-  padding: 16px 8px;
+  padding: var(--space-md) var(--space-sm);
   box-sizing: border-box;
 }
 
@@ -70,9 +78,9 @@ html.mobile-layout .sidebar {
      close button in sidebar-header) never sits under a notch/status
      bar/gesture-nav bar. */
   height: 100dvh;
-  padding-top: calc(16px + env(safe-area-inset-top));
-  padding-left: calc(8px + env(safe-area-inset-left));
-  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
+  padding-left: calc(var(--space-sm) + env(safe-area-inset-left));
+  padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom));
 }
 
 /* Right-docked sidebar: same panel, border flips to the inner edge. */
@@ -84,8 +92,8 @@ html.mobile-layout .sidebar {
 html.mobile-layout[data-nav-layout="right"] .sidebar {
   left: auto;
   right: 0;
-  padding-left: 8px;
-  padding-right: calc(8px + env(safe-area-inset-right));
+  padding-left: var(--space-sm);
+  padding-right: calc(var(--space-sm) + env(safe-area-inset-right));
 }
 
 /* Top navbar: the vertical panel becomes a horizontal strip and its
@@ -124,7 +132,7 @@ html.mobile-layout[data-nav-layout="top"] .sidebar {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sidebar-item-gap);
 }
 
 .sidebar-item {
@@ -132,7 +140,7 @@ html.mobile-layout[data-nav-layout="top"] .sidebar {
   text-align: left;
   background: none;
   border: none;
-  padding: 7px 10px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   color: var(--color-sidebar-text);

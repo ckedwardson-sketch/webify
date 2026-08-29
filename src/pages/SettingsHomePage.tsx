@@ -6,6 +6,7 @@ import { useButtonStyles } from "../icons/ButtonStyleContext";
 import { useTheme } from "../theme/ThemeContext";
 import { fetchPresets, savePreset, deletePreset, fetchPresetData, ThemePresetRow } from "../db/themePresets";
 import { buildSettingsSearchIndex } from "./settingsSearchIndex";
+import { useDynamicOverlay } from "../overlay/DynamicOverlayContext";
 import { ThemeExport } from "../theme/themeExport";
 import { isValidCustomSliderDef } from "../theme/customSliders";
 import { ExportToAiModal } from "../components/ExportToAiModal";
@@ -18,7 +19,10 @@ const NAV_CARDS: { view: View; title: string; desc: string }[] = [
   { view: { type: "settings-text" }, title: "Text Elements", desc: "Editor toolbar letters, size, color" },
   { view: { type: "settings-buttons" }, title: "Buttons", desc: "Text, font, colors, box size" },
   { view: { type: "settings-theme" }, title: "Theme", desc: "Colors, fonts, radius, density, backgrounds" },
+  { view: { type: "settings-editor" }, title: "Editor Tools", desc: "Toolbar, right-click menu, selection menu, slash commands" },
+  { view: { type: "settings-headers" }, title: "Headers", desc: "Sidebar title/nav item font size, color, bold, underline" },
   { view: { type: "settings-issues" }, title: "Reported Issues", desc: "Notes + screenshots saved from the capture button" },
+  { view: { type: "settings-dynamic-search" }, title: "Dynamic Settings Search", desc: "Every setting, grouped by page and location" },
 ];
 
 export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
@@ -35,6 +39,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     clearOverride: clearButtonOverride,
   } = useButtonStyles();
   const { overrides: themeOverrides, replaceTheme, customSliders, replaceCustomSliders } = useTheme();
+  const { requestQuickEdit } = useDynamicOverlay();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -245,7 +250,14 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
               <button
                 key={`${item.section}:${item.key}`}
                 className="settings-search-result"
-                onClick={() => onNavigate(item.view)}
+                onClick={() => {
+                  // Opens the setting inline in the Dynamic Search
+                  // overlay instead of navigating to its real page — the
+                  // whole point of search is finding+changing it without
+                  // leaving where you are.
+                  requestQuickEdit(item);
+                  setQuery("");
+                }}
               >
                 <span className="settings-search-result-section">{item.section}</span>
                 <span>{item.label}</span>

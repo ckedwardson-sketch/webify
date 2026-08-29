@@ -11,6 +11,7 @@ export function Icon({ iconKey, size = 16 }: { iconKey: string; size?: number })
       <img
         src={override}
         alt={def?.label ?? iconKey}
+        data-overlay-target={iconKey}
         style={{
           width: size,
           height: size,
@@ -22,5 +23,5 @@ export function Icon({ iconKey, size = 16 }: { iconKey: string; size?: number })
     );
   }
 
-  return <span>{def?.defaultGlyph ?? "?"}</span>;
+  return <span data-overlay-target={iconKey}>{def?.defaultGlyph ?? "?"}</span>;
 }

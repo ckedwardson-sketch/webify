@@ -57,7 +57,8 @@ body {
      --bg-pattern to "none" so this is a no-op until the user picks a
      pattern. */
   background-image: var(--bg-image-app), var(--bg-pattern);
-  background-size: cover, var(--bg-pattern-size);
+  background-size: var(--bg-image-app-size), var(--bg-pattern-size);
+  background-repeat: var(--bg-image-app-repeat), repeat;
   background-position: center, top left;
   background-attachment: fixed, fixed;
   color: var(--color-text);

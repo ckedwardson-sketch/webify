@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import { PhotoEntry, PhotoWidgetSettings, PhotoDisplayMode, PhotoOrientation } from "../types/project";
 import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto, deletePhoto } from "../db/photos";
 import { downloadBlob } from "../capture/captureEngine";
+import { Icon } from "../icons/Icon";
 import "./QuickPhotoWidget.css";
 
 const CARD_DECK_VISIBLE = 8;
@@ -190,7 +191,7 @@ export function QuickPhotoWidget({ widgetId }: { widgetId: number }) {
     <div className="quick-photo-widget" style={{ aspectRatio: settings.orientation === "portrait" ? "3 / 4" : "4 / 3" }}>
       <div className="quick-photo-menu-wrapper">
         <button className="quick-photo-menu-button" onClick={() => setShowMenu((v) => !v)} title="Quick Photo settings">
-          ⋯
+          <Icon iconKey="menu-more" size={16} />
         </button>
         {showMenu && (
           <>

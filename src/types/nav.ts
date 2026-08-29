@@ -16,7 +16,10 @@ export type View =
   | { type: "settings-text"; focusKey?: string }
   | { type: "settings-buttons"; focusKey?: string }
   | { type: "settings-theme"; focusKey?: string }
+  | { type: "settings-editor"; focusKey?: string }
+  | { type: "settings-headers"; focusKey?: string }
   | { type: "settings-issues" }
+  | { type: "settings-dynamic-search" }
   | { type: "responsibilities-home" }
   | { type: "responsibilities-manage" }
   | { type: "responsibility-detail"; responsibilityId: number }

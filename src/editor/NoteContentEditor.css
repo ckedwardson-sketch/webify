@@ -1,0 +1,145 @@
+/* src/editor/NoteContentEditor.css — Notion-style typography: no
+   bordered box (unlike Recipe's), full-bleed, generous line height. */
+
+.note-content-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-content-editor-body {
+  position: relative;
+}
+
+.note-content-editor-content {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 8px 0 120px;
+}
+
+.note-content-editor-content .ProseMirror {
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--color-text);
+}
+
+.note-content-editor-content h1 {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin: 0.8em 0 0.3em;
+}
+
+.note-content-editor-content h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0.7em 0 0.3em;
+}
+
+.note-content-editor-content h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+}
+
+.note-content-editor-content p {
+  margin: 0.4em 0;
+}
+
+.note-content-editor-content ul,
+.note-content-editor-content ol {
+  padding-left: 1.4em;
+  margin: 0.4em 0;
+}
+
+.note-content-editor-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+
+.note-content-editor-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.note-content-editor-content ul[data-type="taskList"] li > label {
+  margin-top: 3px;
+}
+
+.note-content-editor-content blockquote {
+  border-left: 3px solid var(--color-accent);
+  margin: 0.5em 0;
+  padding-left: 12px;
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.note-content-editor-content hr {
+  border: none;
+  border-top: 1px solid var(--color-border-strong);
+  margin: 1em 0;
+}
+
+.note-content-editor-content a {
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.note-content-editor-content code {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+
+.note-content-editor-content pre {
+  background: #1e1e1e;
+  color: #eee;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.note-content-editor-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.note-content-editor-content mark {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Toggle (details/summary) */
+.note-content-editor-content details {
+  margin: 0.5em 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+}
+
+.note-content-editor-content summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.note-content-editor-content details > div[data-toggle-content] {
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+/* Callout — same tint the old fake-block callout used */
+.note-content-editor-content div[data-callout] {
+  margin: 0.5em 0;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-secondary));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.note-content-editor-content div[data-callout] > p:first-child::before {
+  content: "💡 ";
+}

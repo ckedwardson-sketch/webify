@@ -24,6 +24,14 @@
   --color-accent: #2563eb;
   --color-danger: #cc0000;
   --bg-image-app: none;
+  --bg-image-app-size: cover;
+  --bg-image-app-repeat: no-repeat;
+  --bg-image-sidebar: none;
+  --bg-image-sidebar-size: cover;
+  --bg-image-sidebar-repeat: no-repeat;
+  --bg-image-input: none;
+  --bg-image-input-size: cover;
+  --bg-image-input-repeat: no-repeat;
 
   /* Typography/radius/density presets — mirrored in fontPresets.ts /
      scalePresets.ts (the "system" / "subtle" / "comfortable" defaults).
@@ -45,6 +53,8 @@
   --page-max-width: 640px;
   --sidebar-width: 220px;
   --page-title-size: 1.6rem;
+  --sidebar-item-gap: 2px;
+  --field-spacing: 16px;
 
   /* Baseline values for the surface/heading/background/motion presets
      below (surfacePresets.ts / headingPresets.ts / backgroundPresets.ts

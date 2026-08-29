@@ -39,8 +39,10 @@ export function SectionThemeScope({
 
   const style: React.CSSProperties = { display: "contents" };
   for (const key of keys) {
+    const cssVar = CSS_VAR_MAP[key];
+    if (!cssVar) continue;
     const value = overrides[key]!;
-    (style as Record<string, string>)[CSS_VAR_MAP[key]] = IMAGE_KEYS.has(key) ? `url("${value}")` : value;
+    (style as Record<string, string>)[cssVar] = IMAGE_KEYS.has(key) ? `url("${value}")` : value;
   }
 
   return <div style={style}>{children}</div>;

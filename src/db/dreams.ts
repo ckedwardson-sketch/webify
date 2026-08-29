@@ -1,5 +1,6 @@
 import { getDb } from "./database";
 import { Dream, DreamHistoryEntry, DreamHistoryField, DreamLink, DreamPriority } from "../types/models";
+import { recordEntityHistory, deleteEntityHistoryFor } from "./entityHistory";
 
 type RawDreamRow = {
   id: number;
@@ -13,6 +14,7 @@ type RawDreamRow = {
   posY: number;
   isAsleep: number;
   sleepUntil: string | null;
+  estimatedStartDate: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -25,6 +27,7 @@ function mapDreamRow(row: RawDreamRow): Dream {
     priority: (row.priority as DreamPriority) || "medium",
     isAsleep: !!row.isAsleep,
     sleepUntil: row.sleepUntil ?? undefined,
+    estimatedStartDate: row.estimatedStartDate ?? undefined,
   };
 }
 
@@ -40,6 +43,7 @@ const DREAM_COLUMNS = `
   pos_y as posY,
   is_asleep as isAsleep,
   sleep_until as sleepUntil,
+  estimated_start_date as estimatedStartDate,
   created_at as createdAt,
   updated_at as updatedAt
 `;
@@ -89,7 +93,22 @@ export async function deleteDream(id: number): Promise<void> {
     [id]
   );
   await db.execute("DELETE FROM field_layout WHERE category = 'dream' AND owner_id = $1", [id]);
+  await deleteEntityHistoryFor("dream", id);
   await db.execute("DELETE FROM dreams WHERE id = $1", [id]);
+}
+
+// The portable "Estimated start date" field (see fieldLayout.ts) — a
+// Dream doesn't have this by default (it only ever had the expected
+// date *range*), but can add it the same way a Project/Goal can add a
+// Memory field. Deliberately not logged to dream_history/entity_history
+// with the ceremony updateDreamField gives simple fields — it's a new,
+// optional field, not part of the dream's original tracked shape.
+export async function updateDreamEstimatedStartDate(id: number, date: string | null): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE dreams SET estimated_start_date = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    [date, id]
+  );
 }
 
 // Canvas X is the only freely-dragged coordinate for a dated dream (Y
@@ -150,6 +169,11 @@ export async function updateDreamField(
     `UPDATE dreams SET ${column} = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
     [newValue, id]
   );
+  // Additive: also logs to the generalized entity_history table (see
+  // db/entityHistory.ts) — dream_history above remains the source for
+  // the dream's own built-in Memory field; this is what a second,
+  // portable Memory field added to a Dream (see fieldLayout.ts) reads.
+  await recordEntityHistory("dream", id, field, oldValue, newValue, reason);
 }
 
 // start/end are both null for "no date set". A single exact day is
@@ -177,6 +201,7 @@ export async function updateDreamExpectedDate(
     `UPDATE dreams SET expected_date_start = $1, expected_date_end = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
     [start, end, id]
   );
+  await recordEntityHistory("dream", id, "expectedDate", formatDateRange(oldStart, oldEnd), formatDateRange(start, end), reason);
 }
 
 // Parks a dream off the timeline instead of deleting it. Logged to

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { useSaveFeedback } from "../hooks/useSaveFeedback";
 import { SaveStatusIndicator } from "./SaveStatusIndicator";
 
@@ -9,9 +9,11 @@ import { SaveStatusIndicator } from "./SaveStatusIndicator";
 export function EstimatedStartDateField({
   value,
   onSave,
+  style,
 }: {
   value?: string;
   onSave: (date: string | null) => void | Promise<void>;
+  style?: CSSProperties;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   const { status, run } = useSaveFeedback();
@@ -29,7 +31,7 @@ export function EstimatedStartDateField({
       <input
         type="date"
         className="inline-add-input"
-        style={{ width: "auto", marginBottom: 0 }}
+        style={{ width: "auto", marginBottom: 0, ...style }}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
       />

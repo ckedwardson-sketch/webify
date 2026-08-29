@@ -17,7 +17,15 @@ import {
   fetchAllProjects,
   addProject,
   updateProjectGoalId,
+  fetchWidgetsForProject,
 } from "../db/projects";
+import { fetchWidgetsForGoal } from "../db/goals";
+import { fetchFieldLayout, fetchFreetextFields, updateFieldStyle, FieldLayoutRow, FieldStylePatch, FreetextField } from "../db/fieldLayout";
+import { buildNodeCardTextItems, widgetsVisibleOnWeb, NodeCardTextItem } from "../theme/nodeCardFields";
+import { mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { NodeCardFields } from "../components/NodeCardFields";
+import { NodeWidgetOverlay } from "../components/NodeWidgetOverlay";
+import { NodeFieldVisibilityPopover } from "../components/NodeFieldVisibilityPopover";
 import { fetchGoal } from "../db/goals";
 import {
   fetchProgressNodesForGoal,
@@ -36,7 +44,7 @@ import {
 import { consistencyPercent, daysPerWeek as daysPerWeekFor } from "../responsibilities/scheduling";
 import { fetchViewport, saveViewport } from "../db/viewports";
 import { fetchBookmarksForGoal, addBookmark, deleteBookmark, GoalWebBookmark } from "../db/goalWebBookmarks";
-import { Goal, Project } from "../types/project";
+import { Goal, Project, ProjectWidget } from "../types/project";
 import { ProgressNode as ProgressNodeModel } from "../types/models";
 import { Responsibility, ResponsibilityCompletion, DailySchedule } from "../types/responsibility";
 import { ProgressNode as ProgressNodeView } from "../components/ProgressGraphNodes";
@@ -74,8 +82,16 @@ function gridPosition(index: number, colWidth: number, rowHeight: number, perRow
 // The one fixed, non-draggable, non-deletable node every goal's web
 // starts with: its own goals text — a live read of the goal's own goals
 // field, not a DB row.
-function GoalSummaryNode({ data }: { data: { goals: string } }) {
+interface GoalSummaryNodeData {
+  webFields: NodeCardTextItem[];
+  widgets: ProjectWidget[];
+  onOpenWidget: (widget: ProjectWidget) => void;
+}
+
+function GoalSummaryNode({ data }: { data: GoalSummaryNodeData }) {
   const { theme } = useTheme();
+  const hasExtras = data.webFields.length > 0 || data.widgets.length > 0;
+  const growToFit = theme.nodeCardGrowToFit === "1";
   return (
     <div
       style={{
@@ -97,17 +113,19 @@ function GoalSummaryNode({ data }: { data: { goals: string } }) {
       <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: theme.accent }}>
         🎯 GOAL
       </span>
-      <span
-        style={{
-          fontSize: "12px",
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: 4,
-          WebkitBoxOrient: "vertical",
-        }}
-      >
-        {data.goals || "No goals written yet — click to add some."}
-      </span>
+      {hasExtras ? (
+        <NodeCardFields
+          items={data.webFields}
+          widgets={data.widgets}
+          onOpenWidget={data.onOpenWidget}
+          fullText={growToFit}
+          capHeightPx={growToFit ? undefined : 70}
+        />
+      ) : (
+        <span style={{ fontSize: "11px", opacity: 0.7 }}>
+          Nothing shown yet — pick fields to show on the web via 🎨 on the goal page.
+        </span>
+      )}
     </div>
   );
 }
@@ -120,12 +138,18 @@ function GoalSummaryNode({ data }: { data: { goals: string } }) {
 // "which owner?" dropdown in the add panel (see item 1's design note on
 // handleAddTask below): adding a project-scoped task is now something
 // you do right at the project it belongs to.
-function ProjectCardNode({
-  data,
-}: {
-  data: { name: string; needsDoing: string; onUnlink: () => void; onAddTask: () => void };
-}) {
+interface ProjectCardNodeData {
+  name: string;
+  onUnlink: () => void;
+  onAddTask: () => void;
+  webFields: NodeCardTextItem[];
+  widgets: ProjectWidget[];
+  onOpenWidget: (widget: ProjectWidget) => void;
+}
+
+function ProjectCardNode({ data }: { data: ProjectCardNodeData }) {
   const { theme } = useTheme();
+  const growToFit = theme.nodeCardGrowToFit === "1";
   return (
     <div
       style={{
@@ -203,18 +227,17 @@ function ProjectCardNode({
       >
         📁 {data.name}
       </div>
-      <div
-        style={{
-          fontSize: "11px",
-          opacity: 0.85,
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: 3,
-          WebkitBoxOrient: "vertical",
-        }}
-      >
-        {data.needsDoing || "No details yet."}
-      </div>
+      {data.webFields.length > 0 || data.widgets.length > 0 ? (
+        <NodeCardFields
+          items={data.webFields}
+          widgets={data.widgets}
+          onOpenWidget={data.onOpenWidget}
+          fullText={growToFit}
+          capHeightPx={growToFit ? undefined : 60}
+        />
+      ) : (
+        <div style={{ fontSize: "11px", opacity: 0.7 }}>No details shown — see 🎨 on the project page.</div>
+      )}
     </div>
   );
 }
@@ -351,6 +374,19 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   const [bookmarks, setBookmarks] = useState<GoalWebBookmark[]>([]);
   const [initialViewport, setInitialViewport] = useState<Viewport | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
+  // "Show on web" field config + widget rows for the goal card and every
+  // linked project card (see FieldStylePopover.tsx's "On the web"
+  // section / theme/nodeCardFields.ts) — fetched alongside everything
+  // else in load() rather than lazily per-node.
+  const [goalFields, setGoalFields] = useState<FieldLayoutRow[]>([]);
+  const [projectFieldsById, setProjectFieldsById] = useState<Map<number, FieldLayoutRow[]>>(new Map());
+  const [freetextById, setFreetextById] = useState<Map<number, FreetextField>>(new Map());
+  const [goalWidgets, setGoalWidgets] = useState<ProjectWidget[]>([]);
+  const [projectWidgetsById, setProjectWidgetsById] = useState<Map<number, ProjectWidget[]>>(new Map());
+  const [openWidget, setOpenWidget] = useState<ProjectWidget | null>(null);
+  const [fieldVisibilityTarget, setFieldVisibilityTarget] = useState<
+    { category: "goal"; ownerId: number } | { category: "project"; ownerId: number } | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [creatingProject, setCreatingProject] = useState(false);
   const [showAddPanel, setShowAddPanel] = useState(false);
@@ -399,11 +435,34 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         setBookmarks(goalBookmarks);
         setInitialViewport(viewport);
         setLoading(false);
+
+        loadWebFieldConfig(goalProjects);
       }
     );
   };
 
-  useEffect(load, [goalId]);
+  const loadWebFieldConfig = async (currentProjects: Project[]) => {
+    const [gFields, pFieldLists, gWidgets, pWidgetLists] = await Promise.all([
+      fetchFieldLayout("goal", goalId),
+      Promise.all(currentProjects.map((p) => fetchFieldLayout("project", p.id))),
+      fetchWidgetsForGoal(goalId),
+      Promise.all(currentProjects.map((p) => fetchWidgetsForProject(p.id))),
+    ]);
+    setGoalFields(gFields);
+    setProjectFieldsById(new Map(currentProjects.map((p, i) => [p.id, pFieldLists[i]])));
+    setGoalWidgets(gWidgets);
+    setProjectWidgetsById(new Map(currentProjects.map((p, i) => [p.id, pWidgetLists[i]])));
+
+    const freetextIds = [...gFields, ...pFieldLists.flat()]
+      .filter((f) => f.fieldType === "freetext" && f.refId !== null)
+      .map((f) => f.refId!);
+    setFreetextById(await fetchFreetextFields(freetextIds));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goalId]);
 
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
@@ -424,6 +483,39 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     return GOAL_TASKS_BASE;
   };
 
+  const handleUpdateFieldWeb = (
+    category: "goal" | "project",
+    ownerId: number,
+    fieldId: number,
+    patch: FieldStylePatch
+  ) => {
+    if (category === "goal") {
+      setGoalFields((prev) => prev.map((f) => (f.id === fieldId ? mergeFieldStylePatch(f, patch) : f)));
+    } else {
+      setProjectFieldsById((prev) => {
+        const next = new Map(prev);
+        const list = next.get(ownerId);
+        if (list) next.set(ownerId, list.map((f) => (f.id === fieldId ? mergeFieldStylePatch(f, patch) : f)));
+        return next;
+      });
+    }
+    updateFieldStyle(fieldId, patch);
+  };
+
+  const handleOpenWidget = (widget: ProjectWidget) => {
+    const owner = widget.projectId != null ? { projectId: widget.projectId } : { goalId: widget.goalId! };
+    if (widget.widgetType === "table") {
+      onNavigate({ type: "project-table", widgetId: widget.id, ...owner });
+    } else if (widget.widgetType === "journal") {
+      onNavigate({ type: "project-journal", widgetId: widget.id, ...owner });
+    } else if (widget.widgetType === "linkboard") {
+      onNavigate({ type: "project-board", widgetId: widget.id, ...owner });
+    } else {
+      // photo / dock — no dedicated page, open inline instead of navigating away.
+      setOpenWidget(widget);
+    }
+  };
+
   useEffect(() => {
     const goalNode: Node = {
       id: GOAL_NODE_ID,
@@ -431,7 +523,24 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       position: GOAL_NODE_POS,
       draggable: false,
       deletable: false,
-      data: { goals: goal?.goals ?? "" },
+      data: {
+        webFields: goal
+          ? buildNodeCardTextItems(
+              goalFields,
+              freetextById,
+              (type) =>
+                type === "goals_text" ? goal.goals : type === "reasoning_text" ? goal.reasoning : type === "needs_doing_text" ? goal.needsDoing : undefined,
+              (type) =>
+                type === "estimated_start"
+                  ? { start: goal.estimatedStartDate }
+                  : type === "expected_range"
+                  ? { start: goal.expectedDateStart, end: goal.expectedDateEnd }
+                  : undefined
+            )
+          : [],
+        widgets: widgetsVisibleOnWeb(goalFields) ? goalWidgets : [],
+        onOpenWidget: handleOpenWidget,
+      },
     };
 
     const projectNodes: Node[] = projects.map((project) => ({
@@ -441,9 +550,24 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       draggable: false,
       data: {
         name: project.name,
-        needsDoing: project.needsDoing,
         onUnlink: () => updateProjectGoalId(project.id, null).then(load),
         onAddTask: () => handleAddTask(project.id),
+        webFields: buildNodeCardTextItems(
+          projectFieldsById.get(project.id) ?? [],
+          freetextById,
+          (type) =>
+            type === "goals_text" ? project.goals : type === "reasoning_text" ? project.reasoning : type === "needs_doing_text" ? project.needsDoing : undefined,
+          (type) =>
+            type === "estimated_start"
+              ? { start: project.estimatedStartDate }
+              : type === "expected_range"
+              ? { start: project.expectedDateStart, end: project.expectedDateEnd }
+              : undefined
+        ),
+        widgets: widgetsVisibleOnWeb(projectFieldsById.get(project.id) ?? [])
+          ? projectWidgetsById.get(project.id) ?? []
+          : [],
+        onOpenWidget: handleOpenWidget,
       },
     }));
 
@@ -484,7 +608,19 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
 
     setNodes([goalNode, ...projectNodes, ...responsibilityNodes, ...taskNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goal, projects, responsibilities, completions, tasks, projectBases]);
+  }, [
+    goal,
+    projects,
+    responsibilities,
+    completions,
+    tasks,
+    projectBases,
+    goalFields,
+    projectFieldsById,
+    freetextById,
+    goalWidgets,
+    projectWidgetsById,
+  ]);
 
   const onNodesChange = (changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes.filter((c) => c.type !== "remove"), nds));
@@ -504,13 +640,21 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, posX: localX, posY: localY } : t)));
   };
 
-  const onNodeClick = (_: React.MouseEvent, node: Node) => {
+  const onNodeClick = (event: React.MouseEvent, node: Node) => {
     if (node.id === GOAL_NODE_ID) {
+      if (event.ctrlKey) {
+        setFieldVisibilityTarget({ category: "goal", ownerId: goalId });
+        return;
+      }
       onNavigate({ type: "goal-detail", goalId });
       return;
     }
     if (node.id.startsWith("pr-")) {
       const id = parseProjectNodeId(node.id);
+      if (event.ctrlKey) {
+        if (projectById.has(id)) setFieldVisibilityTarget({ category: "project", ownerId: id });
+        return;
+      }
       if (projectById.has(id)) onNavigate({ type: "project-detail", projectId: id });
       return;
     }
@@ -664,7 +808,16 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
           </div>
         </div>
 
-        <div className="goal-web-canvas">
+        <div
+          className="goal-web-canvas"
+          style={{
+            backgroundImage: theme.goalWebBackgroundImage ? `url("${theme.goalWebBackgroundImage}")` : "none",
+            backgroundSize:
+              theme.goalWebBackgroundTile === "1" ? `${theme.goalWebBackgroundScale || "128"}px` : "cover",
+            backgroundRepeat: theme.goalWebBackgroundTile === "1" ? "repeat" : "no-repeat",
+            backgroundPosition: "center",
+          }}
+        >
           {projects.length === 0 && tasks.length === 0 && responsibilities.length === 0 && (
             <div className="goal-web-empty-hint">
               Nothing here yet — use "+ Add" to attach a project, task, or responsibility.
@@ -779,11 +932,34 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
               lives on this one canvas. Zoom out to see it all; save a zoom to jump straight back to a
               cluster you're focused on.
             </Panel>
-            <Background color="#64748b" bgColor={theme.goalWebBackground} gap={16} />
+            <Background
+              color="#64748b"
+              bgColor={theme.goalWebBackgroundImage ? "transparent" : theme.goalWebBackground}
+              gap={16}
+            />
             <WebControls />
           </ReactFlow>
         </div>
       </div>
+      {openWidget && <NodeWidgetOverlay widget={openWidget} onClose={() => setOpenWidget(null)} />}
+      {fieldVisibilityTarget && (
+        <NodeFieldVisibilityPopover
+          title={
+            fieldVisibilityTarget.category === "goal"
+              ? goal?.name ?? "Goal"
+              : projectById.get(fieldVisibilityTarget.ownerId)?.name ?? "Project"
+          }
+          fields={
+            fieldVisibilityTarget.category === "goal"
+              ? goalFields
+              : projectFieldsById.get(fieldVisibilityTarget.ownerId) ?? []
+          }
+          onUpdate={(fieldId, patch) =>
+            handleUpdateFieldWeb(fieldVisibilityTarget.category, fieldVisibilityTarget.ownerId, fieldId, patch)
+          }
+          onClose={() => setFieldVisibilityTarget(null)}
+        />
+      )}
     </div>
   );
 }

@@ -35,6 +35,10 @@ import {
   GoalDreamLink,
 } from "../db/goalDreamLinks";
 import { fetchViewport, saveViewport } from "../db/viewports";
+import { fetchFieldLayout, fetchFreetextFields, updateFieldStyle, FieldLayoutRow, FieldStylePatch, FreetextField } from "../db/fieldLayout";
+import { buildNodeCardTextItems } from "../theme/nodeCardFields";
+import { mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { NodeFieldVisibilityPopover } from "../components/NodeFieldVisibilityPopover";
 import { Dream, DreamLink, DreamPriority } from "../types/models";
 import { Goal } from "../types/project";
 import {
@@ -237,26 +241,41 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [initialViewport, setInitialViewport] = useState<Viewport | null>(null);
+  const [dreamFieldsById, setDreamFieldsById] = useState<Map<number, FieldLayoutRow[]>>(new Map());
+  const [freetextById, setFreetextById] = useState<Map<number, FreetextField>>(new Map());
+  const [fieldVisibilityDreamId, setFieldVisibilityDreamId] = useState<number | null>(null);
 
   const gridLines = useMemo(buildGridLines, []);
 
-  const load = () => {
-    Promise.all([
+  const load = async () => {
+    const [{ dreams, links }, goals, goalDreamLinks, viewport] = await Promise.all([
       fetchDreamGraphData(),
       fetchAllGoals(),
       fetchAllGoalDreamLinks(),
       fetchViewport("dream-web"),
-    ]).then(([{ dreams, links }, goals, goalDreamLinks, viewport]) => {
-      setDreams(dreams);
-      setLinks(links);
-      setGoals(goals);
-      setGoalDreamLinks(goalDreamLinks);
-      setInitialViewport(viewport);
-      setLoading(false);
-    });
+    ]);
+    setDreams(dreams);
+    setLinks(links);
+    setGoals(goals);
+    setGoalDreamLinks(goalDreamLinks);
+    setInitialViewport(viewport);
+    setLoading(false);
+
+    // Per-dream "show on web" field config (see FieldStylePopover.tsx) —
+    // fetched for every active dream, not lazily per-node, so the node-
+    // building effect below can stay a synchronous map over already-
+    // loaded data.
+    const activeDreams = dreams.filter((d) => !d.isAsleep);
+    const fieldLists = await Promise.all(activeDreams.map((d) => fetchFieldLayout("dream", d.id)));
+    setDreamFieldsById(new Map(activeDreams.map((d, i) => [d.id, fieldLists[i]])));
+    const freetextIds = fieldLists.flat().filter((f) => f.fieldType === "freetext" && f.refId !== null).map((f) => f.refId!);
+    setFreetextById(await fetchFreetextFields(freetextIds));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleMoveEnd = (_: unknown, viewport: Viewport) => {
     saveViewport("dream-web", viewport);
@@ -267,9 +286,20 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const activeDreams = useMemo(() => dreams.filter((d) => !d.isAsleep), [dreams]);
   const sleepingDreams = useMemo(() => dreams.filter((d) => d.isAsleep), [dreams]);
 
+  // A React Flow node's `position` is its top-left corner, but the
+  // timeline (gridlines, the date-range flagpole below) is drawn against
+  // each date's literal isoToY value — which is meant to line up with a
+  // dated dream's visual *center*, not its top edge. Without this
+  // offset, a dated node's top edge sits on its date instead of its
+  // center, i.e. the whole box reads roughly half a node-height too low
+  // relative to the line/flagpole marking its actual date. Uses the
+  // zoom=1 reference size (same simplification anchorPoint/edges below
+  // already make) rather than the live zoom-compensated size, so this
+  // stays a plain function of the dream alone.
   const positionFor = (dream: Dream): { x: number; y: number } => {
     if (dream.expectedDateStart) {
-      return { x: dream.posX, y: rangeMidY(dream.expectedDateStart, dream.expectedDateEnd) };
+      const { height } = nodeSizeFor(dream.priority, 1);
+      return { x: dream.posX, y: rangeMidY(dream.expectedDateStart, dream.expectedDateEnd) - height / 2 };
     }
     return { x: dream.posX, y: dream.posY };
   };
@@ -339,6 +369,18 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         priority: dream.priority,
         expectedDateStart: dream.expectedDateStart,
         expectedDateEnd: dream.expectedDateEnd,
+        webFields: buildNodeCardTextItems(
+          dreamFieldsById.get(dream.id) ?? [],
+          freetextById,
+          (type) =>
+            type === "dream_reasoning_text" ? dream.reasoning : type === "dream_notes_text" ? dream.notes : undefined,
+          (type) =>
+            type === "dream_expected_date"
+              ? { start: dream.expectedDateStart, end: dream.expectedDateEnd }
+              : type === "estimated_start"
+              ? { start: dream.estimatedStartDate }
+              : undefined
+        ),
       },
     }));
 
@@ -362,7 +404,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
 
     setNodes([...dreamNodes, ...goalNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDreams, goalDreamLinks, goalById, goalPositionById, onNavigate]);
+  }, [activeDreams, goalDreamLinks, goalById, goalPositionById, onNavigate, dreamFieldsById, freetextById]);
 
   const edges: Edge[] = useMemo(() => {
     const activeIds = new Set(activeDreams.map((d) => d.id));
@@ -464,7 +506,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         // Dated dreams can only move horizontally — y snaps back to the
         // date-derived position every change, not just on drop, so the
         // node visually tracks a straight horizontal line while dragging.
-        return { ...c, position: { x: c.position.x, y: rangeMidY(dream.expectedDateStart, dream.expectedDateEnd) } };
+        return { ...c, position: { x: c.position.x, y: positionFor(dream).y } };
       });
     setNodes((nds) => applyNodeChanges(adjusted, nds));
   };
@@ -584,13 +626,28 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     }
   };
 
-  const onNodeClick = (_: React.MouseEvent, node: Node) => {
+  const onNodeClick = (event: React.MouseEvent, node: Node) => {
     if (node.id.startsWith("g-")) {
       const link = linkById.get(parseGoalNodeId(node.id));
       if (link) onNavigate({ type: "goal-detail", goalId: link.goalId });
       return;
     }
-    onNavigate({ type: "dream-detail", dreamId: parseDreamNodeId(node.id) });
+    const dreamId = parseDreamNodeId(node.id);
+    if (event.ctrlKey) {
+      setFieldVisibilityDreamId(dreamId);
+      return;
+    }
+    onNavigate({ type: "dream-detail", dreamId });
+  };
+
+  const handleUpdateDreamFieldWeb = (dreamId: number, fieldId: number, patch: FieldStylePatch) => {
+    setDreamFieldsById((prev) => {
+      const next = new Map(prev);
+      const list = next.get(dreamId);
+      if (list) next.set(dreamId, list.map((f) => (f.id === fieldId ? mergeFieldStylePatch(f, patch) : f)));
+      return next;
+    });
+    updateFieldStyle(fieldId, patch);
   };
 
   const handleAddDream = async () => {
@@ -679,6 +736,10 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           className="dream-canvas"
           style={{
             backgroundImage: theme.dreamWebBackgroundImage ? `url("${theme.dreamWebBackgroundImage}")` : "none",
+            backgroundSize:
+              theme.dreamWebBackgroundTile === "1" ? `${theme.dreamWebBackgroundScale || "128"}px` : "cover",
+            backgroundRepeat: theme.dreamWebBackgroundTile === "1" ? "repeat" : "no-repeat",
+            backgroundPosition: "center",
           }}
         >
           <ReactFlow
@@ -812,6 +873,14 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           </ReactFlow>
         </div>
       </div>
+      {fieldVisibilityDreamId != null && (
+        <NodeFieldVisibilityPopover
+          title={dreamById.get(fieldVisibilityDreamId)?.name ?? "Dream"}
+          fields={dreamFieldsById.get(fieldVisibilityDreamId) ?? []}
+          onUpdate={(fieldId, patch) => handleUpdateDreamFieldWeb(fieldVisibilityDreamId, fieldId, patch)}
+          onClose={() => setFieldVisibilityDreamId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,12 @@
+/* Hover affordance for backgrounds ctrl+hover can recolor while Color
+   Mode is open — mirrors OverlayTargetHighlighter.css's
+   body.dyn-overlay-active pattern, scoped to its own body class so the
+   two overlays never fight over the same elements. */
+body.color-mode-active [data-color-surface] {
+  cursor: pointer;
+}
+
+body.color-mode-active [data-color-surface]:hover {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}

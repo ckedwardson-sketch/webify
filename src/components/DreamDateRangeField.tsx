@@ -1,5 +1,5 @@
 // src/components/DreamDateRangeField.tsx
-import { useEffect, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { useSaveFeedback } from "../hooks/useSaveFeedback";
 import { SaveStatusIndicator } from "./SaveStatusIndicator";
 import "./DreamDateRangeField.css";
@@ -60,11 +60,13 @@ export function DreamDateRangeField({
   end,
   resetToken,
   onSave,
+  style,
 }: {
   start?: string;
   end?: string;
   resetToken: number;
   onSave: (start: string | null, end: string | null) => void | Promise<void>;
+  style?: CSSProperties;
 }) {
   const { status, run } = useSaveFeedback();
   const [mode, setMode] = useState<Precision>(() => inferPrecision(start, end));
@@ -108,15 +110,16 @@ export function DreamDateRangeField({
       </div>
 
       {mode === "day" && (
-        <input type="date" className="inline-add-input" value={day} onChange={(e) => setDay(e.target.value)} />
+        <input type="date" className="inline-add-input" style={style} value={day} onChange={(e) => setDay(e.target.value)} />
       )}
       {mode === "month" && (
-        <input type="month" className="inline-add-input" value={month} onChange={(e) => setMonth(e.target.value)} />
+        <input type="month" className="inline-add-input" style={style} value={month} onChange={(e) => setMonth(e.target.value)} />
       )}
       {mode === "year" && (
         <input
           type="number"
           className="inline-add-input"
+          style={style}
           placeholder="e.g. 2030"
           value={year}
           onChange={(e) => setYear(e.target.value)}
@@ -127,6 +130,7 @@ export function DreamDateRangeField({
           <input
             type="date"
             className="inline-add-input"
+            style={style}
             value={rangeStart}
             onChange={(e) => setRangeStart(e.target.value)}
           />
@@ -134,6 +138,7 @@ export function DreamDateRangeField({
           <input
             type="date"
             className="inline-add-input"
+            style={style}
             value={rangeEnd}
             onChange={(e) => setRangeEnd(e.target.value)}
           />

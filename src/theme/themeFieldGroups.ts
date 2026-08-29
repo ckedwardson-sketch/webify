@@ -60,6 +60,19 @@ const MOBILE_MODE_OPTIONS = [
   { value: "off", label: "Always off — force desktop layout" },
 ];
 
+// Shared by every Color Mode-capable background's Tile field below (see
+// overlay/ColorModePanel.tsx) — "Off" leaves the image at its normal
+// cover-the-surface size, same as before tiling existed.
+const TILE_OPTIONS = [
+  { value: "0", label: "Off — fill the surface (default)" },
+  { value: "1", label: "On — repeat as a tile" },
+];
+
+const GROW_TO_FIT_OPTIONS = [
+  { value: "0", label: "Off — fixed size, scroll to see more (default)" },
+  { value: "1", label: "On — card grows downward to fit everything" },
+];
+
 const SURFACE_STYLE_LABELS: Record<string, string> = {
   bordered: "Bordered (default)",
   flat: "Flat — no border or shadow",
@@ -141,6 +154,22 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
         step: 0.1,
       },
       {
+        key: "sidebarItemGap",
+        label: "Sidebar item spacing (px)",
+        kind: "number",
+        min: 0,
+        max: 20,
+        step: 1,
+      },
+      {
+        key: "fieldSpacing",
+        label: "Field spacing (px)",
+        kind: "number",
+        min: 0,
+        max: 48,
+        step: 1,
+      },
+      {
         key: "surfaceStyle",
         label: "Surface style (buttons, cards, rows)",
         kind: "select",
@@ -161,6 +190,8 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
     fields: [
       { key: "bg", label: "Page background" },
       { key: "appBackgroundImage", label: "Page background image", kind: "image" },
+      { key: "appBackgroundTile", label: "Tile page background image", kind: "select", options: TILE_OPTIONS },
+      { key: "appBackgroundScale", label: "Page background tile size (px)", kind: "number", min: 20, max: 600, step: 10 },
       { key: "bgSecondary", label: "Secondary background" },
       { key: "bgElevated", label: "Card / row background" },
       { key: "border", label: "Border" },
@@ -178,6 +209,9 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
     title: "Sidebar",
     fields: [
       { key: "sidebarBg", label: "Background" },
+      { key: "sidebarBgImage", label: "Background image", kind: "image" },
+      { key: "sidebarBgTile", label: "Tile background image", kind: "select", options: TILE_OPTIONS },
+      { key: "sidebarBgScale", label: "Background tile size (px)", kind: "number", min: 20, max: 600, step: 10 },
       { key: "sidebarText", label: "Text" },
       { key: "sidebarTextActive", label: "Active item text" },
       { key: "sidebarHoverBg", label: "Hover background" },
@@ -188,6 +222,9 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
     title: "Inputs & Buttons",
     fields: [
       { key: "inputBg", label: "Input background" },
+      { key: "inputBgImage", label: "Input / field background image", kind: "image" },
+      { key: "inputBgTile", label: "Tile input background image", kind: "select", options: TILE_OPTIONS },
+      { key: "inputBgScale", label: "Input background tile size (px)", kind: "number", min: 20, max: 600, step: 10 },
       { key: "inputText", label: "Input text" },
       { key: "primaryBg", label: "Primary button background" },
       { key: "primaryText", label: "Primary button text" },
@@ -201,6 +238,8 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
     fields: [
       { key: "webBackground", label: "Web background" },
       { key: "webBackgroundImage", label: "Web background image", kind: "image" },
+      { key: "webBackgroundTile", label: "Tile web background image", kind: "select", options: TILE_OPTIONS },
+      { key: "webBackgroundScale", label: "Web background tile size (px)", kind: "number", min: 20, max: 600, step: 10 },
       { key: "webNodeProvenBackground", label: "Proven recipe node background" },
       { key: "webNodeUnprovenBackground", label: "Unproven recipe node background" },
       { key: "webNodeOutlineColor", label: "Recipe node outline color" },
@@ -233,6 +272,8 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
     fields: [
       { key: "dreamWebBackground", label: "Web background" },
       { key: "dreamWebBackgroundImage", label: "Web background image", kind: "image" },
+      { key: "dreamWebBackgroundTile", label: "Tile web background image", kind: "select", options: TILE_OPTIONS },
+      { key: "dreamWebBackgroundScale", label: "Web background tile size (px)", kind: "number", min: 20, max: 600, step: 10 },
       { key: "dreamNodeBackground", label: "Dream node background" },
       { key: "dreamNodeOutlineColor", label: "Dream node outline color" },
       { key: "dreamLinkColor", label: "Link line color" },
@@ -245,6 +286,23 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
         kind: "select",
         options: NODE_SHAPE_OPTIONS,
       },
+      {
+        key: "nodeCardGrowToFit",
+        label: "Fields shown on web cards",
+        kind: "select",
+        options: GROW_TO_FIT_OPTIONS,
+      },
+    ],
+  },
+  {
+    title: "Goal web",
+    fields: [
+      { key: "goalWebBackground", label: "Web background" },
+      { key: "goalWebBackgroundImage", label: "Web background image", kind: "image" },
+      { key: "goalWebBackgroundTile", label: "Tile web background image", kind: "select", options: TILE_OPTIONS },
+      { key: "goalWebBackgroundScale", label: "Web background tile size (px)", kind: "number", min: 20, max: 600, step: 10 },
+      { key: "goalProjectNodeBackground", label: "Project node background" },
+      { key: "goalProjectNodeOutlineColor", label: "Project node outline color" },
     ],
   },
   {

@@ -1,0 +1,17 @@
+.quick-edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quick-edit-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+
+.quick-edit-actions {
+  display: flex;
+  gap: 8px;
+}

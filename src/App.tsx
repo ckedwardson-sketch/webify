@@ -16,7 +16,10 @@ import { SettingsIconsPage } from "./pages/SettingsIconsPage";
 import { SettingsTextPage } from "./pages/SettingsTextPage";
 import { SettingsButtonsPage } from "./pages/SettingsButtonsPage";
 import { SettingsThemePage } from "./pages/SettingsThemePage";
+import { SettingsEditorPage } from "./pages/SettingsEditorPage";
+import { SettingsHeadersPage } from "./pages/SettingsHeadersPage";
 import { SettingsIssuesPage } from "./pages/SettingsIssuesPage";
+import { SettingsDynamicSearchPage } from "./pages/SettingsDynamicSearchPage";
 import { ResponsibilitiesHomePage } from "./pages/ResponsibilitiesHomePage";
 import { ResponsibilitiesManagePage } from "./pages/ResponsibilitiesManagePage";
 import { ResponsibilityDetailPage } from "./pages/ResponsibilityDetailPage";
@@ -34,12 +37,21 @@ import { ProgressNodeDetailPage } from "./pages/ProgressNodeDetailPage";
 import { NotesPage } from "./pages/NotesPage";
 import { IconProvider } from "./icons/IconContext";
 import { TextElementProvider } from "./icons/TextElementContext";
+import { HeaderStyleProvider } from "./icons/HeaderStyleContext";
 import { ButtonStyleProvider } from "./icons/ButtonStyleContext";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { SectionThemeScope, ThemeSection } from "./theme/SectionThemeScope";
 import { ScreenCaptureWidget } from "./capture/ScreenCaptureWidget";
 import { RearrangeModeProvider, useRearrangeMode } from "./rearrange/RearrangeModeContext";
 import { RearrangeToolbar } from "./rearrange/RearrangeToolbar";
+import { EditorSettingsProvider } from "./editor/EditorSettingsContext";
+import { DynamicOverlayProvider, useDynamicOverlay } from "./overlay/DynamicOverlayContext";
+import { DynamicOverlayPanel } from "./overlay/DynamicOverlayPanel";
+import { DynamicOverlayGutter } from "./overlay/DynamicOverlayGutter";
+import { OverlayTargetHighlighter } from "./overlay/OverlayTargetHighlighter";
+import { ColorModeSurfaceHighlighter } from "./overlay/ColorModeSurfaceHighlighter";
+import { PageBackgroundProvider } from "./theme/PageBackgroundContext";
+import { FieldStyleRegistryProvider } from "./rearrange/FieldStyleRegistryContext";
 import "./App.css";
 
 export default function App() {
@@ -150,8 +162,14 @@ export default function App() {
         return <SettingsButtonsPage onNavigate={navigate} focusKey={view.focusKey} />;
       case "settings-theme":
         return <SettingsThemePage onNavigate={navigate} focusKey={view.focusKey} />;
+      case "settings-editor":
+        return <SettingsEditorPage onNavigate={navigate} focusKey={view.focusKey} />;
+      case "settings-headers":
+        return <SettingsHeadersPage onNavigate={navigate} focusKey={view.focusKey} />;
       case "settings-issues":
         return <SettingsIssuesPage onNavigate={navigate} />;
+      case "settings-dynamic-search":
+        return <SettingsDynamicSearchPage onNavigate={navigate} />;
       case "responsibilities-home":
         return <ResponsibilitiesHomePage onNavigate={navigate} />;
       case "responsibilities-manage":
@@ -249,20 +267,35 @@ export default function App() {
     <ThemeProvider>
       <IconProvider>
         <TextElementProvider>
-          <ButtonStyleProvider>
-            <RearrangeModeProvider>
-              <AppShell
-                view={view}
-                onSidebarNavigate={resetNavigate}
-                path={path}
-                onJump={navigate}
-                sidebarOpen={sidebarOpen}
-                setSidebarOpen={setSidebarOpen}
-                page={page}
-              />
-            </RearrangeModeProvider>
-            <ScreenCaptureWidget view={view} onNavigate={navigate} />
-          </ButtonStyleProvider>
+          <HeaderStyleProvider>
+            <ButtonStyleProvider>
+              <EditorSettingsProvider>
+                <PageBackgroundProvider view={view}>
+                  <DynamicOverlayProvider>
+                    <FieldStyleRegistryProvider>
+                      <RearrangeModeProvider>
+                        <AppShell
+                          view={view}
+                          onSidebarNavigate={resetNavigate}
+                          path={path}
+                          onJump={navigate}
+                          sidebarOpen={sidebarOpen}
+                          setSidebarOpen={setSidebarOpen}
+                          page={page}
+                        />
+                      </RearrangeModeProvider>
+                      <ScreenCaptureWidget view={view} onNavigate={navigate} />
+                      <DynamicOverlayPanel view={view} onNavigate={navigate} />
+                      <DynamicOverlayGutter view={view} />
+                      <OverlayTargetHighlighter view={view} />
+                      <ColorModeSurfaceHighlighter />
+                      <DynamicOverlayToggle />
+                    </FieldStyleRegistryProvider>
+                  </DynamicOverlayProvider>
+                </PageBackgroundProvider>
+              </EditorSettingsProvider>
+            </ButtonStyleProvider>
+          </HeaderStyleProvider>
         </TextElementProvider>
       </IconProvider>
     </ThemeProvider>
@@ -311,8 +344,29 @@ function AppShell({
       <RearrangeToolbar />
       <div className="app-main-column">
         <NavHistoryBar path={path} onJump={onJump} />
-        <main className="app-content">{page}</main>
+        <main className="app-content" data-color-surface="page">{page}</main>
       </div>
     </div>
+  );
+}
+
+// Global floating toggle for "Dynamic Overlay" mode (Part 2) — visible
+// on every page regardless of sidebar state, since overlay mode is a
+// cross-page feature. Rendered as a sibling of AppShell so it survives
+// sidebar collapse/expand.
+function DynamicOverlayToggle() {
+  const { active, toggle } = useDynamicOverlay();
+  return (
+    <button
+      className={`dyn-overlay-toggle${active ? " active" : ""}`}
+      onClick={toggle}
+      title={
+        active
+          ? "Exit Dynamic Search overlay"
+          : "Open Dynamic Search overlay — while active, hover any tagged element and press Ctrl (or \"J\") to edit its setting inline, no navigating away"
+      }
+    >
+      {active ? "✕ Dynamic Search" : "🔍 Dynamic Search"}
+    </button>
   );
 }

@@ -49,6 +49,11 @@ export interface Dream {
   posY: number; // always free-drag
   isAsleep: boolean;
   sleepUntil?: string;
+  // The portable "Estimated start date" field (see db/fieldLayout.ts) —
+  // unset unless the user has added it via rearrange mode's Add-field
+  // menu; Project/Goal have always had this, Dream didn't until it
+  // became addable everywhere.
+  estimatedStartDate?: string;
   createdAt: string;
   updatedAt: string;
 }

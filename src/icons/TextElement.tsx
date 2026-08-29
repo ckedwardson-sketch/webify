@@ -10,5 +10,9 @@ export function TextElement({ elementKey }: { elementKey: string }) {
   const size = override?.size ?? def?.defaultSize ?? 14;
   const color = override?.color ?? def?.defaultColor;
 
-  return <span style={{ fontSize: `${size}px`, color, lineHeight: 1 }}>{text}</span>;
+  return (
+    <span data-overlay-target={elementKey} style={{ fontSize: `${size}px`, color, lineHeight: 1 }}>
+      {text}
+    </span>
+  );
 }

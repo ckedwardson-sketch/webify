@@ -24,17 +24,24 @@ import {
   addFreetextFieldWithContent,
   removeField,
   fetchFreetextFields,
+  availableFieldsToAdd as computeAvailableFieldsToAdd,
+  updateFieldStyle,
   FieldLayoutRow,
+  FieldStylePatch,
   FieldType,
   FreetextField,
   REMOVABLE_FIELD_TYPES,
 } from "../db/fieldLayout";
+import { Icon } from "../icons/Icon";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { DreamDateRangeField } from "../components/DreamDateRangeField";
 import { FreetextFieldEditor } from "../components/FreetextFieldEditor";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
+import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
+import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
 import { withFieldUndo } from "../rearrange/fieldUndo";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "./Page.css";
 import "./DreamDetailPage.css";
@@ -99,6 +106,7 @@ export function DreamDetailPage({
   dreamId: number;
   onNavigate: (view: View) => void;
 }) {
+  const { overrides: pageBgOverrides } = usePageBackground();
   const [dream, setDream] = useState<Dream | null>(null);
   const [history, setHistory] = useState<DreamHistoryEntry[]>([]);
   const [linked, setLinked] = useState<LinkedDream[]>([]);
@@ -131,6 +139,7 @@ export function DreamDetailPage({
     registerTarget,
     pushUndo,
   } = useRearrangeMode();
+  const { registerFieldStyleTarget } = useFieldStyleRegistry();
 
   const load = () => {
     setLoading(true);
@@ -376,7 +385,28 @@ export function DreamDetailPage({
     copyField(row.id, content);
   };
 
+  // See ProjectDetailPage.tsx's identical handler — optimistic local
+  // merge (mergeFieldStylePatch) so the style popover updates instantly,
+  // persistence runs in the background.
+  const handleFieldStyleSave = (row: FieldLayoutRow, patch: FieldStylePatch) => {
+    setFields((prev) => prev.map((f) => (f.id === row.id ? mergeFieldStylePatch(f, patch) : f)));
+    updateFieldStyle(row.id, patch);
+  };
+
+  useEffect(() => {
+    registerFieldStyleTarget({
+      fields,
+      onSave: (fieldId, patch) => {
+        const row = fields.find((f) => f.id === fieldId);
+        if (row) handleFieldStyleSave(row, patch);
+      },
+    });
+    return () => registerFieldStyleTarget(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields]);
+
   const handleFieldDragStart = (e: React.DragEvent, id: number) => {
+    e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(id));
   };
 
@@ -399,10 +429,7 @@ export function DreamDetailPage({
     await withFieldUndo("dream", dream.id, "Reorder fields", () => reorderFields(ids), pushUndo, load);
   };
 
-  const availableFieldsToAdd: AddableField[] = (() => {
-    const present = new Set(fields.map((f) => f.fieldType));
-    return present.has("dream_expected_date") ? [] : [{ type: "dream_expected_date", label: "Expected date" }];
-  })();
+  const availableFieldsToAdd: AddableField[] = computeAvailableFieldsToAdd("dream", fields);
 
   // Dream Detail has no widget grid at all — this target exists purely
   // for the field-rearrangement system, so the widget-shaped callbacks
@@ -449,12 +476,15 @@ export function DreamDetailPage({
       case "dream_expected_date":
         return (
           <label className="dream-field">
-            <span className="dream-field-label">Expected date</span>
+            <div className="field-slot-header-row">
+              <span className="dream-field-label" style={headerStyle(f)}>Expected date</span>
+            </div>
             <DreamDateRangeField
               start={dream.expectedDateStart}
               end={dream.expectedDateEnd}
               resetToken={dateResetToken}
               onSave={commitDate}
+              style={contentStyle(f)}
             />
           </label>
         );
@@ -478,10 +508,13 @@ export function DreamDetailPage({
       case "dream_reasoning_text":
         return (
           <label className="dream-field">
-            <span className="dream-field-label">Reasoning — why this dream matters</span>
+            <div className="field-slot-header-row">
+              <span className="dream-field-label" style={headerStyle(f)}>Reasoning — why this dream matters</span>
+            </div>
             <textarea
               className="instructions-textarea"
               rows={4}
+              style={contentStyle(f)}
               value={reasoningDraft}
               onChange={(e) => setReasoningDraft(e.target.value)}
               onBlur={commitReasoning}
@@ -492,10 +525,13 @@ export function DreamDetailPage({
       case "dream_notes_text":
         return (
           <label className="dream-field">
-            <span className="dream-field-label">Other words</span>
+            <div className="field-slot-header-row">
+              <span className="dream-field-label" style={headerStyle(f)}>Other words</span>
+            </div>
             <textarea
               className="instructions-textarea"
               rows={4}
+              style={contentStyle(f)}
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               onBlur={commitNotes}
@@ -597,7 +633,14 @@ export function DreamDetailPage({
       case "freetext": {
         const ft = f.refId !== null ? freetextById.get(f.refId) : undefined;
         if (!ft) return null;
-        return <FreetextFieldEditor refId={ft.id} label={ft.label} content={ft.content} />;
+        return (
+          <FreetextFieldEditor
+            refId={ft.id}
+            label={ft.label}
+            content={ft.content}
+            field={f}
+          />
+        );
       }
       default:
         return null;
@@ -636,7 +679,7 @@ export function DreamDetailPage({
   }
 
   return (
-    <div className="page">
+    <div className="page" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
       <Breadcrumb
         crumbs={[
           { label: "Dream Web", onClick: () => onNavigate({ type: "dreams-web" }) },
@@ -673,7 +716,7 @@ export function DreamDetailPage({
         )}
         <div className="detail-header-actions" style={{ position: "relative" }}>
           <button className="icon-button" onClick={() => setMenuOpen((v) => !v)} title="Dream actions">
-            ⋯
+            <Icon iconKey="menu-more" size={16} />
           </button>
           {menuOpen && (
             <>

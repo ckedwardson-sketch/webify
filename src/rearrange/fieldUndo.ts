@@ -10,7 +10,11 @@ export async function withFieldUndo(
   category: FieldCategory,
   ownerId: number,
   label: string,
-  mutate: () => Promise<void>,
+  // Return value (if any) is discarded — several mutations (e.g.
+  // addBuiltinField) return the new row's id for callers that need it
+  // immediately (see useFieldLayout.ts's handleAddPairedField); this
+  // wrapper just doesn't care.
+  mutate: () => Promise<unknown>,
   pushUndo: (entry: UndoEntry) => void,
   load: () => void
 ): Promise<void> {
@@ -18,9 +22,11 @@ export async function withFieldUndo(
   await mutate();
   pushUndo({
     label,
+    category,
+    ownerId,
+    load,
     undo: async () => {
       await restoreFieldLayoutSnapshot(category, ownerId, snapshot);
-      load();
     },
   });
   load();

@@ -1,0 +1,95 @@
+.color-wheel-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.color-wheel-ring {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none;
+  /* Radial white->transparent overlay (saturation: center = white/s=0,
+     edge = pure hue/s=100) layered on a rainbow conic-gradient hue ring.
+     `from 90deg` rotates the gradient's 0% stop to 3 o'clock so it lines
+     up with ColorWheel.tsx's atan2-based angle math (0deg = right,
+     clockwise-increasing in screen coordinates). */
+  background:
+    radial-gradient(circle at center, #fff 0%, rgba(255, 255, 255, 0) 100%),
+    conic-gradient(
+      from 90deg,
+      hsl(0, 100%, 50%) 0deg,
+      hsl(60, 100%, 50%) 60deg,
+      hsl(120, 100%, 50%) 120deg,
+      hsl(180, 100%, 50%) 180deg,
+      hsl(240, 100%, 50%) 240deg,
+      hsl(300, 100%, 50%) 300deg,
+      hsl(360, 100%, 50%) 360deg
+    );
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--surface-shadow);
+  flex-shrink: 0;
+}
+
+.color-wheel-knob {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.color-wheel-lightness-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.color-wheel-lightness-row input[type="range"] {
+  flex: 1;
+}
+
+.color-wheel-hex {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.color-wheel-palette {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.color-wheel-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-wheel-swatch:hover {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

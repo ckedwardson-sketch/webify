@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import { notesBlocksToHtml, LegacyNoteBlockRow } from "./notesMigration";
 
 const DB_URL = "sqlite:webify.db";
 
@@ -152,6 +153,31 @@ async function runMigrations(db: Database): Promise<void> {
       )
     `);
     await markMigrationApplied(db, "create_text_element_overrides_table");
+  }
+
+  // Header style overrides — customizable font size/color/bold/underline
+  // for named "header" text around the app (currently the sidebar's
+  // title and nav items — see icons/headerRegistry.ts). Same independently
+  // -nullable convention as text_element_overrides, but this registry
+  // never overrides the text content itself, only its style.
+  if (!(await isMigrationApplied(db, "create_header_style_overrides_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS header_style_overrides (
+        header_key TEXT PRIMARY KEY,
+        size INTEGER,
+        color TEXT,
+        bold INTEGER,
+        underline INTEGER
+      )
+    `);
+    await markMigrationApplied(db, "create_header_style_overrides_table");
+  }
+
+  // Adds the ability to rename a header's text (not just style it) — the
+  // sidebar's title/nav labels were style-only until now.
+  if (!(await isMigrationApplied(db, "add_header_style_overrides_text_column"))) {
+    await db.execute(`ALTER TABLE header_style_overrides ADD COLUMN text TEXT`);
+    await markMigrationApplied(db, "add_header_style_overrides_text_column");
   }
 
   // Button style overrides — customizable text/font/colors/box size for
@@ -873,6 +899,25 @@ async function runMigrations(db: Database): Promise<void> {
     await markMigrationApplied(db, "create_notes_tables");
   }
 
+  // Notes editor rework: content moves from many notes_blocks rows to a
+  // single Tiptap HTML document per page (see editor/NoteContentEditor.tsx).
+  // notes_blocks is left in place, unread, after the one-time backfill —
+  // this project has been burned by destructive migrations before
+  // (commit 5b379d0), so nothing gets dropped.
+  await ensureColumn(db, "add_notes_pages_content", "notes_pages", "content", "TEXT NOT NULL DEFAULT ''");
+  if (!(await isMigrationApplied(db, "migrate_notes_blocks_to_content"))) {
+    const pages = await db.select<{ id: number }[]>("SELECT id FROM notes_pages");
+    for (const page of pages) {
+      const blocks = await db.select<LegacyNoteBlockRow[]>(
+        "SELECT block_type as blockType, content, checked FROM notes_blocks WHERE page_id = $1 ORDER BY sort_order",
+        [page.id]
+      );
+      const html = notesBlocksToHtml(blocks);
+      await db.execute("UPDATE notes_pages SET content = $1 WHERE id = $2", [html, page.id]);
+    }
+    await markMigrationApplied(db, "migrate_notes_blocks_to_content");
+  }
+
   // Bugfix: fetchFieldLayout's lazy backfill (see db/fieldLayout.ts) was
   // a plain "if no rows, insert the defaults" check with no protection
   // against two concurrent calls both seeing zero rows and both
@@ -899,6 +944,139 @@ async function runMigrations(db: Database): Promise<void> {
       WHERE field_type != 'freetext'
     `);
     await markMigrationApplied(db, "dedupe_and_constrain_field_layout");
+  }
+
+  // Rearrange mode overhaul: a field can now (1) have a user-renamed
+  // header, (2) — Memory specifically — a custom saved box height, and
+  // (3) sit paired to the right of another field instead of its own
+  // full-width row. paired_with_id/pair_mode live on the *secondary*
+  // (the one added "to the right"); no REFERENCES clause, same reasoning
+  // as owner_id above — a plain app-level cross-reference, cleaned up by
+  // hand (see fieldLayout.ts's removeField), not a real FK, so a
+  // snapshot restore (rearrange/fieldUndo.ts) can freely re-insert rows
+  // in any order without a dangling-reference window tripping
+  // PRAGMA foreign_keys.
+  await ensureColumn(db, "add_field_layout_custom_label", "field_layout", "custom_label", "TEXT");
+  await ensureColumn(db, "add_field_layout_height_px", "field_layout", "height_px", "INTEGER");
+  await ensureColumn(db, "add_field_layout_paired_with_id", "field_layout", "paired_with_id", "INTEGER");
+  await ensureColumn(db, "add_field_layout_pair_mode", "field_layout", "pair_mode", "TEXT");
+
+  // Per-page content/header style overrides (font size/color/corner
+  // radius/border for a field's box, font size/color/bold/underline for
+  // its header) — deliberately per field_layout row rather than a global
+  // default, since the whole point (per the user's ask) is that the same
+  // field type can look different from one project/goal/dream to the
+  // next. Every column independently nullable = "inherit the default
+  // look"; resetting just writes NULL back.
+  await ensureColumn(db, "add_field_layout_content_font_size", "field_layout", "content_font_size", "INTEGER");
+  await ensureColumn(db, "add_field_layout_content_color", "field_layout", "content_color", "TEXT");
+  await ensureColumn(db, "add_field_layout_content_radius", "field_layout", "content_radius", "INTEGER");
+  await ensureColumn(db, "add_field_layout_content_border_color", "field_layout", "content_border_color", "TEXT");
+  await ensureColumn(db, "add_field_layout_content_border_width", "field_layout", "content_border_width", "INTEGER");
+  await ensureColumn(db, "add_field_layout_header_font_size", "field_layout", "header_font_size", "INTEGER");
+  await ensureColumn(db, "add_field_layout_header_color", "field_layout", "header_color", "TEXT");
+  await ensureColumn(db, "add_field_layout_header_bold", "field_layout", "header_bold", "INTEGER");
+  await ensureColumn(db, "add_field_layout_header_underline", "field_layout", "header_underline", "INTEGER");
+
+  // A field's own box background — the "per field" half of Color Mode
+  // (see FieldStylePopover.tsx's 🎨 control and
+  // overlay/ColorModeHoverPopover.tsx's ctrl+hover editor for the same
+  // surface). Same independently-nullable convention as every other
+  // content_* column above: null means "use the page's field-background
+  // default (Color Mode's global 'field' target)".
+  await ensureColumn(db, "add_field_layout_content_background_color", "field_layout", "content_background_color", "TEXT");
+
+  // Per-field "show this on the Dream/Goal/Project Web graph card"
+  // toggle, plus a companion "show its header too" toggle — the
+  // ctrl+hover-free, always-visible half of the same field_layout row
+  // (see FieldStylePopover.tsx's new "On the web" section). Off by
+  // default (0/NULL) so a fresh field never shows on the graph until the
+  // user opts in — except the one-time backfill below, which preserves
+  // the content that was always hardcoded-visible before this existed.
+  await ensureColumn(db, "add_field_layout_show_on_web", "field_layout", "show_on_web", "INTEGER");
+  await ensureColumn(db, "add_field_layout_web_header", "field_layout", "web_header", "INTEGER");
+
+  if (!(await isMigrationApplied(db, "backfill_field_layout_show_on_web_defaults"))) {
+    // Before this feature existed, GoalWebPage's goal card always showed
+    // its "goals" text and ProjectWebPage's project card always showed
+    // its "needs doing" text — flipping those two on by default keeps
+    // existing webs looking the same after upgrading; everything else
+    // stays opt-in.
+    await db.execute(
+      "UPDATE field_layout SET show_on_web = 1 WHERE category = 'goal' AND field_type = 'goals_text'"
+    );
+    await db.execute(
+      "UPDATE field_layout SET show_on_web = 1 WHERE category = 'project' AND field_type = 'needs_doing_text'"
+    );
+    await markMigrationApplied(db, "backfill_field_layout_show_on_web_defaults");
+  }
+
+  // Generalized memory/history log for the portable "memory" field type
+  // (see fieldLayout.ts's FieldType) — same shape as dream_history, but
+  // keyed by category+owner_id like field_layout itself so it can back a
+  // Memory field added to a Project or Goal, not just a Dream. Dream's
+  // own built-in Memory field keeps reading dream_history unchanged;
+  // this is additive, not a migration of existing dream data.
+  if (!(await isMigrationApplied(db, "create_entity_history_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS entity_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL,
+        owner_id INTEGER NOT NULL,
+        field TEXT NOT NULL,
+        old_value TEXT,
+        new_value TEXT,
+        reason TEXT,
+        changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_entity_history_table");
+  }
+
+  // Lets a Dream carry the same "rough single-day guess" start-date field
+  // Projects/Goals already have (estimated_start_date) — the portable
+  // half of "the start date in projects should be [addable elsewhere]".
+  // Dream's own dated range (expected_date_start/end) is unrelated and
+  // keeps its DreamWeb node-sizing side effect; this is just the extra,
+  // optional field.
+  await ensureColumn(db, "add_dreams_estimated_start_date", "dreams", "estimated_start_date", "TEXT");
+
+  // Editor tool-surface settings (toolbar/context-menu/bubble-menu/slash
+  // command on-off + input mode) — a small generic key/value store like
+  // theme_settings, but deliberately separate from it: these aren't theme
+  // concepts and shouldn't be swept into theme export/import/presets.
+  if (!(await isMigrationApplied(db, "create_editor_settings_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS editor_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+    await markMigrationApplied(db, "create_editor_settings_table");
+  }
+
+  // Per-page background overrides for Color Mode (see
+  // overlay/ColorModeSurfaceHighlighter.tsx) — ctrl+hovering a tagged
+  // surface on a Project/Goal/Dream/Recipe detail page and picking a
+  // color/image there should only affect that one page, unlike the
+  // app-wide backgrounds in theme_settings. scope_key identifies the
+  // owning page (e.g. "project:5"), surface_key identifies which
+  // background on that page (currently just "page-bg", the page's own
+  // root background) — composite key lets one page carry several
+  // independently-colorable surfaces later without a schema change.
+  if (!(await isMigrationApplied(db, "create_page_background_overrides_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS page_background_overrides (
+        scope_key TEXT NOT NULL,
+        surface_key TEXT NOT NULL,
+        color TEXT,
+        image_data TEXT,
+        tile TEXT,
+        scale TEXT,
+        PRIMARY KEY (scope_key, surface_key)
+      )
+    `);
+    await markMigrationApplied(db, "create_page_background_overrides_table");
   }
 }
 

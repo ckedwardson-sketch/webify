@@ -1,0 +1,44 @@
+.node-field-visibility-popover {
+  gap: 6px;
+}
+
+.node-field-visibility-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.node-field-visibility-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.node-field-visibility-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.node-field-visibility-header-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.node-field-visibility-divider {
+  border-top: 1px solid var(--color-border);
+  margin: 4px 0;
+}

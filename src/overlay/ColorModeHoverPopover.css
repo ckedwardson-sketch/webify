@@ -1,0 +1,24 @@
+.color-hover-popover {
+  position: fixed;
+  z-index: 400;
+  width: 260px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--color-bg-elevated);
+  border: var(--surface-border-width) solid var(--color-accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--surface-shadow);
+}
+
+.color-hover-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--color-text);
+}

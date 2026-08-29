@@ -16,6 +16,7 @@ import { Icon } from "../icons/Icon";
 import { Recipe } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import "./Page.css";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 
@@ -32,6 +33,7 @@ export function RecipeDetailPage({
   recipeId: number;
   onNavigate: (view: View) => void;
 }) {
+  const { overrides: pageBgOverrides } = usePageBackground();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [parentRecipe, setParentRecipe] = useState<Recipe | null>(null);
   const [iterations, setIterations] = useState<Recipe[]>([]);
@@ -151,7 +153,7 @@ export function RecipeDetailPage({
   }
 
   return (
-    <div className="page">
+    <div className="page" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
       <Breadcrumb
         crumbs={[
           { label: "Recipes", onClick: () => onNavigate({ type: "recipes-home" }) },
@@ -341,6 +343,7 @@ export function RecipeDetailPage({
           updateRecipeInstructions(recipe.id, html);
         }}
         onOpenRecipeLink={handleOpenRecipeLink}
+        onOpenNoteLink={(noteId) => onNavigate({ type: "notes", pageId: noteId })}
       />
     </div>
   );

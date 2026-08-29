@@ -1,0 +1,15 @@
+/* Hover affordance for live elements that jump to a settings row when
+   overlay mode is active — reuses the accent color language already
+   established by .dyn-overlay-item / .settings-highlight rather than
+   inventing a new style. Scoped under body.dyn-overlay-active so it has
+   zero effect on normal app usage when overlay mode is off. */
+body.dyn-overlay-active [data-overlay-target] {
+  cursor: pointer;
+}
+
+body.dyn-overlay-active [data-overlay-target]:hover {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}

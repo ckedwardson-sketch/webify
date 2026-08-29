@@ -337,7 +337,8 @@ export function RecipesGraphPage({
           borderRadius: "8px",
           overflow: "hidden",
           backgroundImage: theme.webBackgroundImage ? `url("${theme.webBackgroundImage}")` : "none",
-          backgroundSize: "cover",
+          backgroundSize: theme.webBackgroundTile === "1" ? `${theme.webBackgroundScale || "128"}px` : "cover",
+          backgroundRepeat: theme.webBackgroundTile === "1" ? "repeat" : "no-repeat",
           backgroundPosition: "center",
         }}
       >

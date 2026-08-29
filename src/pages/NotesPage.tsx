@@ -8,8 +8,11 @@ import {
   deletePage,
   updatePageTitle,
   updatePageIcon,
+  updatePageContent,
 } from "../db/notes";
-import { NoteEditor } from "../components/NoteEditor";
+import { NoteContentEditor } from "../editor/NoteContentEditor";
+import { fetchRecipe } from "../db/recipes";
+import { fetchCategories } from "../db/categories";
 import { NOTE_ICON_CHOICES } from "../notes/iconChoices";
 import "../components/ManagedListRow.css"; // reusing .menu-backdrop
 import "./Page.css";
@@ -126,6 +129,19 @@ export function NotesPage({ pageId, onNavigate }: { pageId?: number; onNavigate:
     if (!selected || !trimmed || trimmed === selected.title) return;
     await updatePageTitle(selected.id, trimmed);
     setPages((prev) => prev.map((p) => (p.id === selected.id ? { ...p, title: trimmed } : p)));
+  };
+
+  const handleOpenRecipeLink = async (recipeId: number) => {
+    const target = await fetchRecipe(recipeId);
+    if (!target) return;
+    const categories = await fetchCategories();
+    const targetCategory = categories.find((c) => c.id === target.categoryId);
+    onNavigate({
+      type: "recipe-detail",
+      categoryId: target.categoryId,
+      categoryName: targetCategory?.name ?? "",
+      recipeId: target.id,
+    });
   };
 
   const pickIcon = async (icon: string) => {
@@ -274,7 +290,13 @@ export function NotesPage({ pageId, onNavigate }: { pageId?: number; onNavigate:
                 </h1>
               )}
             </div>
-            <NoteEditor pageId={selected.id} />
+            <NoteContentEditor
+              key={selected.id}
+              content={selected.content}
+              onChange={(html) => updatePageContent(selected.id, html)}
+              onOpenNoteLink={(id) => onNavigate({ type: "notes", pageId: id })}
+              onOpenRecipeLink={handleOpenRecipeLink}
+            />
           </div>
         )}
       </div>

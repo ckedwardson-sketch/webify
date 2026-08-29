@@ -21,11 +21,15 @@ import {
   addFreetextFieldWithContent,
   removeField,
   fetchFreetextFields,
+  availableFieldsToAdd as computeAvailableFieldsToAdd,
+  updateFieldStyle,
   FieldLayoutRow,
+  FieldStylePatch,
   FieldType,
   FreetextField,
   REMOVABLE_FIELD_TYPES,
 } from "../db/fieldLayout";
+import { Icon } from "../icons/Icon";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { DreamDateRangeField } from "../components/DreamDateRangeField";
 import { EstimatedStartDateField } from "../components/EstimatedStartDateField";
@@ -34,8 +38,11 @@ import { ImageDockWidget } from "../components/ImageDockWidget";
 import { QuickPhotoWidget } from "../components/QuickPhotoWidget";
 import { TableWidgetPreview } from "../components/TableWidgetPreview";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
+import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
+import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
 import { withFieldUndo } from "../rearrange/fieldUndo";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "./Page.css";
 import "./ProjectDetailPage.css";
@@ -62,6 +69,7 @@ export function GoalDetailPage({
   goalId: number;
   onNavigate: (view: View) => void;
 }) {
+  const { overrides: pageBgOverrides } = usePageBackground();
   const [goal, setGoal] = useState<Goal | null>(null);
   const [dreamName, setDreamName] = useState("");
   const [widgets, setWidgets] = useState<ProjectWidget[]>([]);
@@ -89,6 +97,7 @@ export function GoalDetailPage({
     registerTarget,
     pushUndo,
   } = useRearrangeMode();
+  const { registerFieldStyleTarget } = useFieldStyleRegistry();
 
   const load = async () => {
     const g = await fetchGoal(goalId);
@@ -270,7 +279,28 @@ export function GoalDetailPage({
     copyField(row.id, content);
   };
 
+  // See ProjectDetailPage.tsx's identical handler — optimistic local
+  // merge (mergeFieldStylePatch) so the style popover updates instantly,
+  // persistence runs in the background.
+  const handleFieldStyleSave = (row: FieldLayoutRow, patch: FieldStylePatch) => {
+    setFields((prev) => prev.map((f) => (f.id === row.id ? mergeFieldStylePatch(f, patch) : f)));
+    updateFieldStyle(row.id, patch);
+  };
+
+  useEffect(() => {
+    registerFieldStyleTarget({
+      fields,
+      onSave: (fieldId, patch) => {
+        const row = fields.find((f) => f.id === fieldId);
+        if (row) handleFieldStyleSave(row, patch);
+      },
+    });
+    return () => registerFieldStyleTarget(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields]);
+
   const handleFieldDragStart = (e: React.DragEvent, id: number) => {
+    e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(id));
   };
 
@@ -293,13 +323,8 @@ export function GoalDetailPage({
     await withFieldUndo("goal", goal.id, "Reorder fields", () => reorderFields(ids), pushUndo, load);
   };
 
-  const availableFieldsToAdd: AddableField[] = (() => {
-    const present = new Set(fields.map((f) => f.fieldType));
-    const options: AddableField[] = [];
-    if (!present.has("estimated_start")) options.push({ type: "estimated_start", label: "Estimated start date" });
-    if (!present.has("expected_range")) options.push({ type: "expected_range", label: "When it should be done" });
-    return options;
-  })();
+  const availableFieldsToAdd: AddableField[] = computeAvailableFieldsToAdd("goal", fields);
+  const hasWidgetsField = fields.some((f) => f.fieldType === "widgets");
 
   useEffect(() => {
     if (!goal) return;
@@ -307,6 +332,7 @@ export function GoalDetailPage({
       category: "goal",
       ownerId: goal.id,
       supportedWidgetTypes: ALL_WIDGET_TYPES,
+      hasWidgetsField,
       widgets,
       onAddWidget: handleAddWidget,
       onDeleteWidget: handleDeleteWidget,
@@ -331,6 +357,7 @@ export function GoalDetailPage({
       const rect = card.getBoundingClientRect();
       e.dataTransfer.setDragImage(card, e.clientX - rect.left, e.clientY - rect.top);
     }
+    e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(id));
   };
 
@@ -492,10 +519,13 @@ export function GoalDetailPage({
       case "goals_text":
         return (
           <div className="project-field">
-            <label className="project-field-label">Goals</label>
+            <div className="field-slot-header-row">
+              <label className="project-field-label" style={headerStyle(f)}>Goals</label>
+            </div>
             <textarea
               className="instructions-textarea"
               rows={3}
+              style={contentStyle(f)}
               value={goalsDraft}
               onChange={(e) => setGoalsDraft(e.target.value)}
               onBlur={saveGoals}
@@ -506,10 +536,13 @@ export function GoalDetailPage({
       case "reasoning_text":
         return (
           <div className="project-field">
-            <label className="project-field-label">Reasoning</label>
+            <div className="field-slot-header-row">
+              <label className="project-field-label" style={headerStyle(f)}>Reasoning</label>
+            </div>
             <textarea
               className="instructions-textarea"
               rows={3}
+              style={contentStyle(f)}
               value={reasoningDraft}
               onChange={(e) => setReasoningDraft(e.target.value)}
               onBlur={saveReasoning}
@@ -520,10 +553,13 @@ export function GoalDetailPage({
       case "needs_doing_text":
         return (
           <div className="project-field">
-            <label className="project-field-label">What needs doing</label>
+            <div className="field-slot-header-row">
+              <label className="project-field-label" style={headerStyle(f)}>What needs doing</label>
+            </div>
             <textarea
               className="instructions-textarea"
               rows={3}
+              style={contentStyle(f)}
               value={needsDoingDraft}
               onChange={(e) => setNeedsDoingDraft(e.target.value)}
               onBlur={saveNeedsDoing}
@@ -534,19 +570,28 @@ export function GoalDetailPage({
       case "estimated_start":
         return (
           <div className="project-field">
-            <label className="project-field-label">Estimated start date</label>
-            <EstimatedStartDateField value={goal.estimatedStartDate} onSave={handleSaveEstimatedStart} />
+            <div className="field-slot-header-row">
+              <label className="project-field-label" style={headerStyle(f)}>Estimated start date</label>
+            </div>
+            <EstimatedStartDateField
+              value={goal.estimatedStartDate}
+              onSave={handleSaveEstimatedStart}
+              style={contentStyle(f)}
+            />
           </div>
         );
       case "expected_range":
         return (
           <div className="project-field">
-            <label className="project-field-label">When it should be done</label>
+            <div className="field-slot-header-row">
+              <label className="project-field-label" style={headerStyle(f)}>When it should be done</label>
+            </div>
             <DreamDateRangeField
               start={goal.expectedDateStart}
               end={goal.expectedDateEnd}
               resetToken={dateResetToken}
               onSave={handleSaveDate}
+              style={contentStyle(f)}
             />
           </div>
         );
@@ -555,7 +600,14 @@ export function GoalDetailPage({
       case "freetext": {
         const ft = f.refId !== null ? freetextById.get(f.refId) : undefined;
         if (!ft) return null;
-        return <FreetextFieldEditor refId={ft.id} label={ft.label} content={ft.content} />;
+        return (
+          <FreetextFieldEditor
+            refId={ft.id}
+            label={ft.label}
+            content={ft.content}
+            field={f}
+          />
+        );
       }
     }
   };
@@ -592,7 +644,7 @@ export function GoalDetailPage({
   }
 
   return (
-    <div className="page">
+    <div className="page" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
       <Breadcrumb
         crumbs={[
           { label: "Goals", onClick: () => onNavigate({ type: "goals-home" }) },
@@ -627,10 +679,10 @@ export function GoalDetailPage({
             onClick={() => onNavigate({ type: "goal-web", goalId: goal.id })}
             title="Enter Goal Web"
           >
-            🕸
+            <Icon iconKey="web-view" size={16} />
           </button>
           <button className="icon-button" onClick={() => setMenuOpen((v) => !v)} title="Goal actions">
-            ⋯
+            <Icon iconKey="menu-more" size={16} />
           </button>
           {menuOpen && (
             <>

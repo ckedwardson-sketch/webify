@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { updateFreetextField } from "../db/fieldLayout";
+import { FieldLayoutRow, updateFreetextField } from "../db/fieldLayout";
+import { contentStyle, headerStyle } from "../rearrange/fieldStyle";
 
 // A generic label+textarea "area" — the one genuinely new field kind
 // the generalized rearrange system adds (see db/fieldLayout.ts), for
@@ -9,10 +10,12 @@ export function FreetextFieldEditor({
   refId,
   label,
   content,
+  field,
 }: {
   refId: number;
   label: string;
   content: string;
+  field: FieldLayoutRow;
 }) {
   const [labelDraft, setLabelDraft] = useState(label);
   const [contentDraft, setContentDraft] = useState(content);
@@ -24,15 +27,19 @@ export function FreetextFieldEditor({
 
   return (
     <div className="project-field">
-      <input
-        className="project-field-label freetext-field-label-input"
-        value={labelDraft}
-        onChange={(e) => setLabelDraft(e.target.value)}
-        onBlur={() => updateFreetextField(refId, { label: labelDraft })}
-      />
+      <div className="field-slot-header-row">
+        <input
+          className="project-field-label freetext-field-label-input"
+          style={headerStyle(field)}
+          value={labelDraft}
+          onChange={(e) => setLabelDraft(e.target.value)}
+          onBlur={() => updateFreetextField(refId, { label: labelDraft })}
+        />
+      </div>
       <textarea
         className="instructions-textarea"
         rows={3}
+        style={contentStyle(field)}
         value={contentDraft}
         onChange={(e) => setContentDraft(e.target.value)}
         onBlur={() => updateFreetextField(refId, { content: contentDraft })}

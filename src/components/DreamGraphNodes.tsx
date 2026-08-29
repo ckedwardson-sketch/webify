@@ -4,6 +4,9 @@ import { useTheme } from "../theme/ThemeContext";
 import { clipPathFor, contentInsetFor } from "../theme/nodeShapes";
 import { pointOnShapeBoundary } from "../theme/nodeBoundary";
 import { DreamPriority } from "../types/models";
+import { NodeCardTextItem } from "../theme/nodeCardFields";
+import { NodeCardFields } from "./NodeCardFields";
+import { Icon } from "../icons/Icon";
 import "../pages/DreamWebPage.css";
 
 // Doubled from the original 170x92 — nodes were hard to click at the
@@ -49,6 +52,10 @@ export interface DreamNodeData {
   priority: DreamPriority;
   expectedDateStart?: string;
   expectedDateEnd?: string;
+  // Whatever fields this dream has opted into showing on the web (see
+  // theme/nodeCardFields.ts) — empty unless the user has turned any on
+  // via the 🎨 field popover's "On the web" section.
+  webFields?: NodeCardTextItem[];
 }
 
 // A ring of grab points around the node's boundary, one every 22.5°
@@ -162,13 +169,22 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
   const hasRange =
     data.expectedDateStart && data.expectedDateEnd && data.expectedDateStart !== data.expectedDateEnd;
   const inset = contentInsetFor(theme.dreamNodeShape);
+  const hasWebFields = !!data.webFields && data.webFields.length > 0;
+  // See themeFieldGroups.ts's "Fields shown on web cards" setting — "1"
+  // lets the card's bottom edge grow downward (a normal-flow sibling
+  // below the fixed-size shape/handle box, so edge-anchor math — which
+  // is all keyed off the formula height above, never the real DOM size
+  // — stays untouched); "0" keeps the box at its computed size and makes
+  // the field area scrollable instead, so nothing is ever silently lost
+  // either way.
+  const growToFit = theme.nodeCardGrowToFit === "1" && hasWebFields;
 
   return (
     <div
       className="dream-node"
       style={{
         width: `${width}px`,
-        height: `${height}px`,
+        height: growToFit ? "auto" : `${height}px`,
         position: "relative",
         // Read by .dream-node-shape-layer's hover rule (DreamWebPage.css)
         // — filter: drop-shadow() follows the clipped silhouette itself,
@@ -178,24 +194,25 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
         ["--dream-edge-glow-color" as string]: theme.dreamLinkColor,
       }}
     >
-      {/* Only this decorative layer is clipped to a non-rectangular
-          shape — the name/date below live in an unclipped layer so a
-          hexagon/diamond/blob never hides them. */}
-      <div
-        className="dream-node-shape-layer"
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: "10px",
-          border: `2px solid ${theme.dreamNodeOutlineColor}`,
-          background: theme.dreamNodeBackground,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
-          clipPath: clipPathFor(theme.dreamNodeShape),
-          pointerEvents: "none",
-        }}
-      />
+      <div style={{ position: "relative", width: "100%", height: `${height}px` }}>
+        {/* Only this decorative layer is clipped to a non-rectangular
+            shape — the name/date below live in an unclipped layer so a
+            hexagon/diamond/blob never hides them. */}
+        <div
+          className="dream-node-shape-layer"
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "10px",
+            border: `2px solid ${theme.dreamNodeOutlineColor}`,
+            background: theme.dreamNodeBackground,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+            clipPath: clipPathFor(theme.dreamNodeShape),
+            pointerEvents: "none",
+          }}
+        />
 
-      <AngleHandleRing shape={theme.dreamNodeShape} />
+        <AngleHandleRing shape={theme.dreamNodeShape} />
 
       <div
         style={{
@@ -233,6 +250,12 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
           </span>
         </div>
 
+        {hasWebFields && !growToFit && (
+          <div className="nodrag nopan" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", margin: "2px 0" }}>
+            <NodeCardFields items={data.webFields!} />
+          </div>
+        )}
+
         <span
           style={{
             fontSize: "11px",
@@ -247,6 +270,24 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
             : formatDate(data.expectedDateStart) || "No date set"}
         </span>
       </div>
+      </div>
+
+      {growToFit && (
+        <div
+          className="nodrag nopan"
+          style={{
+            background: theme.dreamNodeBackground,
+            border: `2px solid ${theme.dreamNodeOutlineColor}`,
+            borderTop: "none",
+            borderRadius: "0 0 10px 10px",
+            color: "#ffffff",
+            padding: "6px 10px 8px",
+            boxSizing: "border-box",
+          }}
+        >
+          <NodeCardFields items={data.webFields!} fullText />
+        </div>
+      )}
     </div>
   );
 }
@@ -343,7 +384,7 @@ export function DreamGoalNode({ data }: { data: DreamGoalNodeData }) {
           cursor: "pointer",
         }}
       >
-        🕸 Web
+        <Icon iconKey="web-view" size={12} /> Web
       </button>
     </div>
   );

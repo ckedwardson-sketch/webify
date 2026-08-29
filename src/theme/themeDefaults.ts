@@ -36,6 +36,19 @@ export interface GeneralThemeSettings {
   // Raw data: URL of an uploaded image, or "" for none. Resolved into a
   // url(...) CSS value by ThemeContext, not stored that way.
   appBackgroundImage: string;
+  // Color Mode's tiling controls for the three CSS-var-driven
+  // backgrounds (see ColorModePanel.tsx / ThemeContext.tsx's
+  // applyTileVars) — "1" tiles the image at appBackgroundScale px,
+  // otherwise it covers the surface like a normal background image.
+  // No effect while the matching *Image field is empty.
+  appBackgroundTile: string; // "0" | "1"
+  appBackgroundScale: string; // px, numeric string
+  sidebarBgImage: string;
+  sidebarBgTile: string;
+  sidebarBgScale: string;
+  inputBgImage: string;
+  inputBgTile: string;
+  inputBgScale: string;
 }
 
 // A named preset key (see fontPresets.ts / scalePresets.ts), not a raw
@@ -75,6 +88,12 @@ export interface LayoutThemeSettings {
   pageMaxWidth: string; // px, numeric string
   sidebarWidth: string; // px, numeric string
   pageTitleSize: string; // rem, numeric string
+  // Two more previously-hardcoded spacing values, same pattern as the
+  // three above: the gap between sidebar nav items, and the vertical
+  // gap between fields on a Project/Goal/Dream detail page (was
+  // piggybacking on generic density before — now its own knob).
+  sidebarItemGap: string; // px, numeric string
+  fieldSpacing: string; // px, numeric string
 }
 
 // Recipe web colors + card chrome. Not backed by CSS variables — the
@@ -83,6 +102,8 @@ export interface LayoutThemeSettings {
 export interface WebThemeSettings {
   webBackground: string;
   webBackgroundImage: string; // raw data: URL, or "" for none
+  webBackgroundTile: string; // "0" | "1"
+  webBackgroundScale: string; // px, numeric string
   webNodeProvenBackground: string;
   webNodeUnprovenBackground: string;
   webNodeOutlineColor: string;
@@ -110,6 +131,12 @@ export interface AdvancedThemeSettings {
   recipeThemeOverrides: string;
   dreamThemeOverrides: string;
   responsibilityThemeOverrides: string;
+  // Dream/Goal/Project Web graph cards' "show on web" field list (see
+  // theme/nodeCardFields.ts): "1" lets a card's bottom edge grow
+  // downward to fit all its visible fields; "0" (default) keeps the
+  // card at its normal computed size and makes that area scrollable
+  // instead, so nothing is ever silently cut off either way.
+  nodeCardGrowToFit: string; // "0" | "1"
 }
 
 // Progress web colors — one per work category (see ProgressCategory in
@@ -129,6 +156,8 @@ export interface ProgressWebThemeSettings {
 export interface DreamWebThemeSettings {
   dreamWebBackground: string;
   dreamWebBackgroundImage: string; // raw data: URL, or "" for none
+  dreamWebBackgroundTile: string; // "0" | "1"
+  dreamWebBackgroundScale: string; // px, numeric string
   dreamNodeBackground: string;
   dreamNodeOutlineColor: string;
   dreamLinkColor: string;
@@ -149,6 +178,9 @@ export interface DreamWebThemeSettings {
 // by plain React components via useTheme(), not CSS variables.
 export interface GoalWebThemeSettings {
   goalWebBackground: string;
+  goalWebBackgroundImage: string; // raw data: URL, or "" for none
+  goalWebBackgroundTile: string; // "0" | "1"
+  goalWebBackgroundScale: string; // px, numeric string
   goalProjectNodeBackground: string;
   goalProjectNodeOutlineColor: string;
 }
@@ -187,6 +219,14 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "accent",
   "danger",
   "appBackgroundImage",
+  "appBackgroundTile",
+  "appBackgroundScale",
+  "sidebarBgImage",
+  "sidebarBgTile",
+  "sidebarBgScale",
+  "inputBgImage",
+  "inputBgTile",
+  "inputBgScale",
   "fontFamily",
   "radiusScale",
   "density",
@@ -199,12 +239,17 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "pageMaxWidth",
   "sidebarWidth",
   "pageTitleSize",
+  "sidebarItemGap",
+  "fieldSpacing",
   "customCss",
   "recipeThemeOverrides",
   "dreamThemeOverrides",
   "responsibilityThemeOverrides",
+  "nodeCardGrowToFit",
   "webBackground",
   "webBackgroundImage",
+  "webBackgroundTile",
+  "webBackgroundScale",
   "webNodeProvenBackground",
   "webNodeUnprovenBackground",
   "webNodeOutlineColor",
@@ -222,6 +267,8 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "progressTaskColor",
   "dreamWebBackground",
   "dreamWebBackgroundImage",
+  "dreamWebBackgroundTile",
+  "dreamWebBackgroundScale",
   "dreamNodeBackground",
   "dreamNodeOutlineColor",
   "dreamLinkColor",
@@ -232,6 +279,9 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "dreamGoalNodeBackground",
   "dreamGoalNodeOutlineColor",
   "goalWebBackground",
+  "goalWebBackgroundImage",
+  "goalWebBackgroundTile",
+  "goalWebBackgroundScale",
   "goalProjectNodeBackground",
   "goalProjectNodeOutlineColor",
 ];
@@ -240,7 +290,12 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
 // Must stay in sync with theme.css's --color-* / --bg-image-app
 // declarations. appBackgroundImage's raw data: URL gets wrapped in
 // url(...) by ThemeContext before being written to its property.
-export const CSS_VAR_MAP: Record<keyof GeneralThemeSettings, string> = {
+// Partial rather than a full Record: the *Tile/*Scale keys aren't a
+// simple value passthrough (they resolve to different CSS properties
+// depending on whether tiling is on — see ThemeContext's
+// applyTileVars), so they're deliberately left out of this generic
+// mechanism and handled by their own dedicated effects instead.
+export const CSS_VAR_MAP: Partial<Record<keyof GeneralThemeSettings, string>> = {
   bg: "--color-bg",
   bgSecondary: "--color-bg-secondary",
   bgElevated: "--color-bg-elevated",
@@ -261,11 +316,17 @@ export const CSS_VAR_MAP: Record<keyof GeneralThemeSettings, string> = {
   accent: "--color-accent",
   danger: "--color-danger",
   appBackgroundImage: "--bg-image-app",
+  sidebarBgImage: "--bg-image-sidebar",
+  inputBgImage: "--bg-image-input",
 };
 
 // General-theme keys whose value is a raw data: URL that needs
 // wrapping in url(...) before becoming a CSS custom property value.
-export const IMAGE_GENERAL_KEYS: (keyof GeneralThemeSettings)[] = ["appBackgroundImage"];
+export const IMAGE_GENERAL_KEYS: (keyof GeneralThemeSettings)[] = [
+  "appBackgroundImage",
+  "sidebarBgImage",
+  "inputBgImage",
+];
 
 // Light/dark preset palettes. These must mirror the :root and
 // :root[data-theme="dark"] blocks in theme.css exactly — CSS owns the
@@ -292,6 +353,14 @@ export const LIGHT_DEFAULTS: GeneralThemeSettings = {
   accent: "#2563eb",
   danger: "#cc0000",
   appBackgroundImage: "",
+  appBackgroundTile: "0",
+  appBackgroundScale: "128",
+  sidebarBgImage: "",
+  sidebarBgTile: "0",
+  sidebarBgScale: "128",
+  inputBgImage: "",
+  inputBgTile: "0",
+  inputBgScale: "128",
 };
 
 export const DARK_DEFAULTS: GeneralThemeSettings = {
@@ -315,11 +384,21 @@ export const DARK_DEFAULTS: GeneralThemeSettings = {
   accent: "#60a5fa",
   danger: "#f87171",
   appBackgroundImage: "",
+  appBackgroundTile: "0",
+  appBackgroundScale: "128",
+  sidebarBgImage: "",
+  sidebarBgTile: "0",
+  sidebarBgScale: "128",
+  inputBgImage: "",
+  inputBgTile: "0",
+  inputBgScale: "128",
 };
 
 export const WEB_DEFAULTS: WebThemeSettings = {
   webBackground: "#1e293b",
   webBackgroundImage: "",
+  webBackgroundTile: "0",
+  webBackgroundScale: "128",
   webNodeProvenBackground: "#15803d",
   webNodeUnprovenBackground: "#4b5563",
   webNodeOutlineColor: "#94a3b8",
@@ -347,6 +426,8 @@ export const LAYOUT_DEFAULTS: LayoutThemeSettings = {
   pageMaxWidth: "640",
   sidebarWidth: "220",
   pageTitleSize: "1.6",
+  sidebarItemGap: "2",
+  fieldSpacing: "16",
 };
 
 export const ADVANCED_DEFAULTS: AdvancedThemeSettings = {
@@ -354,6 +435,7 @@ export const ADVANCED_DEFAULTS: AdvancedThemeSettings = {
   recipeThemeOverrides: "",
   dreamThemeOverrides: "",
   responsibilityThemeOverrides: "",
+  nodeCardGrowToFit: "0",
 };
 
 export const PROGRESS_WEB_DEFAULTS: ProgressWebThemeSettings = {
@@ -368,6 +450,8 @@ export const PROGRESS_WEB_DEFAULTS: ProgressWebThemeSettings = {
 export const DREAM_WEB_DEFAULTS: DreamWebThemeSettings = {
   dreamWebBackground: "#1e1b2e",
   dreamWebBackgroundImage: "",
+  dreamWebBackgroundTile: "0",
+  dreamWebBackgroundScale: "128",
   dreamNodeBackground: "#4c1d95",
   dreamNodeOutlineColor: "#a78bfa",
   dreamLinkColor: "#a78bfa",
@@ -381,6 +465,9 @@ export const DREAM_WEB_DEFAULTS: DreamWebThemeSettings = {
 
 export const GOAL_WEB_DEFAULTS: GoalWebThemeSettings = {
   goalWebBackground: "#0f2027",
+  goalWebBackgroundImage: "",
+  goalWebBackgroundTile: "0",
+  goalWebBackgroundScale: "128",
   goalProjectNodeBackground: "#155e75",
   goalProjectNodeOutlineColor: "#67e8f9",
 };

@@ -38,6 +38,23 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 const GENERAL_KEYS = Object.keys(CSS_VAR_MAP) as (keyof GeneralThemeSettings)[];
 const IMAGE_KEYS = new Set(IMAGE_GENERAL_KEYS);
 
+// Shared by the three CSS-var-driven Color Mode tiling effects below —
+// `prefix` is the image variable's own name (e.g. "--bg-image-app"),
+// and this writes its "-size"/"-repeat" companions. Tiling on: a small
+// repeating tile at `scale`px; off: today's cover/no-repeat behavior
+// (theme.css's default for both companion vars), restored by simply
+// removing the override.
+function applyTileVars(prefix: string, tile?: string, scale?: string): void {
+  const root = document.documentElement.style;
+  if (tile === "1") {
+    root.setProperty(`${prefix}-repeat`, "repeat");
+    root.setProperty(`${prefix}-size`, `${scale || "128"}px ${scale || "128"}px`);
+  } else {
+    root.removeProperty(`${prefix}-repeat`);
+    root.removeProperty(`${prefix}-size`);
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [overrides, setOverrides] = useState<Partial<ThemeSettings>>({});
   const [customSliders, setCustomSlidersState] = useState<CustomSliderState[]>([]);
@@ -92,6 +109,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement.style;
     for (const key of GENERAL_KEYS) {
       const cssVar = CSS_VAR_MAP[key];
+      if (!cssVar) continue;
       const override = overrides[key];
       if (override) {
         root.setProperty(cssVar, IMAGE_KEYS.has(key) ? `url("${override}")` : override);
@@ -131,6 +149,38 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (overrides.pageTitleSize) root.setProperty("--page-title-size", `${overrides.pageTitleSize}rem`);
     else root.removeProperty("--page-title-size");
   }, [overrides.pageTitleSize]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.sidebarItemGap) root.setProperty("--sidebar-item-gap", `${overrides.sidebarItemGap}px`);
+    else root.removeProperty("--sidebar-item-gap");
+  }, [overrides.sidebarItemGap]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.fieldSpacing) root.setProperty("--field-spacing", `${overrides.fieldSpacing}px`);
+    else root.removeProperty("--field-spacing");
+  }, [overrides.fieldSpacing]);
+
+  // Color Mode's tiling controls (see overlay/ColorModePanel.tsx) for
+  // the three CSS-var-driven backgrounds — page, sidebar, field. Each
+  // pair of custom properties defaults to "cover, no-repeat" in
+  // theme.css, so this only needs to override them when tiling is
+  // actually on; otherwise it reverts to that default (same
+  // remove-when-absent convention as every other knob in this file).
+  // Has no visible effect while the matching *Image field is empty,
+  // since the background-image itself is still "none".
+  useEffect(() => {
+    applyTileVars("--bg-image-app", overrides.appBackgroundTile, overrides.appBackgroundScale);
+  }, [overrides.appBackgroundTile, overrides.appBackgroundScale]);
+
+  useEffect(() => {
+    applyTileVars("--bg-image-sidebar", overrides.sidebarBgTile, overrides.sidebarBgScale);
+  }, [overrides.sidebarBgTile, overrides.sidebarBgScale]);
+
+  useEffect(() => {
+    applyTileVars("--bg-image-input", overrides.inputBgTile, overrides.inputBgScale);
+  }, [overrides.inputBgTile, overrides.inputBgScale]);
 
   useEffect(() => {
     const root = document.documentElement.style;

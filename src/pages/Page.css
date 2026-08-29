@@ -72,7 +72,13 @@ html.mobile-landscape .page-header {
   margin-bottom: 12px;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
-  background: var(--color-input-bg);
+  background-color: var(--color-input-bg);
+  /* Color Mode's optional field background image (see
+     overlay/ColorModePanel.tsx) — unset unless the user picks one. */
+  background-image: var(--bg-image-input);
+  background-size: var(--bg-image-input-size);
+  background-repeat: var(--bg-image-input-repeat);
+  background-position: center;
   color: var(--color-input-text);
   font-size: 0.9rem;
   font: inherit;
@@ -97,7 +103,11 @@ html.mobile-landscape .page-header {
   padding: var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-input-bg);
+  background-color: var(--color-input-bg);
+  background-image: var(--bg-image-input);
+  background-size: var(--bg-image-input-size);
+  background-repeat: var(--bg-image-input-repeat);
+  background-position: center;
   color: var(--color-input-text);
   font-size: 0.95rem;
   font-family: inherit;

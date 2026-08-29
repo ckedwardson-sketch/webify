@@ -9,6 +9,7 @@ import {
 import { fetchTable, saveTable } from "./tables";
 import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto } from "./photos";
 import { fetchDockImages, addDockImage } from "./dockImages";
+import { recordEntityHistory, deleteEntityHistoryFor } from "./entityHistory";
 
 const PROJECT_COLUMNS = `
   id, dream_id as dreamId, goal_id as goalId, name, goals, reasoning, needs_doing as needsDoing,
@@ -99,6 +100,17 @@ export async function addProject(dreamId: number | null, name: string): Promise<
   return result.lastInsertId as number;
 }
 
+const PROJECT_FIELD_LABELS: Record<"name" | "goals" | "reasoning" | "needsDoing", string> = {
+  name: "Name",
+  goals: "Goals",
+  reasoning: "Reasoning",
+  needsDoing: "What needs doing",
+};
+
+// Logs to entity_history alongside the write (see db/entityHistory.ts) —
+// silent, no reason prompt, matching how most of Dream's own fields
+// already behave. This is what gives a Project's portable Memory field
+// (if added — see fieldLayout.ts's FieldType) real content.
 export async function updateProjectField(
   id: number,
   field: "name" | "goals" | "reasoning" | "needsDoing",
@@ -106,10 +118,19 @@ export async function updateProjectField(
 ): Promise<void> {
   const db = await getDb();
   const column = field === "needsDoing" ? "needs_doing" : field;
+  const current = await db.select<Record<string, string>[]>(`SELECT ${column} as value FROM projects WHERE id = $1`, [id]);
+  const oldValue = current[0]?.value ?? "";
   await db.execute(
     `UPDATE projects SET ${column} = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
     [value, id]
   );
+  await recordEntityHistory("project", id, PROJECT_FIELD_LABELS[field], oldValue, value);
+}
+
+function formatDateRangeForHistory(start: string | null, end: string | null): string {
+  if (!start && !end) return "No date set";
+  if (start === end) return start ?? "";
+  return `${start ?? "?"} → ${end ?? "?"}`;
 }
 
 export async function updateProjectExpectedDate(
@@ -118,18 +139,34 @@ export async function updateProjectExpectedDate(
   end: string | null
 ): Promise<void> {
   const db = await getDb();
+  const current = await db.select<{ start: string | null; end: string | null }[]>(
+    "SELECT expected_date_start as start, expected_date_end as end FROM projects WHERE id = $1",
+    [id]
+  );
   await db.execute(
     "UPDATE projects SET expected_date_start = $1, expected_date_end = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
     [start, end, id]
+  );
+  await recordEntityHistory(
+    "project",
+    id,
+    "When it should be done",
+    formatDateRangeForHistory(current[0]?.start ?? null, current[0]?.end ?? null),
+    formatDateRangeForHistory(start, end)
   );
 }
 
 export async function updateProjectEstimatedStartDate(id: number, date: string | null): Promise<void> {
   const db = await getDb();
+  const current = await db.select<{ value: string | null }[]>(
+    "SELECT estimated_start_date as value FROM projects WHERE id = $1",
+    [id]
+  );
   await db.execute(
     "UPDATE projects SET estimated_start_date = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
     [date, id]
   );
+  await recordEntityHistory("project", id, "Estimated start date", current[0]?.value ?? null, date);
 }
 
 // "IS $1" (not "=") — same reasoning as addProject's dreamId lookup:
@@ -154,6 +191,7 @@ export async function deleteProject(id: number): Promise<void> {
     [id]
   );
   await db.execute("DELETE FROM field_layout WHERE category = 'project' AND owner_id = $1", [id]);
+  await deleteEntityHistoryFor("project", id);
   await db.execute("DELETE FROM projects WHERE id = $1", [id]);
 }
 

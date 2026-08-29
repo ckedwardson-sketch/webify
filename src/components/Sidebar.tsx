@@ -2,6 +2,8 @@ import { sidebarItems } from "../data/appData";
 import { View } from "../types/nav";
 import { useRearrangeMode } from "../rearrange/RearrangeModeContext";
 import { isMobileLayoutActive } from "../theme/mobileLayout";
+import { sidebarNavHeaderKey } from "../icons/headerRegistry";
+import { StyledHeader } from "./StyledHeader";
 import "./Sidebar.css";
 
 interface SidebarProps {
@@ -43,9 +45,11 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
   };
 
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" data-color-surface="sidebar">
       <div className="sidebar-header">
-        <div className="sidebar-title">My System</div>
+        <div className="sidebar-title">
+          <StyledHeader headerKey="sidebar-title">My System</StyledHeader>
+        </div>
         <button
           className="sidebar-toggle"
           type="button"
@@ -62,7 +66,7 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
               className={`sidebar-item ${isActive(item.label) ? "active" : ""}`}
               onClick={() => handleNav(item.label, item.isPlaceholder)}
             >
-              {item.label}
+              <StyledHeader headerKey={sidebarNavHeaderKey(item.label)}>{item.label}</StyledHeader>
             </button>
           </li>
         ))}
@@ -76,7 +80,7 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
             : "Reorder, add, or save/load layouts of the widgets on a project or goal page"
         }
       >
-        ↕ Rearrange
+        ↕ <StyledHeader headerKey="sidebar-rearrange">Rearrange</StyledHeader>
       </button>
     </nav>
   );

@@ -1,5 +1,51 @@
+.field-row {
+  position: relative;
+}
+
+/* A paired row's two fields sit side by side instead of stacking — see
+   FieldPairBar's compact/expand switch. Compact keeps the row at its
+   normal width (each field gets half); expand widens the whole row past
+   the page's normal reading width to give both fields their full size —
+   deliberately desktop-only (see the mobile override below), since
+   there's rarely room to spare on a phone. */
+.field-row-paired {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.field-row-compact > .field-slot {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field-row-expand {
+  width: calc(var(--page-max-width) + 260px);
+  max-width: calc(100vw - var(--sidebar-width) - 120px);
+}
+
+.field-row-expand > .field-slot {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+
+html.mobile-layout .field-row-paired,
+html.mobile-layout .field-row-expand {
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+}
+
+html.mobile-layout .field-row-compact > .field-slot,
+html.mobile-layout .field-row-expand > .field-slot {
+  width: 100%;
+  min-width: 0;
+}
+
 .field-slot {
   position: relative;
+  flex: 1;
+  min-width: 0;
 }
 
 .field-slot-rearranging {
@@ -8,7 +54,7 @@
   border-radius: var(--radius-md);
 }
 
-.field-slot-drop-target {
+.field-row-drop-target > .field-slot:first-child {
   outline: 2px solid var(--color-accent);
 }
 
@@ -27,37 +73,198 @@
 }
 
 /* The field currently sitting in the copy clipboard — stays highlighted
-   (not just on hover) so it's obvious what Paste will place. */
+   (not just on hover) so it's obvious what Paste will place. Click it
+   again to cancel (see useFieldLayout.ts's handleCopyField) — the small
+   "click to cancel" badge is the discoverable hint for that. */
 .field-slot-copied {
   outline: 2px solid #22c55e;
-  background: color-mix(in srgb, #22c55e 10%, transparent);
+  background: color-mix(in srgb, #22c55e 8%, transparent);
   border-radius: var(--radius-md);
 }
 
-/* Only the handle is the real native drag source (see
-   RearrangeableField.tsx's comment on why) — it needs to actually
-   receive pointer events for that, unlike the old widget-card handle
-   this was copied from, which was purely decorative. */
-.field-slot-drag-handle {
+.field-slot-copied::after {
+  content: "copied — click to cancel";
   position: absolute;
-  top: -10px;
-  left: -10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  top: -9px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: #22c55e;
+  padding: 1px 7px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.field-slot-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  min-height: 20px;
+}
+
+/* Inline with the header now (was a circle overflowing -10px/-10px
+   above/left of the field) — that overlapped the FieldGap sitting just
+   above it closely enough to occasionally steal the drag gesture before
+   it reached the handle. Living inside the field's own box entirely
+   removes that overlap outright. */
+.field-slot-drag-handle {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
   background: var(--color-accent);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  z-index: 5;
+  font-size: 11px;
   cursor: grab;
 }
 
 .field-slot-drag-handle:active {
   cursor: grabbing;
 }
+
+.field-header-editable {
+  cursor: text;
+}
+
+.field-header-rename-input {
+  font: inherit;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  padding: 1px 6px;
+  min-width: 80px;
+}
+
+/* ---- Field pairing — the right-edge "add a field here" bar --------- */
+
+.field-pair-bar-wrapper {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -14px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.field-pair-bar {
+  width: 10px;
+  height: 100%;
+  min-height: 32px;
+  border: none;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: width 0.12s ease, background 0.12s ease;
+}
+
+.field-pair-bar:hover,
+.field-pair-bar-active {
+  width: 18px;
+  background: color-mix(in srgb, var(--color-accent) 60%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent) 60%, transparent);
+}
+
+.field-pair-bar-plus {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.field-pair-bar:hover .field-pair-bar-plus,
+.field-pair-bar-active .field-pair-bar-plus {
+  opacity: 1;
+}
+
+.field-pair-menu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 8px);
+  z-index: 251;
+}
+
+.field-pair-mode-switch {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px 2px;
+}
+
+.field-pair-mode-switch button {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.field-pair-mode-switch button.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.field-pair-mode-hint {
+  margin: 4px 8px 2px;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  max-width: 190px;
+}
+
+/* Lives on an existing pair's secondary field — swap compact/expand or
+   split the pair apart again. */
+.field-pair-controls {
+  position: absolute;
+  top: -10px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  z-index: 2;
+}
+
+.field-pair-controls button {
+  width: 20px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.field-pair-controls button:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+.field-pair-controls button.active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* ---- Gaps between rows ---------------------------------------------- */
 
 .field-gap-wrapper {
   position: relative;
@@ -74,7 +281,7 @@
   padding: 0;
   border: none;
   border-radius: 4px;
-  background: rgba(59, 130, 246, 0.18);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
   cursor: pointer;
   transition: height 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
@@ -82,20 +289,21 @@
 .field-gap:hover,
 .field-gap-active {
   height: 22px;
-  background: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+  background: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-accent) 65%, transparent);
 }
 
-/* Paste tool armed with something in the clipboard — greenish instead
-   of blue, matching the copied source's own highlight color. */
+/* A subtle green tint hints something's copied and ready — no longer a
+   separate armed "mode" you have to switch into first; opening the gap
+   always offers both Paste (if there's a clipboard) and the normal add
+   menu together. */
 .field-gap-paste-armed {
-  background: rgba(34, 197, 94, 0.18);
+  background: color-mix(in srgb, #22c55e 22%, transparent);
 }
 
 .field-gap-paste-armed:hover {
-  height: 22px;
-  background: rgba(34, 197, 94, 0.5);
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.8);
+  background: color-mix(in srgb, #22c55e 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, #22c55e 65%, transparent);
 }
 
 .field-gap-plus {
@@ -125,4 +333,15 @@
   transform: translateX(-50%);
   margin-top: 4px;
   z-index: 251;
+}
+
+.field-gap-paste-item {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.rearrange-add-menu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 2px;
 }

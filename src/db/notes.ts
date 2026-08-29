@@ -1,8 +1,8 @@
 import { getDb } from "./database";
-import { NotePage, NoteBlock, NoteBlockType } from "../types/notes";
+import { NotePage } from "../types/notes";
 
 const PAGE_COLUMNS = `
-  id, parent_id as parentId, category, title, icon,
+  id, parent_id as parentId, category, title, icon, content,
   sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt
 `;
 
@@ -28,8 +28,8 @@ export async function fetchAllCategories(): Promise<string[]> {
   return rows.map((r) => r.category);
 }
 
-// New pages start with one empty paragraph block so the editor never
-// opens to a totally blank, unclickable state.
+// New pages start with an empty paragraph doc so the editor never opens
+// to a totally blank, unclickable state.
 export async function addPage(parentId: number | null, category: string, title = "Untitled"): Promise<number> {
   const db = await getDb();
   const existing = await db.select<{ maxOrder: number | null }[]>(
@@ -38,18 +38,24 @@ export async function addPage(parentId: number | null, category: string, title =
   );
   const nextOrder = (existing[0].maxOrder ?? -1) + 1;
   const result = await db.execute(
-    `INSERT INTO notes_pages (parent_id, category, title, sort_order, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    `INSERT INTO notes_pages (parent_id, category, title, sort_order, content, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, '<p></p>', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     [parentId, category, title, nextOrder]
   );
-  const id = result.lastInsertId as number;
-  await db.execute("INSERT INTO notes_blocks (page_id, block_type, content, sort_order) VALUES ($1, 'paragraph', '', 0)", [id]);
-  return id;
+  return result.lastInsertId as number;
 }
 
 export async function updatePageTitle(id: number, title: string): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE notes_pages SET title = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [title, id]);
+}
+
+export async function updatePageContent(id: number, content: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE notes_pages SET content = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [
+    content,
+    id,
+  ]);
 }
 
 export async function updatePageIcon(id: number, icon: string): Promise<void> {
@@ -89,64 +95,17 @@ export async function deletePage(id: number): Promise<void> {
   await db.execute("DELETE FROM notes_pages WHERE id = $1", [id]);
 }
 
-// ---- Blocks -----------------------------------------------------------
-
-const BLOCK_COLUMNS = `
-  id, page_id as pageId, block_type as blockType, content, checked, sort_order as sortOrder
-`;
-
-type RawBlockRow = Omit<NoteBlock, "checked"> & { checked: number };
-
-function mapBlock(row: RawBlockRow): NoteBlock {
-  return { ...row, checked: !!row.checked };
+export interface NoteLinkTarget {
+  id: number;
+  title: string;
+  category: string;
 }
 
-export async function fetchBlocksForPage(pageId: number): Promise<NoteBlock[]> {
+// For the editor's "link to a note" picker — every page across every
+// category, mirroring fetchAllRecipesFlat in db/recipes.ts.
+export async function fetchAllNotePagesFlat(): Promise<NoteLinkTarget[]> {
   const db = await getDb();
-  const rows = await db.select<RawBlockRow[]>(
-    `SELECT ${BLOCK_COLUMNS} FROM notes_blocks WHERE page_id = $1 ORDER BY sort_order`,
-    [pageId]
+  return db.select<NoteLinkTarget[]>(
+    "SELECT id, title, category FROM notes_pages ORDER BY category, sort_order"
   );
-  return rows.map(mapBlock);
-}
-
-export async function addBlock(
-  pageId: number,
-  blockType: NoteBlockType,
-  content: string,
-  sortOrder: number
-): Promise<number> {
-  const db = await getDb();
-  const result = await db.execute(
-    "INSERT INTO notes_blocks (page_id, block_type, content, sort_order) VALUES ($1, $2, $3, $4)",
-    [pageId, blockType, content, sortOrder]
-  );
-  return result.lastInsertId as number;
-}
-
-export async function updateBlockContent(id: number, content: string): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE notes_blocks SET content = $1 WHERE id = $2", [content, id]);
-}
-
-export async function updateBlockType(id: number, blockType: NoteBlockType): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE notes_blocks SET block_type = $1 WHERE id = $2", [blockType, id]);
-}
-
-export async function updateBlockChecked(id: number, checked: boolean): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE notes_blocks SET checked = $1 WHERE id = $2", [checked ? 1 : 0, id]);
-}
-
-export async function deleteBlock(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("DELETE FROM notes_blocks WHERE id = $1", [id]);
-}
-
-export async function reorderBlocks(orderedIds: number[]): Promise<void> {
-  const db = await getDb();
-  for (let i = 0; i < orderedIds.length; i++) {
-    await db.execute("UPDATE notes_blocks SET sort_order = $1 WHERE id = $2", [i, orderedIds[i]]);
-  }
 }

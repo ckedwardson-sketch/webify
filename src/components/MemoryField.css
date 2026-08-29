@@ -1,0 +1,155 @@
+/* The Memory box (see MemoryField.tsx) — a scrollable, resizable log of
+   field changes. Moved here from DreamDetailPage.css since this is now
+   a shared component (Project/Goal can carry a portable Memory field
+   too — see db/fieldLayout.ts's FieldType). */
+
+.memory-field {
+  position: relative;
+}
+
+.dream-memory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dream-memory-header .theme-section-title {
+  margin-bottom: 0;
+}
+
+.dream-filter-dropdown {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  width: 220px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  z-index: 100;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.dream-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dream-filter-checkbox {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.dream-filter-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  gap: 8px;
+}
+
+.dream-filter-date input {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: 0.8rem;
+  padding: 3px 6px;
+}
+
+.dream-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dream-history-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dream-history-field {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.dream-history-change {
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.dream-history-time {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.dream-history-reason {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+/* Fixed visible height (user-resizable — see the handle below),
+   scrollable rather than growing forever. Hovering it and using the
+   mouse wheel reveals older entries; anything past the visible height
+   just stays clipped until you do. */
+.memory-field-scroll {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* A slim bar pinned to the bottom edge, overlapping the last few px of
+   the scrollable list so entries visibly scroll *underneath* it rather
+   than stopping short of it — the boundary reads as physical, not just
+   a clipped overflow. Drag it to resize (see MemoryField.tsx's
+   startResize). Deliberately un-prominent while rearranging (the
+   field's own dashed outline + drag handle already crowd that corner);
+   more visible the rest of the time, since that's the easier moment to
+   grab it — see the user-facing hint this mirrors in RearrangeToolbar. */
+.memory-field-resize-handle {
+  position: relative;
+  margin-top: -14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--color-bg-elevated) 85%, transparent) 60%);
+  touch-action: none;
+}
+
+.memory-field-resize-handle-prominent {
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--color-bg-elevated) 96%, transparent) 55%);
+}
+
+.memory-field-resize-grip {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border-strong);
+  opacity: 0.6;
+  transition: opacity 0.12s ease, background-color 0.12s ease;
+}
+
+.memory-field-resize-handle:hover .memory-field-resize-grip,
+.memory-field-resize-handle-prominent .memory-field-resize-grip {
+  opacity: 1;
+  background: var(--color-accent);
+}

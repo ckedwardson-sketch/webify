@@ -43,6 +43,7 @@ export function StyledButton({
   return (
     <button
       onClick={onClick}
+      data-overlay-target={buttonKey}
       style={{
         display: "flex",
         alignItems: "center",

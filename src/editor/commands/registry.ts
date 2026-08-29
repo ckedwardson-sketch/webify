@@ -1,0 +1,158 @@
+// src/editor/commands/registry.ts
+import { EditorCommandDef } from "./types";
+import { insertToggle } from "../extensions/Toggle";
+import { insertCallout } from "../extensions/Callout";
+
+export const EDITOR_COMMAND_REGISTRY: Record<string, EditorCommandDef> = {
+  bold: {
+    key: "bold",
+    label: "Bold",
+    textElementKey: "bold-button",
+    kind: "mark",
+    run: (editor) => editor.chain().focus().toggleBold().run(),
+    isActive: (editor) => editor.isActive("bold"),
+  },
+  italic: {
+    key: "italic",
+    label: "Italic",
+    textElementKey: "italic-button",
+    kind: "mark",
+    run: (editor) => editor.chain().focus().toggleItalic().run(),
+    isActive: (editor) => editor.isActive("italic"),
+  },
+  underline: {
+    key: "underline",
+    label: "Underline",
+    textElementKey: "underline-button",
+    kind: "mark",
+    run: (editor) => editor.chain().focus().toggleUnderline().run(),
+    isActive: (editor) => editor.isActive("underline"),
+  },
+  strike: {
+    key: "strike",
+    label: "Strikethrough",
+    textElementKey: "strike-button",
+    kind: "mark",
+    run: (editor) => editor.chain().focus().toggleStrike().run(),
+    isActive: (editor) => editor.isActive("strike"),
+  },
+  code: {
+    key: "code",
+    label: "Inline code",
+    textElementKey: "code-button",
+    kind: "mark",
+    run: (editor) => editor.chain().focus().toggleCode().run(),
+    isActive: (editor) => editor.isActive("code"),
+  },
+  highlight: {
+    key: "highlight",
+    label: "Highlight",
+    iconKey: "highlight",
+    kind: "mark",
+    run: (editor) => editor.chain().focus().toggleHighlight().run(),
+    isActive: (editor) => editor.isActive("highlight"),
+  },
+  heading1: {
+    key: "heading1",
+    label: "Heading 1",
+    textElementKey: "heading1-button",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+    isActive: (editor) => editor.isActive("heading", { level: 1 }),
+  },
+  heading2: {
+    key: "heading2",
+    label: "Heading 2",
+    textElementKey: "heading2-button",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+    isActive: (editor) => editor.isActive("heading", { level: 2 }),
+  },
+  heading3: {
+    key: "heading3",
+    label: "Heading 3",
+    textElementKey: "heading3-button",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+    isActive: (editor) => editor.isActive("heading", { level: 3 }),
+  },
+  orderedList: {
+    key: "orderedList",
+    label: "Numbered list",
+    iconKey: "list",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleOrderedList().run(),
+    isActive: (editor) => editor.isActive("orderedList"),
+  },
+  bulletList: {
+    key: "bulletList",
+    label: "Bulleted list",
+    iconKey: "list",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleBulletList().run(),
+    isActive: (editor) => editor.isActive("bulletList"),
+  },
+  taskList: {
+    key: "taskList",
+    label: "To-do list",
+    iconKey: "list",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleTaskList().run(),
+    isActive: (editor) => editor.isActive("taskList"),
+  },
+  toggleList: {
+    key: "toggleList",
+    label: "Toggle list",
+    iconKey: "list",
+    kind: "block",
+    run: (editor) => insertToggle(editor),
+  },
+  blockquote: {
+    key: "blockquote",
+    label: "Quote",
+    textElementKey: "quote-button",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleBlockquote().run(),
+    isActive: (editor) => editor.isActive("blockquote"),
+  },
+  callout: {
+    key: "callout",
+    label: "Callout",
+    iconKey: "callout",
+    kind: "block",
+    run: (editor) => insertCallout(editor),
+    isActive: (editor) => editor.isActive("callout"),
+  },
+  codeBlock: {
+    key: "codeBlock",
+    label: "Code block",
+    iconKey: "code-block",
+    kind: "block",
+    run: (editor) => editor.chain().focus().toggleCodeBlock().run(),
+    isActive: (editor) => editor.isActive("codeBlock"),
+  },
+  horizontalRule: {
+    key: "horizontalRule",
+    label: "Divider",
+    iconKey: "divider",
+    kind: "block",
+    run: (editor) => editor.chain().focus().setHorizontalRule().run(),
+  },
+};
+
+export const MARK_COMMAND_KEYS = ["bold", "italic", "underline", "strike", "code", "highlight"];
+export const HEADING_COMMAND_KEYS = ["heading1", "heading2", "heading3"];
+export const LIST_COMMAND_KEYS = ["orderedList", "bulletList", "taskList", "toggleList"];
+export const SLASH_COMMAND_KEYS = [
+  "heading1",
+  "heading2",
+  "heading3",
+  "orderedList",
+  "bulletList",
+  "taskList",
+  "toggleList",
+  "blockquote",
+  "callout",
+  "codeBlock",
+  "horizontalRule",
+];

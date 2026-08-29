@@ -1,5 +1,5 @@
 .project-field {
-  margin-bottom: 16px;
+  margin-bottom: var(--field-spacing);
 }
 
 .project-field-label {
@@ -11,9 +11,13 @@
 }
 
 /* A freetext field's label is user-editable (see FreetextFieldEditor)
-   — same visual weight as a normal <label>, just interactive. */
+   — same visual weight as a normal <label>, just interactive. Sits in a
+   flex row next to the style trigger button, so it grows to fill the
+   row (not a fixed 100% width) and shrinks instead of pushing the
+   trigger off — flex-basis 0 with flex-grow does that. */
 .freetext-field-label-input {
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   border: none;
   background: none;
   font: inherit;

@@ -6,6 +6,7 @@ import { fetchAllProjects, addProject } from "../db/projects";
 import { fetchDreamGraphData } from "../db/dreams";
 import { fetchPassionProjects, addPassionProject, fetchWidgetsForGoal } from "../db/goals";
 import { ImageDockWidget } from "../components/ImageDockWidget";
+import { Icon } from "../icons/Icon";
 import "./Page.css";
 import "./ProjectsHomePage.css";
 
@@ -233,7 +234,7 @@ export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => v
                   title="Enter Web"
                   onClick={() => onNavigate({ type: "goal-web", goalId: g.id })}
                 >
-                  🕸
+                  <Icon iconKey="web-view" size={16} />
                 </button>
               </div>
               {passionDockWidgets[g.id] !== undefined && <ImageDockWidget widgetId={passionDockWidgets[g.id]} />}
