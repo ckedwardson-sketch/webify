@@ -51,3 +51,14 @@
   align-items: center;
   gap: 8px;
 }
+
+html.mobile-layout .context-menu {
+  max-width: calc(100vw - 24px);
+  max-height: calc(70dvh - var(--keyboard-inset, 0px));
+}
+
+html.mobile-layout .context-menu-item,
+html.mobile-layout .context-menu-item-disabled {
+  min-height: var(--touch-min);
+  padding: 8px 10px;
+}

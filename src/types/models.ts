@@ -21,6 +21,15 @@ export interface Recipe {
   displayId?: string; // 5-digit human-facing id, immutable after creation
   createdAt?: string;
   updatedAt?: string; // auto-maintained by a DB trigger on content edits, not sort_order
+  // Future Slot — a planning/idea card for a recipe that doesn't exist
+  // yet. isFutureSlot is true while it's still in that planning stage;
+  // futureSlotOrigin stays true forever once it ever was one, even
+  // after "Make it a Real Recipe" flips isFutureSlot back to false, so
+  // the inspiration/links it collected stay reachable (just hidden).
+  isFutureSlot?: boolean;
+  futureSlotOrigin?: boolean;
+  inspiration?: string;
+  futureSlotRecipeLinks?: number[]; // ids of recipes linked from the future slot planning area
 }
 
 export interface FilterState {
@@ -113,6 +122,8 @@ export interface ProgressNode {
   isRead: boolean; // cleared on creation/edit, set when the detail page is opened
   posX: number;
   posY: number;
+  cost: number | null; // optional logged cost, shown on completed-task detail/web card if set
+  completedAt: string | null; // set when isComplete flips true, cleared when flipped back
   createdAt?: string;
   updatedAt?: string;
 }

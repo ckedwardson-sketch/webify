@@ -8,6 +8,8 @@ export const WIDGET_TYPE_LABELS: Record<ProjectWidgetType, string> = {
   table: "Table",
   photo: "Quick Photo",
   dock: "Image Dock",
+  costlog: "Cost Log",
+  calculator: "Calculator",
 };
 
 // The categorized "what can I add here" list — shared by the toolbar's

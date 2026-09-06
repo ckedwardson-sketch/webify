@@ -9,15 +9,16 @@
   position: relative;
   width: 200px;
   min-height: 80px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 10px;
-  background: #fff;
+  background: var(--color-bg-elevated);
 }
 
 .project-board-item-text {
   font-size: 0.85rem;
   white-space: pre-wrap;
+  color: var(--color-text);
 }
 
 .project-board-item-image {
@@ -30,7 +31,7 @@
   display: block;
   width: 100%;
   font-size: 0.85rem;
-  color: #2563eb;
+  color: var(--color-accent);
   text-decoration: underline;
   background: none;
   border: none;
@@ -51,4 +52,28 @@
   color: #fff;
   cursor: pointer;
   font-size: 10px;
+}
+
+html.mobile-layout .project-board-grid {
+  gap: var(--space-card-gap, 10px);
+}
+
+html.mobile-layout .project-board-item {
+  width: 100%;
+}
+
+/* Small circular delete stays visually tiny; grow only the hit area
+   via a transparent pseudo-element so mobile taps don't need to be
+   pixel-precise. */
+html.mobile-layout .project-board-item-delete {
+  position: absolute;
+}
+
+html.mobile-layout .project-board-item-delete::after {
+  content: "";
+  position: absolute;
+  inset: 50%;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  transform: translate(-50%, -50%);
 }

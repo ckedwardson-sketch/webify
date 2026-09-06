@@ -1,7 +1,8 @@
 // Builds the shared "Turn into / Format" section list from the command
 // registry, consumed by both the right-click context menu and the slash
-// command menu. Link/Image stay toolbar-only — they need their own
-// popover UI (search box, tabs) rather than a single run() call.
+// command menu. Link/Image aren't here — they need their own popover UI
+// (search box, tabs) rather than a single run() call, so NoteContentEditor
+// and RecipeEditor append their own "Insert" section alongside this one.
 import type { Editor } from "@tiptap/core";
 import { EDITOR_COMMAND_REGISTRY, MARK_COMMAND_KEYS, SLASH_COMMAND_KEYS } from "./commands/registry";
 import type { ContextMenuSection } from "../components/ContextMenu";

@@ -2,6 +2,11 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* Stops the WebView's native elastic-overscroll bounce, which
+     otherwise flashes the native window's white background through
+     whenever a scrollable region (e.g. the sidebar) is scrolled past
+     its end. */
+  overscroll-behavior: none;
 }
 
 .app-shell {
@@ -45,6 +50,64 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Multi-pane mode — split screen, triggered from Notes ("Multi-pane"
+   button). Left is always the Notes tree (collapsible); right is a
+   second, independent "view" the Notes tree / Sidebar / NavHistoryBar
+   all drive while it's active (see App()'s navigate()/dualPaneRightView).
+   Both columns get the app's html.mobile-layout treatment forced on
+   (AppShell's effect) so each reads like a narrow phone screen despite
+   sitting side-by-side on desktop. */
+.dual-pane-shell {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.dual-pane-left {
+  width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+}
+
+.dual-pane-left-toggle {
+  flex-shrink: 0;
+  width: 18px;
+  border: none;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dual-pane-left-toggle:hover {
+  background: var(--color-border);
+}
+
+.dual-pane-right.app-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dual-pane-exit {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  z-index: 400;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .app-content {

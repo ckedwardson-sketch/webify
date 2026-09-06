@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FieldLayoutRow, updateFreetextField } from "../db/fieldLayout";
-import { contentStyle, headerStyle } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
 
 // A generic label+textarea "area" — the one genuinely new field kind
 // the generalized rearrange system adds (see db/fieldLayout.ts), for
@@ -11,11 +11,13 @@ export function FreetextFieldEditor({
   label,
   content,
   field,
+  onResize,
 }: {
   refId: number;
   label: string;
   content: string;
   field: FieldLayoutRow;
+  onResize?: (fieldId: number, heightPx: number | null) => void;
 }) {
   const [labelDraft, setLabelDraft] = useState(label);
   const [contentDraft, setContentDraft] = useState(content);
@@ -43,6 +45,7 @@ export function FreetextFieldEditor({
         value={contentDraft}
         onChange={(e) => setContentDraft(e.target.value)}
         onBlur={() => updateFreetextField(refId, { content: contentDraft })}
+        onMouseUp={(e) => handleFieldResizeMouseUp(e, field.id, onResize)}
       />
     </div>
   );

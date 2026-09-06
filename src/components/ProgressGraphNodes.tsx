@@ -1,6 +1,8 @@
 // src/components/ProgressGraphNodes.tsx
 import { useTheme } from "../theme/ThemeContext";
 import { ProgressCategory, ProgressDifficulty } from "../types/models";
+import { CardAngleRing } from "./DreamGraphNodes";
+import "../pages/GoalWebPage.css";
 
 export const PROGRESS_BASE_SIZE = 76;
 
@@ -50,6 +52,8 @@ export interface ProgressNodeData {
   isComplete: boolean;
   isRead: boolean;
   imageData?: string;
+  // Optional — only rendered when set, never forced onto every node.
+  cost?: number | null;
 }
 
 // A colored "dot": category sets the ring color (always visible, even
@@ -82,6 +86,13 @@ export function ProgressNode({ data }: { data: ProgressNodeData }) {
       }}
       title={data.shortDescription}
     >
+      {/* Same 32-point ring convention as GoalGraphNodes.tsx's cards
+          (see DreamGraphNodes.tsx's CardAngleRing) — approximated
+          against the node's square bounding box since there's no
+          "circle" shape in the boundary-math table, close enough for a
+          small round node. Harmless when this component renders
+          outside the Goal/Dream Web (no drag ever originates there). */}
+      <CardAngleRing />
       {showImage ? (
         <img
           src={data.imageData}
@@ -142,6 +153,27 @@ export function ProgressNode({ data }: { data: ProgressNodeData }) {
           }}
         >
           ✓
+        </span>
+      )}
+
+      {data.cost != null && (
+        <span
+          className="progress-node-cost-badge"
+          title={`Cost: $${data.cost.toFixed(2)}`}
+          style={{
+            position: "absolute",
+            top: 2,
+            left: 2,
+            fontSize: 9,
+            lineHeight: 1,
+            background: "rgba(0,0,0,0.55)",
+            color: "#facc15",
+            borderRadius: "8px",
+            padding: "2px 4px",
+            fontWeight: 700,
+          }}
+        >
+          ${data.cost.toFixed(0)}
         </span>
       )}
     </div>

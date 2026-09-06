@@ -23,6 +23,9 @@ import {
   fetchFreetextFields,
   availableFieldsToAdd as computeAvailableFieldsToAdd,
   updateFieldStyle,
+  updateFieldColumn,
+  updateFieldLayoutLabel,
+  updateFieldLayoutHeight,
   FieldLayoutRow,
   FieldStylePatch,
   FieldType,
@@ -36,18 +39,21 @@ import { EstimatedStartDateField } from "../components/EstimatedStartDateField";
 import { FreetextFieldEditor } from "../components/FreetextFieldEditor";
 import { ImageDockWidget } from "../components/ImageDockWidget";
 import { QuickPhotoWidget } from "../components/QuickPhotoWidget";
+import { CostLogWidget } from "../components/CostLogWidget";
+import { CalculatorWidget } from "../components/CalculatorWidget";
 import { TableWidgetPreview } from "../components/TableWidgetPreview";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
 import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
-import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, mergeFieldStylePatch, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
 import { withFieldUndo } from "../rearrange/fieldUndo";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useTheme } from "../theme/ThemeContext";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "./Page.css";
 import "./ProjectDetailPage.css";
 
-const ALL_WIDGET_TYPES: ProjectWidgetType[] = ["journal", "linkboard", "table", "photo", "dock"];
+const ALL_WIDGET_TYPES: ProjectWidgetType[] = ["journal", "linkboard", "table", "photo", "dock", "costlog", "calculator"];
 const COPIABLE_FIELD_TYPES: FieldType[] = ["goals_text", "reasoning_text", "needs_doing_text", "freetext"];
 
 function gapOrderBefore(fields: FieldLayoutRow[], index: number): number {
@@ -90,6 +96,7 @@ export function GoalDetailPage({
     active: rearranging,
     deleteToolActive,
     copyToolActive,
+    columnToolActive,
     copiedFieldId,
     copyField,
     insertAt,
@@ -98,6 +105,8 @@ export function GoalDetailPage({
     pushUndo,
   } = useRearrangeMode();
   const { registerFieldStyleTarget } = useFieldStyleRegistry();
+  const { theme } = useTheme();
+  const detailColumnCount = Math.max(1, Math.min(3, Number(theme.detailColumnCount) || 1));
 
   const load = async () => {
     const g = await fetchGoal(goalId);
@@ -169,7 +178,25 @@ export function GoalDetailPage({
     table: "Table",
     photo: "Quick Photo",
     dock: "Image Dock",
+    costlog: "Cost Log",
+    calculator: "Calculator",
   };
+
+  const WIDGET_ICON_KEYS: Record<ProjectWidgetType, string> = {
+    journal: "widget-journal",
+    linkboard: "widget-linkboard",
+    table: "widget-table",
+    photo: "widget-photo",
+    dock: "widget-dock",
+    costlog: "widget-costlog",
+    calculator: "widget-calculator",
+  };
+
+  // theme.widgetGridStyle: "auto" keeps this page's original look
+  // (plain cards); "cards"/"tiles" force that style on both Goal and
+  // Project Detail, so the two pages can share one setting instead of
+  // being permanently different (see ProjectDetailPage's mirror of this).
+  const widgetGridStyle = theme.widgetGridStyle === "tiles" ? "tiles" : "cards";
 
   const handleAddWidget = async (type: ProjectWidgetType) => {
     if (!goal) return;
@@ -287,6 +314,16 @@ export function GoalDetailPage({
     updateFieldStyle(row.id, patch);
   };
 
+  const handleFieldResize = (fieldId: number, heightPx: number | null) => {
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, heightPx } : f)));
+    updateFieldLayoutHeight(fieldId, heightPx);
+  };
+
+  const handleFieldStyleRename = (fieldId: number, label: string | null) => {
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, customLabel: label } : f)));
+    updateFieldLayoutLabel(fieldId, label);
+  };
+
   useEffect(() => {
     registerFieldStyleTarget({
       fields,
@@ -294,6 +331,7 @@ export function GoalDetailPage({
         const row = fields.find((f) => f.id === fieldId);
         if (row) handleFieldStyleSave(row, patch);
       },
+      onRename: handleFieldStyleRename,
     });
     return () => registerFieldStyleTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,6 +364,11 @@ export function GoalDetailPage({
   const availableFieldsToAdd: AddableField[] = computeAvailableFieldsToAdd("goal", fields);
   const hasWidgetsField = fields.some((f) => f.fieldType === "widgets");
 
+  const handleCycleColumn = async (f: FieldLayoutRow) => {
+    await updateFieldColumn(f.id, (f.column + 1) % detailColumnCount);
+    load();
+  };
+
   useEffect(() => {
     if (!goal) return;
     registerTarget({
@@ -342,10 +385,12 @@ export function GoalDetailPage({
       availableFieldsToAdd,
       onAddField: handleAddField,
       onPasteField: handlePasteField,
+      columnCount: detailColumnCount > 1 ? detailColumnCount : undefined,
+      onSetFieldColumn: (fieldId, column) => updateFieldColumn(fieldId, column).then(load),
     });
     return () => registerTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goal, widgets, fields, insertAt]);
+  }, [goal, widgets, fields, insertAt, detailColumnCount]);
 
   // Widget cards: only the small ⠿ handle is the native drag source —
   // NOT the whole card — this card sits nested inside the "widgets"
@@ -396,7 +441,7 @@ export function GoalDetailPage({
     if (!goal) return;
     if (!confirm(`Delete "${goal.name}"? This also removes its widgets and everything in them.`)) return;
     await deleteGoal(goal.id);
-    onNavigate({ type: "goals-home" });
+    onNavigate(goal.isPassionProject ? { type: "projects-home" } : { type: "goals-home" });
   };
 
   if (loading) {
@@ -440,17 +485,106 @@ export function GoalDetailPage({
           <button className="add-button secondary" onClick={() => handleAddWidget("dock")}>
             Image Dock
           </button>
+          <button className="add-button secondary" onClick={() => handleAddWidget("costlog")}>
+            Cost Log
+          </button>
+          <button className="add-button secondary" onClick={() => handleAddWidget("calculator")}>
+            Calculator
+          </button>
         </div>
       )}
 
       {widgets.length === 0 ? (
         <p className="page-text">No widgets yet.</p>
+      ) : widgetGridStyle === "tiles" ? (
+        <div className="project-wii-grid">
+          {widgets.map((w) => {
+            const isInline =
+              w.widgetType === "dock" || w.widgetType === "photo" || w.widgetType === "table" || w.widgetType === "costlog" || w.widgetType === "calculator";
+            return (
+              <div
+                key={w.id}
+                className={`project-wii-tile${rearranging ? " project-wii-tile-rearranging" : ""}${dragOverId === w.id ? " project-wii-tile-drop-target" : ""}${rearranging && deleteToolActive ? " project-wii-tile-delete-armed" : ""}`}
+                onDragOver={(e) => handleWidgetDragOver(e, w.id)}
+                onDragLeave={() => setDragOverId((id) => (id === w.id ? null : id))}
+                onDrop={(e) => handleWidgetDrop(e, w.id)}
+                onClickCapture={(e) => {
+                  if (rearranging && (deleteToolActive || copyToolActive)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleWidgetCardClick(w.id, () => {});
+                  }
+                }}
+              >
+                {rearranging && (
+                  <span
+                    className="project-wii-tile-drag-handle"
+                    draggable
+                    title="Drag to reorder"
+                    onDragStart={(e) => handleWidgetDragStart(e, w.id)}
+                  >
+                    ⠿
+                  </span>
+                )}
+                {isInline ? (
+                  <div className="project-wii-tile-inline">
+                    <div className="project-wii-tile-header">
+                      <span className="project-wii-tile-icon"><Icon iconKey={WIDGET_ICON_KEYS[w.widgetType]} size={16} /></span>
+                      <span className="project-wii-tile-title">{w.title}</span>
+                    </div>
+                    <div className="project-wii-tile-preview-body">
+                      {w.widgetType === "dock" ? (
+                        <ImageDockWidget widgetId={w.id} />
+                      ) : w.widgetType === "photo" ? (
+                        <QuickPhotoWidget widgetId={w.id} />
+                      ) : w.widgetType === "costlog" ? (
+                        <CostLogWidget widgetId={w.id} />
+                      ) : w.widgetType === "calculator" ? (
+                        <CalculatorWidget widgetId={w.id} />
+                      ) : (
+                        <TableWidgetPreview
+                          widgetId={w.id}
+                          onOpen={() => onNavigate({ type: "project-table", widgetId: w.id, goalId: goal.id })}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="project-wii-tile-open"
+                    onClick={() =>
+                      onNavigate(
+                        w.widgetType === "journal"
+                          ? { type: "project-journal", widgetId: w.id, goalId: goal.id }
+                          : { type: "project-board", widgetId: w.id, goalId: goal.id }
+                      )
+                    }
+                  >
+                    <div className="project-wii-tile-header">
+                      <span className="project-wii-tile-icon"><Icon iconKey={WIDGET_ICON_KEYS[w.widgetType]} size={16} /></span>
+                      <span className="project-wii-tile-title">{w.title}</span>
+                    </div>
+                    {/* No live-preview snippet fetch on Goal Detail (unlike
+                        Project Detail's widgetPreviews) — icon+title only. */}
+                  </button>
+                )}
+                <button
+                  className="project-wii-tile-delete"
+                  onClick={() => handleDeleteWidget(w.id)}
+                  title="Delete widget"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="project-widget-grid">
           {widgets.map((w) => (
             <div
               key={w.id}
-              className={`project-widget-card${["dock", "photo", "table"].includes(w.widgetType) ? " project-widget-card-inline" : ""}${rearranging ? " project-widget-card-rearranging" : ""}${dragOverId === w.id ? " project-widget-card-drop-target" : ""}${rearranging && deleteToolActive ? " project-widget-card-delete-armed" : ""}`}
+              className={`project-widget-card${["dock", "photo", "table", "costlog", "calculator"].includes(w.widgetType) ? " project-widget-card-inline" : ""}${rearranging ? " project-widget-card-rearranging" : ""}${dragOverId === w.id ? " project-widget-card-drop-target" : ""}${rearranging && deleteToolActive ? " project-widget-card-delete-armed" : ""}`}
               onDragOver={(e) => handleWidgetDragOver(e, w.id)}
               onDragLeave={() => setDragOverId((id) => (id === w.id ? null : id))}
               onDrop={(e) => handleWidgetDrop(e, w.id)}
@@ -476,6 +610,10 @@ export function GoalDetailPage({
                 <ImageDockWidget widgetId={w.id} />
               ) : w.widgetType === "photo" ? (
                 <QuickPhotoWidget widgetId={w.id} />
+              ) : w.widgetType === "costlog" ? (
+                <CostLogWidget widgetId={w.id} />
+              ) : w.widgetType === "calculator" ? (
+                <CalculatorWidget widgetId={w.id} />
               ) : w.widgetType === "table" ? (
                 <TableWidgetPreview
                   widgetId={w.id}
@@ -529,6 +667,7 @@ export function GoalDetailPage({
               value={goalsDraft}
               onChange={(e) => setGoalsDraft(e.target.value)}
               onBlur={saveGoals}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="What does achieving this actually look like?"
             />
           </div>
@@ -546,6 +685,7 @@ export function GoalDetailPage({
               value={reasoningDraft}
               onChange={(e) => setReasoningDraft(e.target.value)}
               onBlur={saveReasoning}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="Why does this goal matter?"
             />
           </div>
@@ -563,6 +703,7 @@ export function GoalDetailPage({
               value={needsDoingDraft}
               onChange={(e) => setNeedsDoingDraft(e.target.value)}
               onBlur={saveNeedsDoing}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="What actually has to happen?"
             />
           </div>
@@ -606,18 +747,19 @@ export function GoalDetailPage({
             label={ft.label}
             content={ft.content}
             field={f}
+            onResize={handleFieldResize}
           />
         );
       }
     }
   };
 
-  const fieldElements: React.ReactNode[] = [];
-  fields.forEach((f, i) => {
+  const renderFieldWithGap = (f: FieldLayoutRow, i: number): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
     if (rearranging) {
-      fieldElements.push(<FieldGap key={`gap-${f.id}`} order={gapOrderBefore(fields, i)} />);
+      nodes.push(<FieldGap key={`gap-${f.id}`} order={gapOrderBefore(fields, i)} />);
     }
-    fieldElements.push(
+    nodes.push(
       <RearrangeableField
         key={f.id}
         id={f.id}
@@ -634,20 +776,32 @@ export function GoalDetailPage({
         onDrop={handleFieldDrop}
         onDelete={() => handleDeleteField(f)}
         onCopy={() => handleCopyField(f)}
+        columnToolActive={columnToolActive}
+        column={detailColumnCount > 1 ? f.column % detailColumnCount : undefined}
+        onCycleColumn={detailColumnCount > 1 ? () => handleCycleColumn(f) : undefined}
       >
         {renderField(f)}
       </RearrangeableField>
     );
+    return nodes;
+  };
+
+  const columnBuckets: React.ReactNode[][] = Array.from({ length: detailColumnCount }, () => []);
+  fields.forEach((f, i) => {
+    const col = detailColumnCount > 1 ? f.column % detailColumnCount : 0;
+    columnBuckets[col].push(...renderFieldWithGap(f, i));
   });
   if (rearranging) {
-    fieldElements.push(<FieldGap key="gap-end" order={gapOrderAfterLast(fields)} />);
+    columnBuckets[0].push(<FieldGap key="gap-end" order={gapOrderAfterLast(fields)} />);
   }
 
   return (
     <div className="page" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
       <Breadcrumb
         crumbs={[
-          { label: "Goals", onClick: () => onNavigate({ type: "goals-home" }) },
+          goal.isPassionProject
+            ? { label: "Projects", onClick: () => onNavigate({ type: "projects-home" }) }
+            : { label: "Goals", onClick: () => onNavigate({ type: "goals-home" }) },
           ...(goal.dreamId !== null && dreamName
             ? [{ label: dreamName, onClick: () => onNavigate({ type: "dream-detail", dreamId: goal.dreamId! }) }]
             : []),
@@ -655,7 +809,7 @@ export function GoalDetailPage({
         ]}
       />
 
-      <div className="page-header">
+      <div className="page-header detail-page-header-area">
         {editingName ? (
           <input
             className="title-rename-input"
@@ -703,7 +857,15 @@ export function GoalDetailPage({
         </div>
       </div>
 
-      {fieldElements}
+      <div className="detail-page-body">
+        <div className="detail-columns">
+          {columnBuckets.map((bucket, i) => (
+            <div className="detail-column" key={i}>
+              {bucket}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

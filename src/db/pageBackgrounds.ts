@@ -78,3 +78,45 @@ export async function clearPageBackground(scopeKey: string, surfaceKey: string):
     [scopeKey, surfaceKey]
   );
 }
+
+// Only the "section:*" scope keys (Dreams/Goals/Projects/Recipes/
+// Responsibilities/Skills/Notes home & web views — see
+// theme/pageScope.ts's scopeKeyForView) are portable theme content —
+// an entity-specific key like "project:5" is this install's own data
+// (a numeric id nothing else can resolve), not something an AI-authored
+// theme should ever set. These two functions back the Export to AI /
+// Import Theme path (see ExportToAiModal.tsx, SettingsHomePage.tsx)
+// and deliberately only ever touch "section:*" rows.
+export async function fetchAllSectionPageBackgrounds(): Promise<Record<string, Record<string, PageSurfaceOverride>>> {
+  const db = await getDb();
+  const rows = await db.select<(PageBackgroundRow & { scope_key: string })[]>(
+    "SELECT scope_key, surface_key, color, image_data, tile, scale FROM page_background_overrides WHERE scope_key LIKE 'section:%'"
+  );
+  const result: Record<string, Record<string, PageSurfaceOverride>> = {};
+  for (const row of rows) {
+    if (!result[row.scope_key]) result[row.scope_key] = {};
+    result[row.scope_key][row.surface_key] = {
+      color: row.color ?? undefined,
+      imageData: row.image_data ?? undefined,
+      tile: row.tile ?? undefined,
+      scale: row.scale ?? undefined,
+    };
+  }
+  return result;
+}
+
+// Full replace of every "section:*" background (entity-specific rows
+// like "project:5" are left untouched), mirroring how theme import
+// already fully replaces icons/textElements/buttonStyles/themeSettings.
+export async function replaceSectionPageBackgrounds(
+  data: Record<string, Record<string, PageSurfaceOverride>>
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM page_background_overrides WHERE scope_key LIKE 'section:%'");
+  for (const [scopeKey, surfaces] of Object.entries(data)) {
+    if (!scopeKey.startsWith("section:")) continue;
+    for (const [surfaceKey, override] of Object.entries(surfaces)) {
+      await setPageBackground(scopeKey, surfaceKey, override);
+    }
+  }
+}

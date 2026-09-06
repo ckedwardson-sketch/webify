@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { Icon } from "../icons/Icon";
 import { TextElement } from "../icons/TextElement";
+import { ContextMenu } from "./ContextMenu";
+import { itemIdAtPoint } from "../hooks/dragReorder";
 import "./ManagedListRow.css";
 
 interface ManagedListRowProps {
@@ -12,6 +14,7 @@ interface ManagedListRowProps {
   isFrozen?: boolean;
   isHomegrown?: boolean;
   isFavorite?: boolean;
+  isFutureSlot?: boolean;
   onOpen: () => void;
   onRename: (newName: string) => void;
   onDelete: () => void;
@@ -22,19 +25,6 @@ interface ManagedListRowProps {
   onDragEnd: () => void;
 }
 
-// Finds the nearest ancestor (including itself) carrying a
-// data-item-id, starting from whatever element is physically under the
-// pointer right now. Used instead of native dragenter/dragover targets
-// since pointer-capture keeps every event routed to the row that
-// started the drag, not whatever's currently underneath the finger.
-function itemIdAtPoint(x: number, y: number): number | null {
-  const el = document.elementFromPoint(x, y);
-  const row = el?.closest<HTMLElement>("[data-item-id]");
-  if (!row) return null;
-  const id = Number(row.dataset.itemId);
-  return Number.isNaN(id) ? null : id;
-}
-
 export function ManagedListRow({
   id,
   label,
@@ -43,6 +33,7 @@ export function ManagedListRow({
   isFrozen = false,
   isHomegrown = false,
   isFavorite = false,
+  isFutureSlot = false,
   onOpen,
   onRename,
   onDelete,
@@ -55,6 +46,7 @@ export function ManagedListRow({
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(label);
   const [dragging, setDragging] = useState(false);
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
 
   const confirm = () => {
     setEditing(false);
@@ -101,7 +93,10 @@ export function ManagedListRow({
   };
 
   return (
-    <li className={`list-row${dragging ? " list-row-dragging" : ""}`} data-item-id={id}>
+    <li
+      className={`list-row${dragging ? " list-row-dragging" : ""}${isFutureSlot ? " list-row-future-slot" : ""}`}
+      data-item-id={id}
+    >
       {/* Primary Row: Drag Handle, Name, Add Image, Edit, Delete */}
       <div className="list-row-primary">
         <span
@@ -113,6 +108,16 @@ export function ManagedListRow({
         >
           <TextElement elementKey="drag-handle" />
         </span>
+
+        {imageUrl && (
+          <img className="list-row-image" src={imageUrl} alt="" />
+        )}
+
+        {isFutureSlot && (
+          <span className="list-row-future-slot-badge" title="Future Slot — planning idea">
+            <Icon iconKey="future-slot" size={13} /> Future Slot
+          </span>
+        )}
 
         {editing ? (
           <input
@@ -147,12 +152,43 @@ export function ManagedListRow({
           </label>
         )}
 
-        <button className="icon-button" onClick={() => setEditing(true)} title="Rename">
-          <Icon iconKey="rename" size={14} />
+        <button
+          className="icon-button list-row-menu-trigger"
+          title="More"
+          onClick={(e) => setMenuAt({ x: e.clientX, y: e.clientY })}
+        >
+          <Icon iconKey="menu-more" size={14} />
         </button>
-        <button className="icon-button danger" onClick={onDelete} title="Delete">
-          <Icon iconKey="delete" size={14} />
-        </button>
+        {menuAt && (
+          <ContextMenu
+            x={menuAt.x}
+            y={menuAt.y}
+            sections={[
+              {
+                items: [
+                  {
+                    key: "rename",
+                    label: "Rename",
+                    onSelect: () => {
+                      setMenuAt(null);
+                      setEditing(true);
+                    },
+                  },
+                  {
+                    key: "delete",
+                    label: "Delete",
+                    danger: true,
+                    onSelect: () => {
+                      setMenuAt(null);
+                      onDelete();
+                    },
+                  },
+                ],
+              },
+            ]}
+            onClose={() => setMenuAt(null)}
+          />
+        )}
       </div>
 
       {/* Secondary Row: State Flags */}

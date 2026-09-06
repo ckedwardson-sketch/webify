@@ -1,3 +1,9 @@
+.dyn-search-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
 .dyn-search-pages {
   display: flex;
   flex-direction: column;

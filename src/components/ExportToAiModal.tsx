@@ -5,6 +5,8 @@ import { useTheme } from "../theme/ThemeContext";
 import { ThemeExport } from "../theme/themeExport";
 import { buildThemeReferenceDoc } from "../theme/themeReference";
 import { buildAiDesignerInstructions } from "../theme/aiDesignerInstructions";
+import { ICON_REGISTRY } from "../icons/registry";
+import { buildDesignVocabularyDoc } from "../theme/designVocabulary";
 import { buildCaptureTargets, CaptureTarget } from "../capture/captureTargetList";
 import { fetchCaptureSelection, setCaptureTargetSelected } from "../db/captureTargets";
 import { capturesToPdfBlob, downloadBlob, runCaptureBatch } from "../capture/captureEngine";
@@ -31,7 +33,7 @@ export function ExportToAiModal({
   onNavigate,
   onClose,
 }: {
-  getThemeExport: () => ThemeExport;
+  getThemeExport: () => Promise<ThemeExport>;
   onNavigate: (view: View) => void;
   onClose: () => void;
 }) {
@@ -97,7 +99,7 @@ export function ExportToAiModal({
 
       setStatus("Packaging theme + instructions…");
       const generatedAt = new Date().toISOString();
-      const themeExport = getThemeExport();
+      const themeExport = await getThemeExport();
       const referenceDoc = buildThemeReferenceDoc(theme);
       const instructions = buildAiDesignerInstructions({
         userIdea: ideaText,
@@ -109,6 +111,8 @@ export function ExportToAiModal({
       zip.file("AI_DESIGNER_INSTRUCTIONS.md", instructions);
       zip.file("theme-current-state.json", JSON.stringify(themeExport, null, 2));
       zip.file("theme-variable-reference.json", JSON.stringify(referenceDoc, null, 2));
+      zip.file("icon-registry.json", JSON.stringify(ICON_REGISTRY, null, 2));
+      zip.file("design-vocabulary.json", JSON.stringify(buildDesignVocabularyDoc(), null, 2));
       if (pdfBlob) zip.file("screenshots.pdf", pdfBlob);
 
       const zipBlob = await zip.generateAsync({ type: "blob" });

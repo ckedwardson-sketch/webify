@@ -11,7 +11,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(520px, calc(100vw - 40px));
-  max-height: calc(100vh - 60px);
+  max-height: calc(100dvh - 60px);
   overflow-y: auto;
   background: var(--color-bg-elevated);
   color: var(--color-text);
@@ -20,6 +20,19 @@
   padding: 20px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   z-index: 301;
+  box-sizing: border-box;
+}
+
+html.mobile-layout .export-ai-modal {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: none;
+  width: 100%;
+  max-height: calc(100dvh - env(safe-area-inset-top) - var(--keyboard-inset, 0px));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 
 .export-ai-title {

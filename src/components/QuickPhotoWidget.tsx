@@ -3,7 +3,8 @@ import jsPDF from "jspdf";
 import { PhotoEntry, PhotoWidgetSettings, PhotoDisplayMode, PhotoOrientation } from "../types/project";
 import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto, deletePhoto } from "../db/photos";
 import { downloadBlob } from "../capture/captureEngine";
-import { Icon } from "../icons/Icon";
+import { useTheme } from "../theme/ThemeContext";
+import { CornerMenu, Corner } from "./CornerMenu";
 import "./QuickPhotoWidget.css";
 
 const CARD_DECK_VISIBLE = 8;
@@ -88,9 +89,9 @@ async function captureOneFrame(preferredCamera: "front" | "rear" = "rear"): Prom
 }
 
 export function QuickPhotoWidget({ widgetId }: { widgetId: number }) {
+  const { theme, replaceTheme } = useTheme();
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [settings, setSettings] = useState<PhotoWidgetSettings | null>(null);
-  const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [capturing, setCapturing] = useState(false);
@@ -189,36 +190,15 @@ export function QuickPhotoWidget({ widgetId }: { widgetId: number }) {
 
   return (
     <div className="quick-photo-widget" style={{ aspectRatio: settings.orientation === "portrait" ? "3 / 4" : "4 / 3" }}>
-      <div className="quick-photo-menu-wrapper">
-        <button className="quick-photo-menu-button" onClick={() => setShowMenu((v) => !v)} title="Quick Photo settings">
-          <Icon iconKey="menu-more" size={16} />
-        </button>
-        {showMenu && (
-          <>
-            <div className="menu-backdrop" onClick={() => setShowMenu(false)} />
-            <div className="managed-row-dropdown" style={{ top: "100%", right: 0 }}>
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  setShowMenu(false);
-                  setShowSettings(true);
-                }}
-              >
-                Settings
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  setShowMenu(false);
-                  handleExportAlbum();
-                }}
-              >
-                Export album (PDF)
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      <CornerMenu
+        corner={(theme.quickPhotoMenuCorner as Corner) || "tr"}
+        onCornerChange={(corner) => replaceTheme({ quickPhotoMenuCorner: corner })}
+        title="Quick Photo settings"
+        items={[
+          { key: "settings", label: "Settings", onClick: () => setShowSettings(true) },
+          { key: "export", label: "Export album (PDF)", onClick: handleExportAlbum },
+        ]}
+      />
 
       {settings.displayMode === "camera" && (
         <CameraStage

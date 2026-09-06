@@ -4,6 +4,8 @@ import { useRearrangeMode } from "../rearrange/RearrangeModeContext";
 import { isMobileLayoutActive } from "../theme/mobileLayout";
 import { sidebarNavHeaderKey } from "../icons/headerRegistry";
 import { StyledHeader } from "./StyledHeader";
+import { Icon } from "../icons/Icon";
+import { useTheme } from "../theme/ThemeContext";
 import "./Sidebar.css";
 
 interface SidebarProps {
@@ -14,6 +16,7 @@ interface SidebarProps {
 
 export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
   const { active: rearranging, enter: enterRearrangeMode, exit: exitRearrangeMode } = useRearrangeMode();
+  const { theme } = useTheme();
   const isActive = (label: string) => {
     if (label === "Home") return view.type === "home";
     if (label === "Recipes") return view.type.startsWith("recipe");
@@ -23,6 +26,8 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
     if (label === "Projects") return view.type.startsWith("project") || view.type.startsWith("progress");
     if (label === "Goals") return view.type.startsWith("goal");
     if (label === "Notes") return view.type === "notes";
+    if (label === "Skills") return view.type.startsWith("skill");
+    if (label === "Quick Apps") return view.type.startsWith("quick-apps");
     if (view.type === "placeholder") return view.label === label;
     return false;
   };
@@ -36,12 +41,14 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
     if (label === "Projects") return onNavigate({ type: "projects-home" });
     if (label === "Goals") return onNavigate({ type: "goals-home" });
     if (label === "Notes") return onNavigate({ type: "notes" });
+    if (label === "Skills") return onNavigate({ type: "skills-home" });
+    if (label === "Quick Apps") return onNavigate({ type: "quick-apps-home" });
     if (isPlaceholder) return onNavigate({ type: "placeholder", label });
   };
 
   const handleNav = (label: string, isPlaceholder: boolean) => {
     handleClick(label, isPlaceholder);
-    if (isMobileLayoutActive()) onToggle();
+    if (isMobileLayoutActive() && theme.sidebarAutoCloseOnMobileNav !== "0") onToggle();
   };
 
   return (
@@ -66,7 +73,12 @@ export function Sidebar({ view, onNavigate, onToggle }: SidebarProps) {
               className={`sidebar-item ${isActive(item.label) ? "active" : ""}`}
               onClick={() => handleNav(item.label, item.isPlaceholder)}
             >
-              <StyledHeader headerKey={sidebarNavHeaderKey(item.label)}>{item.label}</StyledHeader>
+              <span className="sidebar-item-icon">
+                <Icon iconKey={item.iconKey} size={20} />
+              </span>
+              <span className="sidebar-item-label">
+                <StyledHeader headerKey={sidebarNavHeaderKey(item.label)}>{item.label}</StyledHeader>
+              </span>
             </button>
           </li>
         ))}

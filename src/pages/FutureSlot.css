@@ -1,0 +1,314 @@
+/* Future Slot — a planning/idea card for a recipe that doesn't exist
+   yet. Deliberately breaks from the app's theme colors: it's meant to
+   visually shout "this is different" no matter what theme is active. */
+
+:root {
+  --future-slot-accent: #a855f7;
+  --future-slot-accent-strong: #7c3aed;
+  --future-slot-glow: rgba(192, 132, 252, 0.55);
+  --future-slot-tint: rgba(192, 132, 252, 0.14);
+}
+
+/* ---- RecipeCategoryPage: the header button + inline add input ---- */
+
+.future-slot-add-button {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f3e8ff;
+  background: linear-gradient(135deg, var(--future-slot-accent), var(--future-slot-accent-strong));
+  border-color: var(--future-slot-accent-strong);
+}
+
+.future-slot-add-button:hover {
+  background: linear-gradient(135deg, #b969fb, var(--future-slot-accent-strong));
+}
+
+.inline-add-input-future-slot {
+  border-color: var(--future-slot-accent);
+  box-shadow: 0 0 10px var(--future-slot-glow);
+}
+
+.inline-add-input-future-slot:focus {
+  border-color: var(--future-slot-accent);
+}
+
+/* ---- RecipeDetailPage: the full planning panel ---- */
+
+.future-slot-panel {
+  border: 2px solid var(--future-slot-accent);
+  border-radius: var(--radius-lg, 14px);
+  padding: 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(160deg, var(--future-slot-tint), transparent 60%);
+  box-shadow: 0 0 28px var(--future-slot-glow), inset 0 0 0 1px rgba(192, 132, 252, 0.15);
+}
+
+.future-slot-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.future-slot-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f3e8ff;
+  background: linear-gradient(135deg, var(--future-slot-accent), var(--future-slot-accent-strong));
+}
+
+.future-slot-date {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.future-slot-section {
+  margin-bottom: 16px;
+}
+
+.future-slot-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--future-slot-accent);
+  margin-bottom: 8px;
+}
+
+.future-slot-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.future-slot-link-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--future-slot-accent);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-bg-elevated);
+}
+
+.future-slot-link-chip-label {
+  background: none;
+  border: none;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.future-slot-link-chip-label:hover {
+  text-decoration: underline;
+}
+
+.future-slot-link-chip-remove {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--future-slot-accent);
+  padding: 5px 8px;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.future-slot-link-chip-remove:hover {
+  color: var(--color-danger);
+}
+
+.future-slot-add-link-wrapper {
+  position: relative;
+}
+
+.future-slot-add-link-button {
+  background: none;
+  border: 1px dashed var(--future-slot-accent);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  color: var(--future-slot-accent);
+  cursor: pointer;
+  font: inherit;
+}
+
+.future-slot-add-link-button:hover {
+  background: var(--future-slot-tint);
+}
+
+.future-slot-link-picker {
+  min-width: 240px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-top: 4px;
+}
+
+.future-slot-link-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.future-slot-link-search:focus {
+  outline: none;
+}
+
+.future-slot-link-category {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.future-slot-inspiration-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--future-slot-accent);
+  cursor: pointer;
+  font: inherit;
+}
+
+.future-slot-toggle-caret {
+  display: inline-block;
+  width: 1em;
+}
+
+.future-slot-inspiration-box {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  min-height: 60px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--future-slot-accent);
+  border-radius: var(--radius-md);
+  background-color: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.future-slot-inspiration-box:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--future-slot-glow);
+}
+
+.future-slot-main-editor {
+  border: 1px solid var(--future-slot-accent);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.future-slot-convert-row {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.future-slot-convert-button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--future-slot-accent), var(--future-slot-accent-strong));
+  box-shadow: 0 0 16px var(--future-slot-glow);
+  cursor: pointer;
+  transition: transform var(--motion-speed) var(--motion-easing);
+}
+
+.future-slot-convert-button:hover:not(:disabled) {
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
+}
+
+.future-slot-convert-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- Post-conversion: the collapsed "planning notes" callback ---- */
+
+.future-slot-origin-section {
+  margin-bottom: 20px;
+}
+
+.future-slot-origin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px dashed var(--future-slot-accent);
+  border-radius: 999px;
+  background: none;
+  font-size: 0.8rem;
+  color: var(--future-slot-accent);
+  cursor: pointer;
+  font: inherit;
+}
+
+.future-slot-origin-toggle:hover {
+  background: var(--future-slot-tint);
+}
+
+.future-slot-origin-content {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--future-slot-accent);
+  background: var(--future-slot-tint);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.future-slot-link-chip-readonly {
+  border: 1px solid var(--future-slot-accent);
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.future-slot-inspiration-readonly {
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+/* Recipe that was once a Future Slot, now real — stands out with a
+   subtle persistent glow around the whole page so it never looks like
+   just another ordinary recipe. */
+.recipe-future-slot-glow .cover-image-wrapper,
+.recipe-future-slot-glow .cover-image-placeholder {
+  box-shadow: 0 0 22px var(--future-slot-glow);
+  border: 1px solid var(--future-slot-accent);
+}
+
+.recipe-future-slot-glow .detail-header .page-title,
+.recipe-future-slot-glow .title-rename-input {
+  text-shadow: 0 0 14px var(--future-slot-glow);
+}

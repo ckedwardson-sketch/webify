@@ -17,6 +17,8 @@ export function RearrangeToolbar() {
     toggleDeleteTool,
     copyToolActive,
     toggleCopyTool,
+    columnToolActive,
+    toggleColumnTool,
     clipboard,
     target,
     showAddMenu,
@@ -59,6 +61,9 @@ export function RearrangeToolbar() {
         active={copyToolActive}
         onClick={toggleCopyTool}
       />
+      {!!target?.columnCount && target.columnCount > 1 && (
+        <ToolButton icon="🔢" label="Assign field columns" active={columnToolActive} onClick={toggleColumnTool} />
+      )}
       {hasWidgetSystem && (
         <>
           <ToolButton icon="💾" label="Save layout" onClick={() => setShowSave(true)} />
@@ -83,6 +88,9 @@ export function RearrangeToolbar() {
           Holding "{clipboard.label}" — click any blue line between fields to paste it there, or the green field to
           cancel.
         </div>
+      )}
+      {columnToolActive && (
+        <div className="rearrange-hint">Click a field to cycle which column it renders in.</div>
       )}
       {showAddMenu && (
         <div className="rearrange-hint">

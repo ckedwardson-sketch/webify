@@ -1,0 +1,39 @@
+.quick-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+html.mobile-layout .quick-apps-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-app-slot {
+  min-width: 0;
+  aspect-ratio: 4 / 5;
+  min-height: 220px;
+}
+
+/* At 2 columns a 4:5 slot runs taller than it needs to — cap it so
+   ~2.5 rows peek into the viewport as a scroll affordance, since
+   horizontal panning is disabled app-wide on mobile (overflow-x: clip
+   on .app-content, see theme/mobile.css). */
+html.mobile-layout .quick-app-slot {
+  aspect-ratio: auto;
+  min-height: 0;
+  height: 34vh;
+}
+
+.quick-app-slot-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}

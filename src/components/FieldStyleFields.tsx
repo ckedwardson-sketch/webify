@@ -16,10 +16,25 @@ import "./FieldStyleFields.css";
 export function FieldStyleFields({
   field,
   onSave,
+  onRename,
 }: {
   field: FieldLayoutRow;
   onSave: (patch: FieldStylePatch) => void;
+  onRename: (label: string | null) => void;
 }) {
+  const defaultLabel = FIELD_TYPE_LABELS[field.fieldType];
+  const [labelDraft, setLabelDraft] = useState(field.customLabel ?? "");
+
+  const commitLabel = () => {
+    const trimmed = labelDraft.trim();
+    if (!trimmed || trimmed === defaultLabel) {
+      setLabelDraft("");
+      if (field.customLabel !== null) onRename(null);
+      return;
+    }
+    if (trimmed !== field.customLabel) onRename(trimmed);
+  };
+
   const hasContentOverride =
     field.contentFontSize != null ||
     field.contentColor != null ||
@@ -34,6 +49,24 @@ export function FieldStyleFields({
 
   return (
     <div className="field-style-fields">
+      <div className="field-style-section field-style-section-full">
+        <div className="field-style-section-title">Label</div>
+        <label className="field-style-row">
+          <span>Name</span>
+          <input
+            type="text"
+            placeholder={defaultLabel}
+            value={labelDraft}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            onBlur={commitLabel}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setLabelDraft(field.customLabel ?? "");
+            }}
+          />
+        </label>
+      </div>
+
       <div className="field-style-section">
         <div className="field-style-section-title">Text &amp; box</div>
         <label className="field-style-row">

@@ -9,13 +9,15 @@ import {
 import { fetchTable, saveTable } from "./tables";
 import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto } from "./photos";
 import { fetchDockImages, addDockImage } from "./dockImages";
+import { fetchCostEntries, addCostEntry } from "./costLog";
 import { recordEntityHistory, deleteEntityHistoryFor } from "./entityHistory";
 
 const PROJECT_COLUMNS = `
   id, dream_id as dreamId, goal_id as goalId, name, goals, reasoning, needs_doing as needsDoing,
   estimated_start_date as estimatedStartDate,
   expected_date_start as expectedDateStart, expected_date_end as expectedDateEnd,
-  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt
+  web_pos_x as webPosX, web_pos_y as webPosY,
+  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt, image_data as imageData
 `;
 
 type RawProjectRow = {
@@ -29,9 +31,12 @@ type RawProjectRow = {
   estimatedStartDate: string | null;
   expectedDateStart: string | null;
   expectedDateEnd: string | null;
+  webPosX: number | null;
+  webPosY: number | null;
   sortOrder: number;
   createdAt: string | null;
   updatedAt: string | null;
+  imageData: string | null;
 };
 
 function mapProjectRow(row: RawProjectRow): Project {
@@ -42,7 +47,22 @@ function mapProjectRow(row: RawProjectRow): Project {
     expectedDateEnd: row.expectedDateEnd ?? undefined,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
+    imageData: row.imageData ?? undefined,
   };
+}
+
+export async function updateProjectImage(id: number, imageData: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE projects SET image_data = $1 WHERE id = $2", [imageData, id]);
+}
+
+// A project card's dragged offset from its automatic grid slot on its
+// goal's web (see webGraph/goalCluster.ts) — null/unset = sits exactly
+// at the grid slot, same "offset from base" convention progress nodes
+// already use for their own drag position.
+export async function updateProjectWebPosition(id: number, x: number, y: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE projects SET web_pos_x = $1, web_pos_y = $2 WHERE id = $3", [x, y, id]);
 }
 
 export async function fetchAllProjects(): Promise<Project[]> {
@@ -202,7 +222,9 @@ export async function deleteProject(id: number): Promise<void> {
 // but both owners read it identically.
 export const WIDGET_COLUMNS = `
   id, project_id as projectId, goal_id as goalId, widget_type as widgetType, title,
-  sort_order as sortOrder, created_at as createdAt
+  sort_order as sortOrder, created_at as createdAt,
+  web_type as webType, web_owner_id as webOwnerId,
+  pos_x as posX, pos_y as posY, width, height
 `;
 
 export async function fetchWidgetsForProject(projectId: number): Promise<ProjectWidget[]> {
@@ -243,6 +265,62 @@ export async function addWidget(
 export async function deleteWidget(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM project_widgets WHERE id = $1", [id]);
+}
+
+// ---- Web (canvas) widgets ------------------------------------------------
+// The same project_widgets rows as above, but free-floating on a Goal
+// Web or Dream Web canvas instead of living in a grid — see
+// components/WebWidgetNode.tsx. project_id/goal_id stay NULL; web_type/
+// web_owner_id take their place, same "one owner column pair, mutually
+// exclusive" convention note_web_links uses.
+
+export async function fetchWidgetsForWeb(webType: "goal" | "dream", ownerId: number): Promise<ProjectWidget[]> {
+  const db = await getDb();
+  return db.select<ProjectWidget[]>(
+    `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE web_type = $1 AND web_owner_id = $2 ORDER BY sort_order`,
+    [webType, ownerId]
+  );
+}
+
+// Batch variant for Dream Web, which renders every dream at once — same
+// convention as fetchNoteWebLinksForOwners.
+export async function fetchWidgetsForWebOwners(webType: "goal" | "dream", ownerIds: number[]): Promise<ProjectWidget[]> {
+  if (ownerIds.length === 0) return [];
+  const db = await getDb();
+  const placeholders = ownerIds.map((_, i) => `$${i + 2}`).join(", ");
+  return db.select<ProjectWidget[]>(
+    `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE web_type = $1 AND web_owner_id IN (${placeholders})`,
+    [webType, ...ownerIds]
+  );
+}
+
+export async function addWebWidget(
+  webType: "goal" | "dream",
+  ownerId: number,
+  widgetType: ProjectWidgetType,
+  title: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute(
+    `INSERT INTO project_widgets (web_type, web_owner_id, widget_type, title, pos_x, pos_y, width, height)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [webType, ownerId, widgetType, title, x, y, width, height]
+  );
+  return result.lastInsertId as number;
+}
+
+export async function updateWebWidgetPosition(id: number, x: number, y: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE project_widgets SET pos_x = $1, pos_y = $2 WHERE id = $3", [x, y, id]);
+}
+
+export async function updateWebWidgetSize(id: number, width: number, height: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE project_widgets SET width = $1, height = $2 WHERE id = $3", [width, height, id]);
 }
 
 // Rearrange mode's drag-reorder (see components/RearrangeToolbar.tsx) —
@@ -311,6 +389,15 @@ export async function duplicateWidget(id: number): Promise<number | null> {
     case "dock": {
       const images = await fetchDockImages(id);
       for (const img of images) await addDockImage(newId, img.imageData);
+      break;
+    }
+    case "costlog": {
+      const entries = await fetchCostEntries(id);
+      for (const e of entries) await addCostEntry(newId, e.amount, e.description);
+      break;
+    }
+    case "calculator": {
+      // No persisted state to duplicate — the new widget starts empty.
       break;
     }
   }

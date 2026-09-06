@@ -5,7 +5,7 @@
   transform: translate(-50%, -50%);
   z-index: 260;
   width: min(480px, 90vw);
-  max-height: 80vh;
+  max-height: calc(80dvh - var(--keyboard-inset, 0px));
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -15,6 +15,20 @@
   border-radius: var(--radius-md);
   padding: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+html.mobile-layout .node-widget-overlay {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: none;
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(85dvh - var(--keyboard-inset, 0px));
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 
 .node-widget-overlay-header {

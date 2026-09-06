@@ -1,4 +1,4 @@
-import { CSSProperties } from "react";
+import { CSSProperties, MouseEvent } from "react";
 import { FieldLayoutRow, FieldStylePatch } from "../db/fieldLayout";
 
 // Translates a field_layout row's per-page style overrides into inline
@@ -22,7 +22,24 @@ export function contentStyle(f: FieldLayoutRow): CSSProperties {
     style.borderWidth = `${f.contentBorderWidth}px`;
     style.borderStyle = style.borderStyle ?? "solid";
   }
+  // Persisted per field_layout row (not per field *type*), so resizing
+  // one goal's Description never touches another goal's, or that same
+  // goal's Reasoning field — see updateFieldLayoutHeight/onResizeField.
+  if (f.heightPx != null) style.height = `${f.heightPx}px`;
   return style;
+}
+
+// Reads a just-resized textarea/element's own rendered height and
+// persists it via onResizeField — call from a resizable field's
+// onMouseUp (native `resize: vertical` reports its new size through
+// the DOM, there's no resize event, so mouseup-after-drag is the
+// standard way to capture it).
+export function handleFieldResizeMouseUp(
+  e: MouseEvent<HTMLElement>,
+  fieldId: number,
+  onResizeField: ((fieldId: number, heightPx: number | null) => void) | undefined
+) {
+  onResizeField?.(fieldId, e.currentTarget.offsetHeight);
 }
 
 export function headerStyle(f: FieldLayoutRow): CSSProperties {

@@ -78,6 +78,17 @@ html.mobile-layout .nav-history-bar {
   padding: 0 8px;
 }
 
+/* When the sidebar is collapsed, .sidebar-toggle-floating (30px wide,
+   positioned at left: 12px + safe-area-inset-left, see Sidebar.css)
+   floats on top of this bar. Reserve exactly that much space on the
+   left so the bar's content shifts right instead of hiding behind the
+   button — computed from the same numbers the button uses, not a
+   fixed value tied to one screen width, so it stays correct at any
+   size and under mobile layout too. */
+.app-shell.sidebar-collapsed .nav-history-bar {
+  padding-left: calc(12px + env(safe-area-inset-left) + 30px + 10px);
+}
+
 html.mobile-layout .nav-history-scroll {
   padding: 6px 2px;
   font-size: 0.74rem;

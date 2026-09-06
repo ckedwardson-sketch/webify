@@ -20,6 +20,7 @@ export function FieldStyleQuickEdit({ fieldId }: { fieldId: number }) {
 
   return (
     <FieldStyleFields
+      key={field.id}
       field={field}
       onSave={(patch) => target.onSave(field.id, patch)}
       onRename={(label) => target.onRename(field.id, label)}

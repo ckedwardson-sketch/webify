@@ -9,6 +9,7 @@ import { buildSettingsSearchIndex } from "./settingsSearchIndex";
 import { useDynamicOverlay } from "../overlay/DynamicOverlayContext";
 import { ThemeExport } from "../theme/themeExport";
 import { isValidCustomSliderDef } from "../theme/customSliders";
+import { fetchAllSectionPageBackgrounds, replaceSectionPageBackgrounds } from "../db/pageBackgrounds";
 import { ExportToAiModal } from "../components/ExportToAiModal";
 import { CustomThemeSliders } from "../components/CustomThemeSliders";
 import "./Page.css";
@@ -19,9 +20,14 @@ const NAV_CARDS: { view: View; title: string; desc: string }[] = [
   { view: { type: "settings-text" }, title: "Text Elements", desc: "Editor toolbar letters, size, color" },
   { view: { type: "settings-buttons" }, title: "Buttons", desc: "Text, font, colors, box size" },
   { view: { type: "settings-theme" }, title: "Theme", desc: "Colors, fonts, radius, density, backgrounds" },
+  { view: { type: "settings-mobile" }, title: "Mobile", desc: "Layout Mode: Automatic, Mobile, or Desktop" },
   { view: { type: "settings-editor" }, title: "Editor Tools", desc: "Toolbar, right-click menu, selection menu, slash commands" },
   { view: { type: "settings-headers" }, title: "Headers", desc: "Sidebar title/nav item font size, color, bold, underline" },
+  { view: { type: "settings-widget-visibility" }, title: "Widget Visibility", desc: "Show/hide capture, search, web controls, and labor legend buttons" },
+  { view: { type: "settings-panel-memory" }, title: "Panel & Layout Memory", desc: "Choose which layout choices (sidebar, dual-pane, notes tree) survive a restart" },
+  { view: { type: "settings-page-settings" }, title: "Page Settings", desc: "Per-web layout: node scaling, columns, and more as it's built" },
   { view: { type: "settings-issues" }, title: "Reported Issues", desc: "Notes + screenshots saved from the capture button" },
+  { view: { type: "settings-sync" }, title: "Sync", desc: "Sync this device's database with the computer over wifi" },
   { view: { type: "settings-dynamic-search" }, title: "Dynamic Settings Search", desc: "Every setting, grouped by page and location" },
 ];
 
@@ -72,7 +78,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     loadPresets();
   }, []);
 
-  const captureCurrentExport = (): ThemeExport => ({
+  const captureCurrentExport = async (): Promise<ThemeExport> => ({
     icons: iconOverrides,
     textElements: textOverrides,
     buttonStyles: buttonOverrides,
@@ -82,6 +88,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     // rather than resetting sliders back to whatever the original
     // designer shipped.
     customSliders: customSliders.map(({ value, ...def }) => ({ ...def, default: value })),
+    pageBackgrounds: await fetchAllSectionPageBackgrounds(),
   });
 
   // Shared by file import and preset-apply: full replace, not merge —
@@ -102,6 +109,9 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     for (const key of Object.keys(buttonOverrides)) await clearButtonOverride(key);
     await replaceTheme(themeSettings);
     await replaceCustomSliders(customSliderDefs);
+    if (parsed.pageBackgrounds && typeof parsed.pageBackgrounds === "object") {
+      await replaceSectionPageBackgrounds(parsed.pageBackgrounds);
+    }
 
     let iconCount = 0,
       textCount = 0,
@@ -135,8 +145,8 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     };
   };
 
-  const handleExport = () => {
-    const data = captureCurrentExport();
+  const handleExport = async () => {
+    const data = await captureCurrentExport();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -188,7 +198,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     if (!name) return;
     setSavingPreset(true);
     try {
-      const data = JSON.stringify(captureCurrentExport());
+      const data = JSON.stringify(await captureCurrentExport());
       await savePreset(name, data);
       setPresetNameDraft("");
       loadPresets();
@@ -313,7 +323,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+      <div className="settings-theme-file-row">
         <button className="add-button secondary" onClick={handleExport}>
           Export Theme
         </button>
@@ -343,6 +353,25 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
 
       <div style={{ marginTop: "20px" }}>
         <CustomThemeSliders />
+      </div>
+
+      <div style={{ marginTop: "28px", paddingTop: "14px", borderTop: "1px solid var(--color-border, #ccc)" }}>
+        <button
+          onClick={() => onNavigate({ type: "vault" })}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            font: "inherit",
+            fontSize: "0.8rem",
+            color: "var(--color-text-secondary)",
+            cursor: "pointer",
+            opacity: 0.7,
+          }}
+          title="A separate, encrypted notes area"
+        >
+          🔒 Vault
+        </button>
       </div>
 
       {showExportToAi && (

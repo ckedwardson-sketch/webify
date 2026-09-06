@@ -23,4 +23,27 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-fs = "2"
+
+# Sync (see src/sync.rs) talks plain HTTP LAN-to-LAN and streams the db
+# file straight to/from disk on both ends — no TLS backend needed, which
+# keeps this dependency-light to cross-compile for Android.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }
+
+# Standalone sqlite connection for VACUUM INTO snapshotting/restoring the
+# db file directly, independent of whatever the frontend's own plugin-sql
+# connection is doing — needed on every platform, since both the desktop
+# (server) and mobile (client upload) sides snapshot their own db.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Desktop-only local sync server (see src/sync.rs) — a tiny blocking HTTP
+# server the phone talks to over the home LAN.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tiny_http = "0.12"
+
+# opt-level lowered from the default 3 to reduce peak memory usage during
+# release compilation — this machine has only ~8GB RAM and rustc's codegen
+# was OOM-crashing at the default optimization level.
+[profile.release]
+opt-level = 1
 

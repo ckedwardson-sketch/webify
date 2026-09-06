@@ -131,3 +131,45 @@
   font-size: 0.78rem;
   color: var(--color-text-secondary);
 }
+
+.settings-theme-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+html.mobile-layout .settings-search-result {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+html.mobile-layout .settings-search-result-section {
+  width: 100%;
+}
+
+html.mobile-layout .settings-card-grid {
+  grid-template-columns: 1fr;
+}
+
+html.mobile-layout .theme-color-row {
+  flex-wrap: wrap;
+}
+
+html.mobile-layout .theme-color-label {
+  flex: 1 1 100%;
+}
+
+html.mobile-layout .theme-color-row select {
+  min-width: 0;
+  width: 100%;
+}
+
+html.mobile-layout .theme-mode-toggle {
+  flex-wrap: wrap;
+}
+
+html.mobile-layout .theme-mode-button {
+  flex: 1;
+  min-height: 44px;
+}

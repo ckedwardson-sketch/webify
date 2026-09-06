@@ -78,6 +78,48 @@ export function parseAngleHandleId(handleId: string | null | undefined): number 
   return m ? Number(m[1]) : null;
 }
 
+// Snaps any angle (including a continuously-computed default) to one of
+// the 16 actually-rendered ring handles, so a sourceHandle/targetHandle
+// id set on an edge always references a real handle. The *visual* line
+// itself still uses the precise, unsnapped angle (see AngleEdge below) —
+// this snapping only affects which handle id gets referenced.
+export function snapToAnchor(angle: number): number {
+  return (Math.round(angle / ANCHOR_ANGLE_STEP) * ANCHOR_ANGLE_STEP + 360) % 360;
+}
+
+// A ring of grab points around a plain rectangular card (project/task/
+// responsibility/goal-summary cards on Goal Web + Dream Web's "full"
+// view) — same convention as AngleHandleRing above, just always
+// "rectangle" shaped since those cards have no shape system of their
+// own. Exported so GoalGraphNodes.tsx and ProgressGraphNodes.tsx can
+// both use it without duplicating the ring math.
+export function CardAngleRing() {
+  return (
+    <>
+      {angleRingHandles("rectangle").map(({ angle, style }) => (
+        <Handle
+          key={`out-${angle}`}
+          id={`out-${angle}`}
+          type="source"
+          position={Position.Top}
+          className="goal-web-link-handle"
+          style={style}
+        />
+      ))}
+      {angleRingHandles("rectangle").map(({ angle, style }) => (
+        <Handle
+          key={`in-${angle}`}
+          id={`in-${angle}`}
+          type="target"
+          position={Position.Top}
+          className="goal-web-link-handle"
+          style={style}
+        />
+      ))}
+    </>
+  );
+}
+
 function angleRingHandles(shape: string) {
   return ANCHOR_ANGLES.map((angle) => {
     const pt = pointOnShapeBoundary(shape, angle);
@@ -157,9 +199,19 @@ export function anchorPoint(
 export function DreamNode({ data }: { data: DreamNodeData }) {
   const { theme } = useTheme();
   const { zoom } = useViewport();
-  const scale = (PRIORITY_SCALE[data.priority] ?? 1) * zoomCompensation(zoom);
+  const priorityScale = PRIORITY_SCALE[data.priority] ?? 1;
+  const scale = priorityScale * zoomCompensation(zoom);
   const width = DREAM_BASE_WIDTH * scale;
   const height = DREAM_BASE_HEIGHT * scale;
+  // Anchor size — priority-scaled but NOT zoom-compensated, i.e. exactly
+  // what nodeSizeFor(priority, 1) in DreamWebPage.tsx uses for edge
+  // anchoring and node placement. The outer wrapper below stays pinned
+  // to this size/position (so edges and drag hit-testing never drift);
+  // zoomCompensation's extra growth is applied only to an inner overlay
+  // centered on top of it, so the node visually grows/shrinks around
+  // its own center as you zoom instead of ballooning from the top-left.
+  const anchorWidth = DREAM_BASE_WIDTH * priorityScale;
+  const anchorHeight = DREAM_BASE_HEIGHT * priorityScale;
   const priorityColors: Record<DreamPriority, string> = {
     low: theme.dreamPriorityLow,
     medium: theme.dreamPriorityMedium,
@@ -183,8 +235,8 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
     <div
       className="dream-node"
       style={{
-        width: `${width}px`,
-        height: growToFit ? "auto" : `${height}px`,
+        width: `${anchorWidth}px`,
+        height: growToFit ? "auto" : `${anchorHeight}px`,
         position: "relative",
         // Read by .dream-node-shape-layer's hover rule (DreamWebPage.css)
         // — filter: drop-shadow() follows the clipped silhouette itself,
@@ -194,7 +246,20 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
         ["--dream-edge-glow-color" as string]: theme.dreamLinkColor,
       }}
     >
-      <div style={{ position: "relative", width: "100%", height: `${height}px` }}>
+      <div style={{ position: "relative", width: "100%", height: `${anchorHeight}px` }}>
+        {/* Zoom-scaled visual box, centered on the fixed anchor slot
+            above so growth reads as "around the center" rather than
+            down-and-right from the anchor's top-left corner. */}
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            width: `${width}px`,
+            height: `${height}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
         {/* Only this decorative layer is clipped to a non-rectangular
             shape — the name/date below live in an unclipped layer so a
             hexagon/diamond/blob never hides them. */}
@@ -271,6 +336,7 @@ export function DreamNode({ data }: { data: DreamNodeData }) {
         </span>
       </div>
       </div>
+      </div>
 
       {growToFit && (
         <div
@@ -326,6 +392,58 @@ function GoalAttachHandle() {
       <Handle id="out-0" type="source" position={Position.Top} className="dream-edge-handle" style={style} />
       <Handle id="in-0" type="target" position={Position.Top} className="dream-edge-handle" style={style} />
     </>
+  );
+}
+
+// A skill auto-appears clustered near a dream it's linked to (see
+// db/skills.ts's dream_skills) — compact, no priority/date system of
+// its own, same idea as DreamGoalNode. Clicking opens that skill's tree.
+export const SKILL_NODE_WIDTH = 170;
+export const SKILL_NODE_HEIGHT = 76;
+
+export interface SkillDreamNodeData {
+  name: string;
+  currentLevelName: string;
+  onOpen: () => void;
+}
+
+export function SkillDreamNode({ data }: { data: SkillDreamNodeData }) {
+  const { theme } = useTheme();
+  return (
+    <div
+      onClick={data.onOpen}
+      style={{
+        width: `${SKILL_NODE_WIDTH}px`,
+        height: `${SKILL_NODE_HEIGHT}px`,
+        borderRadius: "8px",
+        border: `2px solid ${theme.dreamGoalNodeOutlineColor}`,
+        background: "rgba(88, 28, 135, 0.55)",
+        boxShadow: "0 3px 8px rgba(0,0,0,0.3)",
+        boxSizing: "border-box",
+        padding: "8px 10px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: "3px",
+        color: "#ffffff",
+        cursor: "pointer",
+        position: "relative",
+      }}
+      title={`Skill: ${data.name}`}
+    >
+      {/* Drag from anywhere on the edge to link this skill to another
+          node (dream, goal, or another skill) — see DreamWebPage.tsx's
+          dream_web_links. */}
+      <CardAngleRing />
+      <span
+        style={{ fontSize: "13px", fontWeight: "bold", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+      >
+        🧠 {data.name}
+      </span>
+      <span style={{ fontSize: "11px", opacity: 0.85, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {data.currentLevelName || "No level set"}
+      </span>
+    </div>
   );
 }
 

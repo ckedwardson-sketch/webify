@@ -1,24 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "../types/nav";
 import { Project, Goal, ProjectWidget } from "../types/project";
 import { Dream } from "../types/models";
-import { fetchAllProjects, addProject } from "../db/projects";
+import { fetchAllProjects, addProject, updateProjectField, updateProjectImage, deleteProject } from "../db/projects";
 import { fetchDreamGraphData } from "../db/dreams";
 import { fetchPassionProjects, addPassionProject, fetchWidgetsForGoal } from "../db/goals";
 import { ImageDockWidget } from "../components/ImageDockWidget";
+import { PaneGrid } from "../components/PaneGrid";
 import { Icon } from "../icons/Icon";
+import { useTheme } from "../theme/ThemeContext";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { parseDecals } from "../theme/decals";
+import { DecalLayer } from "../theme/DecalLayer";
 import "./Page.css";
 import "./ProjectsHomePage.css";
 
 const NO_DREAM = "none";
-// Minimum number of project rows' worth of space kept between the
-// Projects list and the Passion Projects header — even with 0 or 1
-// projects, the gap looks like there were 8; past 8 real projects the
-// section just moves down naturally as the list grows.
-const PASSION_BUFFER_ROWS = 8;
-const PROJECT_ROW_HEIGHT = 50;
 
 export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const { theme } = useTheme();
+  const { overrides: pageBgOverrides, scopeKey: pageBgScopeKey } = usePageBackground();
+  const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [dreams, setDreams] = useState<Dream[]>([]);
   const [passionProjects, setPassionProjects] = useState<Goal[]>([]);
@@ -53,6 +55,32 @@ export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => v
   };
 
   useEffect(load, []);
+
+  const handleSetImage = (id: number, file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      await updateProjectImage(id, reader.result as string);
+      load();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // "manual" leaves fetch order untouched (today's behavior). "created"/
+  // "updated" go newest-first, matching the convention used elsewhere in
+  // the app (see theme_presets/issue_reports ORDER BY created_at DESC).
+  const sortedProjects = useMemo(() => {
+    const order = theme.projectsHomeSortOrder;
+    if (order === "name") {
+      return [...projects].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (order === "created") {
+      return [...projects].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    }
+    if (order === "updated") {
+      return [...projects].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+    }
+    return projects;
+  }, [projects, theme.projectsHomeSortOrder]);
 
   const dreamNames = Object.fromEntries(dreams.map((d) => [d.id, d.name]));
 
@@ -105,7 +133,8 @@ export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => v
   }
 
   return (
-    <div className="page">
+    <div className="page" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
+      <DecalLayer decals={decals} target="page-bg" surface={pageBgScopeKey ?? undefined} />
       <div className="page-header">
         <h1 className="page-title">Projects</h1>
         <button className="add-button" onClick={startAdd}>
@@ -155,12 +184,22 @@ export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => v
           Passion Projects section below always starts at least that far
           down, regardless of how few real projects exist — see
           PASSION_BUFFER_ROWS's comment. */}
-      <div style={{ minHeight: PASSION_BUFFER_ROWS * PROJECT_ROW_HEIGHT }}>
+      <div className="projects-list-buffer">
         {projects.length === 0 ? (
           <p className="page-text">No projects yet.</p>
+        ) : theme.projectViewMode === "pane-small" || theme.projectViewMode === "pane-large" || theme.projectViewMode === "icon-grid" ? (
+          <PaneGrid
+            items={sortedProjects.map((p) => ({ id: p.id, label: p.name, imageUrl: p.imageData }))}
+            size={theme.projectViewMode === "pane-large" ? "large" : "small"}
+            surface="project"
+            onOpen={(id) => onNavigate({ type: "project-detail", projectId: id })}
+            onRename={(id, name) => updateProjectField(id, "name", name).then(load)}
+            onDelete={(id) => deleteProject(id).then(load)}
+            onSetImage={handleSetImage}
+          />
         ) : (
           <ul className="list">
-            {projects.map((p) => (
+            {sortedProjects.map((p) => (
               <li key={p.id}>
                 <div className="projects-list-row">
                   <button

@@ -78,6 +78,12 @@ export interface RearrangeTarget {
   onUnpairField?: (secondaryId: number) => Promise<void>;
   onRenameField?: (fieldId: number, label: string | null) => Promise<void>;
   onResizeField?: (fieldId: number, heightPx: number | null) => Promise<void>;
+  // Only present when theme.detailColumnCount > 1 — gates the toolbar's
+  // Columns tool (see RearrangeToolbar.tsx). onSetFieldColumn assigns a
+  // field to a 0-indexed column; the page re-groups its rendering by
+  // column, sort_order stays a single flat ordering underneath.
+  columnCount?: number;
+  onSetFieldColumn?: (fieldId: number, column: number) => Promise<void>;
 }
 
 interface RearrangeModeContextValue {
@@ -93,6 +99,11 @@ interface RearrangeModeContextValue {
   // pasting and adding a fresh field both come from the same click.
   copyToolActive: boolean;
   toggleCopyTool: () => void;
+  // Click-to-assign column tool — only meaningful when target.columnCount
+  // is set (see RearrangeTarget above). Mutually exclusive with
+  // delete/copy, same convention as those two.
+  columnToolActive: boolean;
+  toggleColumnTool: () => void;
   clipboard: FieldClipboard | null;
   copiedFieldId: number | null;
   copyField: (fieldId: number, content: FieldClipboard) => void;
@@ -126,6 +137,7 @@ export function RearrangeModeProvider({ children }: { children: React.ReactNode 
   const [active, setActive] = useState(false);
   const [deleteToolActive, setDeleteToolActive] = useState(false);
   const [copyToolActive, setCopyToolActive] = useState(false);
+  const [columnToolActive, setColumnToolActive] = useState(false);
   const [clipboard, setClipboard] = useState<FieldClipboard | null>(null);
   const [copiedFieldId, setCopiedFieldId] = useState<number | null>(null);
   const [target, setTarget] = useState<RearrangeTarget | null>(null);
@@ -142,6 +154,7 @@ export function RearrangeModeProvider({ children }: { children: React.ReactNode 
         setActive(false);
         setDeleteToolActive(false);
         setCopyToolActive(false);
+        setColumnToolActive(false);
         setClipboard(null);
         setCopiedFieldId(null);
         setShowAddMenu(false);
@@ -153,11 +166,19 @@ export function RearrangeModeProvider({ children }: { children: React.ReactNode 
       toggleDeleteTool: () => {
         setDeleteToolActive((v) => !v);
         setCopyToolActive(false);
+        setColumnToolActive(false);
       },
       copyToolActive,
       toggleCopyTool: () => {
         setCopyToolActive((v) => !v);
         setDeleteToolActive(false);
+        setColumnToolActive(false);
+      },
+      columnToolActive,
+      toggleColumnTool: () => {
+        setColumnToolActive((v) => !v);
+        setDeleteToolActive(false);
+        setCopyToolActive(false);
       },
       clipboard,
       copiedFieldId,
@@ -241,7 +262,7 @@ export function RearrangeModeProvider({ children }: { children: React.ReactNode 
         );
       },
     }),
-    [active, deleteToolActive, copyToolActive, clipboard, copiedFieldId, target, showAddMenu, insertAt, undoStack, redoStack]
+    [active, deleteToolActive, copyToolActive, columnToolActive, clipboard, copiedFieldId, target, showAddMenu, insertAt, undoStack, redoStack]
   );
 
   return <RearrangeModeContext.Provider value={value}>{children}</RearrangeModeContext.Provider>;

@@ -6,6 +6,7 @@
 // component-to-component import.
 import { TextElementOverride } from "../db/textElements";
 import { ButtonStyleOverride } from "../db/buttonStyles";
+import { PageSurfaceOverride } from "../db/pageBackgrounds";
 import { ThemeSettings } from "./themeDefaults";
 import { CustomSliderDef } from "./customSliders";
 
@@ -19,4 +20,10 @@ export interface ThemeExport {
   // the full contract an AI designer follows to add adjustable sliders
   // (e.g. a grain-overlay opacity knob) to a theme it hands back.
   customSliders?: CustomSliderDef[];
+  // Optional — per-section "Color Mode" page backgrounds (see
+  // PageBackgroundContext.tsx / db/pageBackgrounds.ts), keyed by the
+  // "section:*" scope keys from theme/pageScope.ts. Only ever the
+  // portable section-level keys, never an entity-specific one like
+  // "project:5" — those are this install's own data, not theme content.
+  pageBackgrounds?: Record<string, Record<string, PageSurfaceOverride>>;
 }

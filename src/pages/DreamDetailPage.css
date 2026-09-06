@@ -1,3 +1,64 @@
+.dream-skills-section {
+  margin-bottom: 20px;
+}
+
+.dream-skills-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dream-skills-picker,
+.dream-skills-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dream-skills-picker {
+  margin-bottom: 8px;
+}
+
+.dream-skill-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.dream-skill-chip:hover {
+  background: var(--color-bg-elevated);
+}
+
+.dream-skill-chip.pickable {
+  border-style: dashed;
+}
+
+.dream-skill-chip-level {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.dream-skill-chip-remove {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+}
+
+.dream-skill-chip-remove:hover {
+  color: var(--color-danger);
+}
+
 .dream-field {
   display: flex;
   flex-direction: column;
@@ -61,11 +122,25 @@
 .dream-reason-modal {
   width: 420px;
   max-width: 90vw;
+  max-height: calc(100dvh - 24px - var(--keyboard-inset, 0px));
+  overflow-y: auto;
+  box-sizing: border-box;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+html.mobile-layout .dream-reason-backdrop {
+  align-items: flex-end;
+}
+
+html.mobile-layout .dream-reason-modal {
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 
 .dream-reason-title {

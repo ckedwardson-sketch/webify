@@ -15,9 +15,18 @@ export interface Project {
   estimatedStartDate?: string;
   expectedDateStart?: string;
   expectedDateEnd?: string;
+  // Dragged offset from this project card's automatic grid slot on its
+  // goal's web (see webGraph/goalCluster.ts) — null = sits exactly at
+  // the grid slot.
+  webPosX: number | null;
+  webPosY: number | null;
   sortOrder: number;
   createdAt?: string;
   updatedAt?: string;
+  // Cover image shown as a thumbnail in pane/icon-grid view and list-
+  // image-left mode — same convention as recipes.imageData. undefined/""
+  // = no cover, falls back to the initial-letter placeholder.
+  imageData?: string;
 }
 
 // One layer above projects — same shape, same optional dream link.
@@ -32,9 +41,17 @@ export interface Goal {
   // until then, meaning "use the computed position under its parent
   // dream." See db/database.ts's add_goals_pos_x migration.
   posX: number | null;
+  // Vertical counterpart to posX — only used for a goal with no
+  // goal_dream_links (nothing to compute a position under), so it can
+  // still be placed and dragged on the Dream Web as a standalone node.
+  posY: number | null;
   // Dream-side anchor angle for this goal's dashed attachment edge,
   // once re-dragged — null means "auto-compute, point at the goal."
   dreamAttachAngle: number | null;
+  // Multiplier on this goal's own cluster layout (projects/tasks/
+  // responsibilities spacing) — null means 1x. Shared by GoalWebPage and
+  // DreamWebPage's "full" view via webGraph/goalCluster.ts.
+  webScale: number | null;
   // "Passion projects" are goals shown on the Projects page instead of
   // the Goals page — see ProjectsHomePage.tsx. Everything else about
   // them (fields, widgets, Goal Web) is identical to a regular goal.
@@ -45,9 +62,11 @@ export interface Goal {
   sortOrder: number;
   createdAt?: string;
   updatedAt?: string;
+  // Cover image — same convention as Project.imageData.
+  imageData?: string;
 }
 
-export type ProjectWidgetType = "journal" | "linkboard" | "table" | "photo" | "dock";
+export type ProjectWidgetType = "journal" | "linkboard" | "table" | "photo" | "dock" | "costlog" | "calculator";
 
 // Belongs to exactly one of a project or a goal — never both, never
 // neither. Whichever owner fetched it already knows which one it is, so
@@ -61,6 +80,16 @@ export interface ProjectWidget {
   title: string;
   sortOrder: number;
   createdAt?: string;
+  // Set instead of projectId/goalId when this row is a free-floating
+  // widget placed directly on a Goal Web or Dream Web canvas (see
+  // components/WebWidgetNode.tsx) rather than living in a project's/
+  // goal's detail-page widget grid — null for every grid widget.
+  webType?: "goal" | "dream" | null;
+  webOwnerId?: number | null;
+  posX?: number | null;
+  posY?: number | null;
+  width?: number | null;
+  height?: number | null;
 }
 
 export interface ProjectJournalEntry {
@@ -143,4 +172,14 @@ export interface DockImage {
   width: number;
   height: number;
   zIndex: number;
+}
+
+// One logged expense within a Cost Log widget — see
+// components/CostLogWidget.tsx.
+export interface CostEntry {
+  id: number;
+  widgetId: number;
+  amount: number;
+  description: string;
+  createdAt: string;
 }

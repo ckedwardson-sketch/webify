@@ -239,7 +239,10 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 301;
-  width: 320px;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px - var(--keyboard-inset, 0px));
+  overflow-y: auto;
+  box-sizing: border-box;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -264,7 +267,10 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 301;
-  width: 320px;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px - var(--keyboard-inset, 0px));
+  overflow-y: auto;
+  box-sizing: border-box;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -291,4 +297,26 @@
 .quick-photo-dialog-close:hover {
   background: var(--color-danger);
   color: #fff;
+}
+
+/* Icon-only controls stay visually small but grow their hit area on
+   mobile via padding + background-clip so taps don't require pixel
+   precision, without inflating the on-screen circle. */
+html.mobile-layout .quick-photo-menu-button,
+html.mobile-layout .quick-photo-icon-btn,
+html.mobile-layout .quick-photo-dialog-close,
+html.mobile-layout .quick-photo-dot {
+  position: relative;
+}
+
+html.mobile-layout .quick-photo-menu-button::after,
+html.mobile-layout .quick-photo-icon-btn::after,
+html.mobile-layout .quick-photo-dialog-close::after,
+html.mobile-layout .quick-photo-dot::after {
+  content: "";
+  position: absolute;
+  inset: 50%;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  transform: translate(-50%, -50%);
 }

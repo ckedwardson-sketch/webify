@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
-import { buildSettingsByLocation, SettingsLocationGroup } from "./settingsSearchIndex";
+import { buildSettingsByLocation, buildSettingsSearchIndex, SettingsLocationGroup } from "./settingsSearchIndex";
 import { useDynamicOverlay } from "../overlay/DynamicOverlayContext";
 import "./Page.css";
 import "./SettingsShared.css";
@@ -32,8 +32,13 @@ function groupByPage(groups: SettingsLocationGroup[]): PageGroup[] {
 
 export function SettingsDynamicSearchPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
   const allGroups = useMemo(() => buildSettingsByLocation(), []);
   const pageGroups = useMemo(() => groupByPage(allGroups), [allGroups]);
+  const flatItems = useMemo(
+    () => [...buildSettingsSearchIndex()].sort((a, b) => a.label.localeCompare(b.label)),
+    []
+  );
   const { requestQuickEdit } = useDynamicOverlay();
 
   const q = query.trim().toLowerCase();
@@ -50,9 +55,28 @@ export function SettingsDynamicSearchPage({ onNavigate }: { onNavigate: (view: V
       />
       <h1 className="page-title">Dynamic Settings Search</h1>
       <p className="page-text">
-        Every individually customizable setting in the app, organized by the page it lives on rather than by
-        category. Click one to edit it inline in the Dynamic Search overlay — nothing here navigates you away.
+        Every individually customizable setting in the app. "Grouped by page" organizes them by where
+        they live — the same setting can appear under more than one page if it's relevant there.
+        "Flat" is a plain alphabetical list. Click any result to edit it inline — nothing here navigates
+        you away.
       </p>
+
+      <div className="dyn-search-view-toggle" role="group" aria-label="View mode">
+        <button
+          type="button"
+          className={`add-button${viewMode === "grouped" ? "" : " secondary"}`}
+          onClick={() => setViewMode("grouped")}
+        >
+          Grouped by page
+        </button>
+        <button
+          type="button"
+          className={`add-button${viewMode === "flat" ? "" : " secondary"}`}
+          onClick={() => setViewMode("flat")}
+        >
+          Flat list
+        </button>
+      </div>
 
       <input
         className="settings-search"
@@ -61,6 +85,22 @@ export function SettingsDynamicSearchPage({ onNavigate }: { onNavigate: (view: V
         onChange={(e) => setQuery(e.target.value)}
       />
 
+      {viewMode === "flat" ? (
+        <div className="settings-search-results" style={{ marginTop: "12px" }}>
+          {flatItems
+            .filter((item) => matches(item.label, item.key))
+            .map((item) => (
+              <button
+                key={`${item.section}:${item.key}`}
+                className="settings-search-result"
+                onClick={() => requestQuickEdit(item)}
+              >
+                <span className="settings-search-result-section">{item.section}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+        </div>
+      ) : (
       <div className="dyn-search-pages">
         {pageGroups.map((pg) => {
           // A page group is shown if any of its locations have a match.
@@ -114,6 +154,7 @@ export function SettingsDynamicSearchPage({ onNavigate }: { onNavigate: (view: V
           );
         })}
       </div>
+      )}
     </div>
   );
 }

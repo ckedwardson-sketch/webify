@@ -1,0 +1,39 @@
+.corner-menu-trigger {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.corner-menu-trigger--tl {
+  top: 4px;
+  left: 4px;
+}
+
+.corner-menu-trigger--tr {
+  top: 4px;
+  right: 4px;
+}
+
+.corner-menu-trigger--bl {
+  bottom: 4px;
+  left: 4px;
+}
+
+.corner-menu-trigger--br {
+  bottom: 4px;
+  right: 4px;
+}
+
+.corner-menu-trigger:hover {
+  background: var(--color-bg-elevated-hover, var(--color-bg-elevated));
+  color: var(--color-text);
+}

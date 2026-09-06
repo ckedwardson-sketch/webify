@@ -1,0 +1,62 @@
+.mobile-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-mode-option {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 12px 14px;
+  border: var(--surface-border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mobile-mode-option.active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
+  border-color: var(--color-primary-bg);
+}
+
+.mobile-mode-help {
+  margin-top: 10px;
+}
+
+html:not(.mobile-layout) .mobile-mode-options {
+  flex-direction: row;
+}
+
+html:not(.mobile-layout) .mobile-mode-option {
+  flex: 1;
+  text-align: center;
+}
+
+.mobile-spacing-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.mobile-spacing-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.mobile-spacing-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-spacing-field-row .theme-number-input {
+  width: 90px;
+}

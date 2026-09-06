@@ -26,6 +26,9 @@ import {
   fetchFreetextFields,
   availableFieldsToAdd as computeAvailableFieldsToAdd,
   updateFieldStyle,
+  updateFieldColumn,
+  updateFieldLayoutLabel,
+  updateFieldLayoutHeight,
   FieldLayoutRow,
   FieldStylePatch,
   FieldType,
@@ -39,9 +42,12 @@ import { FreetextFieldEditor } from "../components/FreetextFieldEditor";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
 import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
-import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, mergeFieldStylePatch, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
 import { withFieldUndo } from "../rearrange/fieldUndo";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useTheme } from "../theme/ThemeContext";
+import { Skill } from "../types/skill";
+import { fetchSkills, fetchSkillsForDream, linkSkillToDream, unlinkSkillFromDream } from "../db/skills";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "./Page.css";
 import "./DreamDetailPage.css";
@@ -132,6 +138,7 @@ export function DreamDetailPage({
     active: rearranging,
     deleteToolActive,
     copyToolActive,
+    columnToolActive,
     copiedFieldId,
     copyField,
     insertAt,
@@ -140,6 +147,8 @@ export function DreamDetailPage({
     pushUndo,
   } = useRearrangeMode();
   const { registerFieldStyleTarget } = useFieldStyleRegistry();
+  const { theme } = useTheme();
+  const detailColumnCount = Math.max(1, Math.min(3, Number(theme.detailColumnCount) || 1));
 
   const load = () => {
     setLoading(true);
@@ -393,6 +402,16 @@ export function DreamDetailPage({
     updateFieldStyle(row.id, patch);
   };
 
+  const handleFieldStyleRename = (fieldId: number, label: string | null) => {
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, customLabel: label } : f)));
+    updateFieldLayoutLabel(fieldId, label);
+  };
+
+  const handleFieldResize = (fieldId: number, heightPx: number | null) => {
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, heightPx } : f)));
+    updateFieldLayoutHeight(fieldId, heightPx);
+  };
+
   useEffect(() => {
     registerFieldStyleTarget({
       fields,
@@ -400,6 +419,7 @@ export function DreamDetailPage({
         const row = fields.find((f) => f.id === fieldId);
         if (row) handleFieldStyleSave(row, patch);
       },
+      onRename: handleFieldStyleRename,
     });
     return () => registerFieldStyleTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -431,6 +451,11 @@ export function DreamDetailPage({
 
   const availableFieldsToAdd: AddableField[] = computeAvailableFieldsToAdd("dream", fields);
 
+  const handleCycleColumn = async (f: FieldLayoutRow) => {
+    await updateFieldColumn(f.id, (f.column + 1) % detailColumnCount);
+    load();
+  };
+
   // Dream Detail has no widget grid at all — this target exists purely
   // for the field-rearrangement system, so the widget-shaped callbacks
   // are unreachable no-ops (RearrangeToolbar hides Widgets/Save/Load
@@ -450,10 +475,12 @@ export function DreamDetailPage({
       availableFieldsToAdd,
       onAddField: handleAddField,
       onPasteField: handlePasteField,
+      columnCount: detailColumnCount > 1 ? detailColumnCount : undefined,
+      onSetFieldColumn: (fieldId, column) => updateFieldColumn(fieldId, column).then(load),
     });
     return () => registerTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dream, fields, insertAt]);
+  }, [dream, fields, insertAt, detailColumnCount]);
 
   if (loading) {
     return (
@@ -518,6 +545,7 @@ export function DreamDetailPage({
               value={reasoningDraft}
               onChange={(e) => setReasoningDraft(e.target.value)}
               onBlur={commitReasoning}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="Why does this matter to you?"
             />
           </label>
@@ -535,6 +563,7 @@ export function DreamDetailPage({
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               onBlur={commitNotes}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="Anything else — details, feelings, plans…"
             />
           </label>
@@ -639,6 +668,7 @@ export function DreamDetailPage({
             label={ft.label}
             content={ft.content}
             field={f}
+            onResize={handleFieldResize}
           />
         );
       }
@@ -647,12 +677,12 @@ export function DreamDetailPage({
     }
   };
 
-  const fieldElements: React.ReactNode[] = [];
-  fields.forEach((f, i) => {
+  const renderFieldWithGap = (f: FieldLayoutRow, i: number): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
     if (rearranging) {
-      fieldElements.push(<FieldGap key={`gap-${f.id}`} order={gapOrderBefore(fields, i)} />);
+      nodes.push(<FieldGap key={`gap-${f.id}`} order={gapOrderBefore(fields, i)} />);
     }
-    fieldElements.push(
+    nodes.push(
       <RearrangeableField
         key={f.id}
         id={f.id}
@@ -669,13 +699,23 @@ export function DreamDetailPage({
         onDrop={handleFieldDrop}
         onDelete={() => handleDeleteField(f)}
         onCopy={() => handleCopyField(f)}
+        columnToolActive={columnToolActive}
+        column={detailColumnCount > 1 ? f.column % detailColumnCount : undefined}
+        onCycleColumn={detailColumnCount > 1 ? () => handleCycleColumn(f) : undefined}
       >
         {renderField(f)}
       </RearrangeableField>
     );
+    return nodes;
+  };
+
+  const columnBuckets: React.ReactNode[][] = Array.from({ length: detailColumnCount }, () => []);
+  fields.forEach((f, i) => {
+    const col = detailColumnCount > 1 ? f.column % detailColumnCount : 0;
+    columnBuckets[col].push(...renderFieldWithGap(f, i));
   });
   if (rearranging) {
-    fieldElements.push(<FieldGap key="gap-end" order={gapOrderAfterLast(fields)} />);
+    columnBuckets[0].push(<FieldGap key="gap-end" order={gapOrderAfterLast(fields)} />);
   }
 
   return (
@@ -696,7 +736,7 @@ export function DreamDetailPage({
         </div>
       )}
 
-      <div className="detail-header">
+      <div className="detail-header detail-page-header-area">
         {editingName ? (
           <input
             className="title-rename-input"
@@ -736,7 +776,17 @@ export function DreamDetailPage({
         </div>
       </div>
 
-      {fieldElements}
+      <DreamSkillsSection dreamId={dreamId} onNavigate={onNavigate} />
+
+      <div className="detail-page-body">
+        <div className="detail-columns">
+          {columnBuckets.map((bucket, i) => (
+            <div className="detail-column" key={i}>
+              {bucket}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {pendingChange && (
         <div className="dream-reason-backdrop">
@@ -764,6 +814,72 @@ export function DreamDetailPage({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Standalone (not part of the field_layout rearrange system) — a Skill is
+// deliberately independent of any one Dream's data, so this is just a
+// many-to-many link manager plus quick navigation into that Skill's own
+// tree (see plan sections 22-23).
+function DreamSkillsSection({ dreamId, onNavigate }: { dreamId: number; onNavigate: (view: View) => void }) {
+  const [linkedSkills, setLinkedSkills] = useState<(Skill & { linkId: number })[]>([]);
+  const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [picking, setPicking] = useState(false);
+
+  const reload = () => {
+    fetchSkillsForDream(dreamId).then(setLinkedSkills);
+    fetchSkills().then(setAllSkills);
+  };
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dreamId]);
+
+  const linkedIds = new Set(linkedSkills.map((s) => s.id));
+  const available = allSkills.filter((s) => !linkedIds.has(s.id));
+
+  return (
+    <div className="dream-skills-section">
+      <div className="dream-skills-header">
+        <span className="skill-field-label" style={{ margin: 0 }}>Skills</span>
+        <button className="icon-button" onClick={() => setPicking((v) => !v)} title="Link a skill">
+          +
+        </button>
+      </div>
+      {picking && (
+        <div className="dream-skills-picker">
+          {available.length === 0 && <span className="page-text">No other skills to link.</span>}
+          {available.map((s) => (
+            <button
+              key={s.id}
+              className="dream-skill-chip pickable"
+              onClick={() => linkSkillToDream(s.id, dreamId).then(() => { reload(); setPicking(false); })}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="dream-skills-list">
+        {linkedSkills.length === 0 && <span className="page-text">No skills connected to this dream yet.</span>}
+        {linkedSkills.map((s) => (
+          <div key={s.linkId} className="dream-skill-chip" onClick={() => onNavigate({ type: "skill-tree", skillId: s.id })}>
+            <span>{s.name}</span>
+            {s.currentLevelName && <span className="dream-skill-chip-level">"{s.currentLevelName}"</span>}
+            <button
+              className="dream-skill-chip-remove"
+              onClick={(e) => {
+                e.stopPropagation();
+                unlinkSkillFromDream(s.linkId).then(reload);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

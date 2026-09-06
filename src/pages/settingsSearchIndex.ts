@@ -3,7 +3,7 @@ import { ICON_REGISTRY } from "../icons/registry";
 import { TEXT_ELEMENT_REGISTRY } from "../icons/textRegistry";
 import { BUTTON_STYLE_REGISTRY } from "../icons/buttonRegistry";
 import { HEADER_STYLE_REGISTRY } from "../icons/headerRegistry";
-import { THEME_COLOR_GROUPS } from "../theme/themeFieldGroups";
+import { MOBILE_LAYOUT_FIELD, MOBILE_AUTOCLOSE_FIELD, THEME_COLOR_GROUPS, WIDGET_VISIBILITY_FIELDS } from "../theme/themeFieldGroups";
 
 export interface SettingsSearchItem {
   section: string;
@@ -82,6 +82,85 @@ export function buildSettingsSearchIndex(): SettingsSearchItem[] {
     }
   }
 
+  items.push({
+    section: "Mobile",
+    label: MOBILE_LAYOUT_FIELD.label,
+    key: MOBILE_LAYOUT_FIELD.key,
+    view: { type: "settings-mobile" },
+  });
+
+  items.push({
+    section: "Mobile",
+    label: MOBILE_AUTOCLOSE_FIELD.label,
+    key: MOBILE_AUTOCLOSE_FIELD.key,
+    view: { type: "settings-mobile" },
+  });
+
+  for (const field of WIDGET_VISIBILITY_FIELDS) {
+    items.push({
+      section: "Widget Visibility",
+      label: field.label,
+      key: field.key,
+      view: { type: "settings-widget-visibility", focusKey: field.key },
+    });
+  }
+
+  const PANEL_MEMORY_FIELDS = [
+    { key: "rememberSidebarOpen", label: "Remember sidebar open/closed" },
+    { key: "dualPaneDefault", label: "Always open Notes in dual-pane" },
+    { key: "notesTreeRemember", label: "Remember expanded notes folders" },
+  ];
+  for (const field of PANEL_MEMORY_FIELDS) {
+    items.push({
+      section: "Panel & Layout Memory",
+      label: field.label,
+      key: field.key,
+      view: { type: "settings-panel-memory", focusKey: field.key },
+    });
+  }
+
+  const PAGE_SETTINGS_FIELDS = [
+    { key: "nodeScale.mode", label: "Node scaling mode" },
+    { key: "nodeScale.referenceCount", label: "Node scaling reference item count" },
+    { key: "nodeScale.sensitivity", label: "Node scaling strength" },
+    { key: "nodeScale.minScale", label: "Node scaling minimum scale" },
+    { key: "nodeScale.maxScale", label: "Node scaling maximum scale" },
+    { key: "nodeScale.globalPercentile", label: "Node scaling reference percentile" },
+    { key: "nodeScale.fontBoost", label: "Node scaling font size" },
+    { key: "nodeScale.manualWidth", label: "Node scaling manual card width" },
+    { key: "nodeScale.manualHeight", label: "Node scaling manual card height" },
+    { key: "nodeScale.manualFontScale", label: "Node scaling manual font scale" },
+    { key: "nodeScale.aspectRatio", label: "Node scaling height:width ratio" },
+    { key: "nodeScale.columnMode", label: "Columns per category mode" },
+    { key: "nodeScale.fixedColumns", label: "Fixed columns per category" },
+  ];
+  for (const field of PAGE_SETTINGS_FIELDS) {
+    items.push({
+      section: "Page Settings",
+      label: field.label,
+      key: field.key,
+      view: { type: "settings-page-settings", focusKey: field.key },
+    });
+  }
+
+  // Reported Issues has no individually-customizable fields (it's a
+  // viewer/manager, not a preference editor) — this single placeholder
+  // entry just makes it reachable from search/browse like every other
+  // settings-adjacent page, rather than being invisible to both.
+  items.push({
+    section: "Reported Issues",
+    label: "Reported Issues",
+    key: "reported-issues",
+    view: { type: "settings-issues" },
+  });
+
+  items.push({
+    section: "Sync",
+    label: "Sync with computer",
+    key: "sync-with-computer",
+    view: { type: "settings-sync" },
+  });
+
   return items;
 }
 
@@ -119,6 +198,7 @@ export function buildSettingsByLocation(): SettingsLocationGroup[] {
     if (item.section === "Buttons") return { page: "Settings — Buttons", location: "Buttons" };
     if (item.section === "Headers") return { page: "Settings — Headers", location: "Headers" };
     if (item.section === "Editor Tools") return { page: "Settings — Editor Tools", location: "Editor Tools" };
+    if (item.section === "Mobile") return { page: "Settings — Mobile", location: "Layout" };
     if (item.section.startsWith("Theme")) {
       const location = item.section.includes("—") ? item.section.split("—")[1].trim() : "Theme";
       return { page: "Settings — Theme", location };

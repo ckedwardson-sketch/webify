@@ -10,12 +10,26 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 380px;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px - var(--keyboard-inset, 0px));
+  overflow-y: auto;
   background: #fff;
   border-radius: 10px;
   padding: 18px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
   z-index: 201;
+  box-sizing: border-box;
+}
+
+html.mobile-layout .report-issue-modal {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: none;
+  width: 100%;
+  border-radius: 10px 10px 0 0;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 
 .report-issue-title {

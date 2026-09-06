@@ -25,7 +25,7 @@ import {
   addDreamLink,
   removeDreamLink,
 } from "../db/dreams";
-import { fetchAllGoals } from "../db/goals";
+import { fetchAllGoals, updateGoalWebPosition } from "../db/goals";
 import {
   fetchAllGoalDreamLinks,
   addOrUpdateGoalDreamLink,
@@ -39,8 +39,9 @@ import { fetchFieldLayout, fetchFreetextFields, updateFieldStyle, FieldLayoutRow
 import { buildNodeCardTextItems } from "../theme/nodeCardFields";
 import { mergeFieldStylePatch } from "../rearrange/fieldStyle";
 import { NodeFieldVisibilityPopover } from "../components/NodeFieldVisibilityPopover";
-import { Dream, DreamLink, DreamPriority } from "../types/models";
-import { Goal } from "../types/project";
+import { Dream, DreamLink, DreamPriority, ProgressNode as ProgressNodeModel } from "../types/models";
+import { Goal, Project, ProjectWidget, ProjectWidgetType } from "../types/project";
+import { Responsibility, ResponsibilityCompletion } from "../types/responsibility";
 import {
   DreamNode,
   DREAM_BASE_WIDTH,
@@ -50,22 +51,120 @@ import {
   DreamGoalNode,
   GOAL_NODE_WIDTH,
   GOAL_NODE_HEIGHT,
+  SkillDreamNode,
+  SKILL_NODE_WIDTH,
+  SKILL_NODE_HEIGHT,
   AngleEdge,
   AngleEdgeData,
   anchorPoint,
   parseAngleHandleId,
-  ANCHOR_ANGLE_STEP,
+  snapToAnchor,
 } from "../components/DreamGraphNodes";
+import { GoalSummaryNode, ProjectCardNode, ResponsibilityCardNode, ResponsibilityCardData } from "../components/GoalGraphNodes";
+import { ProgressNode as ProgressNodeView } from "../components/ProgressGraphNodes";
+import { computeGoalCluster, GoalClusterLayout, nodeBoxFor } from "../webGraph/goalCluster";
+import { fetchProjectsForGoal, updateProjectGoalId } from "../db/projects";
+import { fetchProgressNodesForGoal, fetchProgressNodesForProjectsOfGoal, updateProgressPosition } from "../db/progress";
+import { fetchResponsibilitiesForGoal, fetchAllCompletions, unlinkResponsibilityFromGoal } from "../db/responsibilities";
+import { consistencyPercent, daysPerWeek as daysPerWeekFor } from "../responsibilities/scheduling";
+import { fetchGoalWebLinksForGoals, GoalWebLink } from "../db/goalWebLinks";
+import { fetchDreamWebLinks, addDreamWebLink, removeDreamWebLink, DreamWebLink } from "../db/dreamWebLinks";
+import {
+  fetchNoteWebLinksForOwners,
+  addNoteWebLink,
+  removeNoteWebLink,
+  updateNoteWebLinkPosition,
+  fetchNotePagesForPicker,
+  NoteWebLink,
+  NotePickerOption,
+} from "../db/noteWebLinks";
+import { addPage } from "../db/notes";
+import { NoteWebNode } from "../components/NoteWebNode";
+import { WebWidgetNode, WEB_WIDGET_DEFAULT_WIDTH, WEB_WIDGET_DEFAULT_HEIGHT } from "../components/WebWidgetNode";
+import {
+  fetchWidgetsForWebOwners,
+  addWebWidget,
+  updateWebWidgetPosition,
+  updateWebWidgetSize,
+  deleteWidget,
+} from "../db/projects";
+import { WIDGET_TYPE_LABELS } from "../rearrange/AddFieldMenu";
+import { fetchSkillsForDreams, updateDreamSkillPosition } from "../db/skills";
+import { Skill } from "../types/skill";
 import { angleFromDirection } from "../theme/nodeBoundary";
 import { View } from "../types/nav";
 import { WebControls } from "../components/WebControls";
+import { LaborLegend } from "../components/LaborLegend";
+import { HintTooltip } from "../components/HintTooltip";
 import { StyledButton } from "../icons/StyledButton";
 import { useTheme } from "../theme/ThemeContext";
+import { parseDecals } from "../theme/decals";
+import { DecalLayer } from "../theme/DecalLayer";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useMobileLayout } from "../theme/useMobileLayout";
+import { useUiPreferences } from "../context/UiPreferencesContext";
 import "./Page.css";
 import "./DreamWebPage.css";
 
-const nodeTypes = { dreamNode: DreamNode, dreamGoalNode: DreamGoalNode };
+const nodeTypes = {
+  dreamNode: DreamNode,
+  dreamGoalNode: DreamGoalNode,
+  skillNode: SkillDreamNode,
+  goalSummaryNode: GoalSummaryNode,
+  goalProjectNode: ProjectCardNode,
+  goalTaskNode: ProgressNodeView,
+  goalRespNode: ResponsibilityCardNode,
+  noteNode: NoteWebNode,
+  widgetNode: WebWidgetNode,
+};
 const edgeTypes = { angleEdge: AngleEdge };
+
+// A goal's node id on Dream Web is either one of these (attached
+// instance, keyed by the goal_dream_links row) or a standalone one
+// (goal with zero links, keyed by the goal itself) — full-mode cluster
+// sub-nodes are namespaced under whichever of these the cluster hangs
+// off of, so the same project/task can render correctly under several
+// instances if its goal is attached to more than one dream.
+const standaloneGoalNodeId = (goalId: number) => `gs-${goalId}`;
+const isStandaloneGoalNodeId = (id: string) => id.startsWith("gs-");
+const parseStandaloneGoalNodeId = (id: string) => Number(id.slice(3));
+const skillNodeId = (linkId: number) => `sk-${linkId}`;
+const parseSkillNodeId = (id: string) => Number(id.slice(3));
+// Notes attached directly to a dream (web_type "dream", owner_id the
+// dream id) — keyed by the note_web_links row id, "dn-" so it can't
+// collide with any other prefix on this canvas.
+const dreamNoteNodeId = (linkId: number) => `dn-${linkId}`;
+const parseDreamNoteNodeId = (id: string) => Number(id.slice(3));
+const NEW_NOTE_SENTINEL = "__new__";
+// Free-floating widgets (see components/WebWidgetNode.tsx) attached
+// directly to a dream (web_type "dream", web_owner_id the dream id) —
+// keyed by the project_widgets row id, "wg-" so it can't collide with
+// any other prefix on this canvas.
+const widgetNodeId = (id: number) => `wg-${id}`;
+const parseWidgetNodeId = (id: string) => Number(id.slice(3));
+
+// Full-mode cluster sub-node ids are namespaced by their goal instance
+// id (see above) plus GoalWebPage's own id scheme, joined by "::" so
+// they can't collide with any other node on the canvas.
+const clusterNodeId = (instanceId: string, inner: string) => `${instanceId}::${inner}`;
+function parseClusterNodeId(id: string): { instanceId: string; inner: string } | null {
+  const i = id.indexOf("::");
+  if (i === -1) return null;
+  return { instanceId: id.slice(0, i), inner: id.slice(i + 2) };
+}
+
+const UNDATED_GOAL_LANE_X = 650;
+
+// Everything one goal owns, fetched once per unique goal id (not per
+// rendered instance) when Full view is on.
+interface GoalClusterData {
+  goal: Goal;
+  projects: Project[];
+  tasks: ProgressNodeModel[];
+  responsibilities: Responsibility[];
+  links: GoalWebLink[];
+  layout: GoalClusterLayout;
+}
 
 const dreamNodeId = (id: number) => `d-${id}`;
 const parseDreamNodeId = (nodeId: string) => Number(nodeId.slice(2));
@@ -79,16 +178,8 @@ const parseGoalEdgeId = (edgeId: string) => Number(edgeId.slice("goal-edge-".len
 const linkEdgeId = (id: number) => `link-${id}`;
 const parseLinkEdgeId = (edgeId: string) => Number(edgeId.slice(5));
 
-// Snaps any angle (including a continuously-computed default — see
-// edges below) to one of the 16 actually-rendered ring handles, so a
-// sourceHandle/targetHandle id set on an edge always references a real
-// handle. The *visual* line itself (data.x1/y1/... below) still uses
-// the precise, unsnapped angle — this snapping only affects which
-// handle id gets referenced, which our custom AngleEdge component
-// otherwise ignores for positioning anyway.
-function snapToAnchor(angle: number): number {
-  return (Math.round(angle / ANCHOR_ANGLE_STEP) * ANCHOR_ANGLE_STEP + 360) % 360;
-}
+// snapToAnchor is imported from DreamGraphNodes.tsx (shared with
+// GoalWebPage's own link rendering).
 
 const GOAL_SHAPE = "rectangle";
 const GOAL_SIZE = { width: GOAL_NODE_WIDTH, height: GOAL_NODE_HEIGHT };
@@ -122,8 +213,12 @@ function goalPositionsFor(
     const goal = goalById.get(link.goalId);
     return {
       x: link.posX ?? xs[i],
+      // Centered on its date range's midpoint, same "subtract half the
+      // box height" rule positionFor uses for a dated dream — without
+      // it the node's top edge sits on the date instead of its visual
+      // center.
       y: goal?.expectedDateStart
-        ? rangeMidY(goal.expectedDateStart, goal.expectedDateEnd)
+        ? rangeMidY(goal.expectedDateStart, goal.expectedDateEnd) - GOAL_NODE_HEIGHT / 2
         : dreamPos.y + GOAL_CLUSTER_Y_OFFSET,
     };
   });
@@ -158,21 +253,29 @@ interface GridLine {
   y: number;
   label: string;
   isYear: boolean;
-  isCurrentYear: boolean;
+  // The one line marking "now" — the current month, not just the
+  // current year's Jan 1 — is what gets the golden highlight below.
+  isCurrentMonth: boolean;
 }
 
 function buildGridLines(): GridLine[] {
   const lines: GridLine[] = [];
   const currentYear = TODAY.getFullYear();
+  const currentMonth = TODAY.getMonth() + 1;
   for (let y = EPOCH_YEAR; y <= END_YEAR; y++) {
-    lines.push({ y: isoToY(`${y}-01-01`), label: String(y), isYear: true, isCurrentYear: y === currentYear });
+    lines.push({
+      y: isoToY(`${y}-01-01`),
+      label: String(y),
+      isYear: true,
+      isCurrentMonth: y === currentYear && currentMonth === 1,
+    });
     for (let m = 2; m <= 12; m++) {
       const mm = String(m).padStart(2, "0");
       lines.push({
         y: isoToY(`${y}-${mm}-01`),
         label: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short" }),
         isYear: false,
-        isCurrentYear: false,
+        isCurrentMonth: y === currentYear && m === currentMonth,
       });
     }
   }
@@ -232,7 +335,11 @@ function timelineSort(a: Dream, b: Dream) {
 
 function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const { theme } = useTheme();
+  const { overrides: pageBgOverrides } = usePageBackground();
+  const mobile = useMobileLayout();
+  const { preferences: uiPreferences, setPreference: setUiPreference } = useUiPreferences();
   const { zoom } = useViewport();
+  const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
   const [dreams, setDreams] = useState<Dream[]>([]);
   const [links, setLinks] = useState<DreamLink[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -240,10 +347,38 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [initialViewport, setInitialViewport] = useState<Viewport | null>(null);
   const [dreamFieldsById, setDreamFieldsById] = useState<Map<number, FieldLayoutRow[]>>(new Map());
   const [freetextById, setFreetextById] = useState<Map<number, FreetextField>>(new Map());
   const [fieldVisibilityDreamId, setFieldVisibilityDreamId] = useState<number | null>(null);
+  const [dreamSkills, setDreamSkills] = useState<
+    (Skill & { linkId: number; dreamId: number; posX: number | null; posY: number | null })[]
+  >([]);
+  const [dreamWebLinks, setDreamWebLinks] = useState<DreamWebLink[]>([]);
+  // "Simple" (default) shows just dreams/goals/skills, same as before
+  // this feature existed. "Full" additionally clusters every goal's
+  // projects/tasks/responsibilities around it, exactly as that goal's
+  // own Goal Web lays them out (see webGraph/goalCluster.ts). A plain
+  // view-mode toggle, not a theme setting — persisted via the DB-backed
+  // ui_preferences store (see UiPreferencesContext) rather than bare
+  // localStorage, same mechanism as every other DB-backed setting.
+  const fullView = uiPreferences["dreamWebFullView"] === "1";
+  const [clusterDataByGoalId, setClusterDataByGoalId] = useState<Map<number, GoalClusterData>>(new Map());
+  const [completions, setCompletions] = useState<ResponsibilityCompletion[]>([]);
+  const [noteLinks, setNoteLinks] = useState<NoteWebLink[]>([]);
+  const [notePickerOptions, setNotePickerOptions] = useState<NotePickerOption[]>([]);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [noteDreamChoice, setNoteDreamChoice] = useState("");
+  const [noteChoice, setNoteChoice] = useState("");
+  const [creatingNote, setCreatingNote] = useState(false);
+  // Free-floating widgets attached directly to a dream (see
+  // components/WebWidgetNode.tsx) — same picker pattern as notes above:
+  // pick which dream owns it, then which widget type to add.
+  const [webWidgets, setWebWidgets] = useState<ProjectWidget[]>([]);
+  const [showWidgetsPanel, setShowWidgetsPanel] = useState(false);
+  const [widgetDreamChoice, setWidgetDreamChoice] = useState("");
+  const [widgetChoice, setWidgetChoice] = useState<ProjectWidgetType | "">("");
 
   const gridLines = useMemo(buildGridLines, []);
 
@@ -270,12 +405,24 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     setDreamFieldsById(new Map(activeDreams.map((d, i) => [d.id, fieldLists[i]])));
     const freetextIds = fieldLists.flat().filter((f) => f.fieldType === "freetext" && f.refId !== null).map((f) => f.refId!);
     setFreetextById(await fetchFreetextFields(freetextIds));
+
+    setDreamSkills(await fetchSkillsForDreams(activeDreams.map((d) => d.id)));
+    setDreamWebLinks(await fetchDreamWebLinks());
+    setNoteLinks(await fetchNoteWebLinksForOwners("dream", activeDreams.map((d) => d.id)));
+    setNotePickerOptions(await fetchNotePagesForPicker());
+    setWebWidgets(await fetchWidgetsForWebOwners("dream", activeDreams.map((d) => d.id)));
   };
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleFullView = () => {
+    setUiPreference("dreamWebFullView", fullView ? "0" : "1").catch((err) =>
+      console.warn("Failed to persist dreamWebFullView preference:", err)
+    );
+  };
 
   const handleMoveEnd = (_: unknown, viewport: Viewport) => {
     saveViewport("dream-web", viewport);
@@ -329,7 +476,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   // dream's y is locked below).
   const goalYFor = (link: GoalDreamLink): number => {
     const goal = goalById.get(link.goalId);
-    if (goal?.expectedDateStart) return rangeMidY(goal.expectedDateStart, goal.expectedDateEnd);
+    if (goal?.expectedDateStart) return rangeMidY(goal.expectedDateStart, goal.expectedDateEnd) - GOAL_NODE_HEIGHT / 2;
     const dream = dreamById.get(link.dreamId);
     return (dream ? positionFor(dream).y : 0) + GOAL_CLUSTER_Y_OFFSET;
   };
@@ -352,6 +499,130 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDreams, linksByDream, goalById]);
+
+  // Goals with zero goal_dream_links have nothing to compute a position
+  // under, so they get one standalone node each instead of being left
+  // off the canvas entirely (see the feature's "every goal, attached or
+  // not" requirement). Positioned by their own date if they have one,
+  // else their own dragged webPos, else a lane off to the side — same
+  // fallback chain dreams themselves use for the undated lane.
+  const attachedGoalIds = useMemo(() => new Set(goalDreamLinks.map((l) => l.goalId)), [goalDreamLinks]);
+  const standaloneGoals = useMemo(
+    () => goals.filter((g) => !attachedGoalIds.has(g.id)),
+    [goals, attachedGoalIds]
+  );
+
+  const standaloneGoalPositionFor = (goal: Goal, indexInLane: number): { x: number; y: number } => {
+    if (goal.expectedDateStart) {
+      return {
+        x: goal.posX ?? UNDATED_GOAL_LANE_X,
+        y: rangeMidY(goal.expectedDateStart, goal.expectedDateEnd) - GOAL_NODE_HEIGHT / 2,
+      };
+    }
+    if (goal.posX != null && goal.posY != null) return { x: goal.posX, y: goal.posY };
+    const x = UNDATED_GOAL_LANE_X + Math.floor(indexInLane / 5) * 240;
+    const y = (indexInLane % 5) * 130 - 260;
+    return { x, y };
+  };
+
+  const standaloneGoalPositionById = useMemo(() => {
+    const map = new Map<number, { x: number; y: number }>();
+    standaloneGoals.forEach((g, i) => map.set(g.id, standaloneGoalPositionFor(g, i)));
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [standaloneGoals]);
+
+  // Same position logic the node-building effect below uses for skill
+  // nodes, factored out here (keyed by "sk-<linkId>", matching skillNodeId)
+  // so link-anchor math (edges below) can resolve a skill's position
+  // without duplicating the fallback chain.
+  const skillPositionById = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    for (const s of dreamSkills) {
+      const dream = dreamById.get(s.dreamId);
+      if (!dream) continue;
+      const dp = positionFor(dream);
+      const ds = nodeSizeFor(dream.priority, 1);
+      map.set(
+        skillNodeId(s.linkId),
+        s.posX != null && s.posY != null
+          ? { x: s.posX, y: s.posY }
+          : { x: dp.x + ds.width / 2 - SKILL_NODE_WIDTH / 2, y: dp.y - 110 }
+      );
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dreamSkills, dreamById]);
+
+  // Every goal *instance* rendered on the canvas right now — one entry
+  // per attached link plus one per standalone goal — is what Full view
+  // clusters projects/tasks/responsibilities around. Recomputed whenever
+  // the underlying goal set or positions change.
+  const goalInstances = useMemo(() => {
+    const list: { instanceId: string; goalId: number; pos: { x: number; y: number } }[] = [];
+    for (const link of goalDreamLinks) {
+      const pos = goalPositionById.get(link.id);
+      if (pos) list.push({ instanceId: goalNodeId(link.id), goalId: link.goalId, pos });
+    }
+    for (const goal of standaloneGoals) {
+      const pos = standaloneGoalPositionById.get(goal.id);
+      if (pos) list.push({ instanceId: standaloneGoalNodeId(goal.id), goalId: goal.id, pos });
+    }
+    return list;
+  }, [goalDreamLinks, goalPositionById, standaloneGoals, standaloneGoalPositionById]);
+
+  // Full view's per-goal data, fetched once per unique goal id (not per
+  // instance) whenever the toggle is on and the visible goal set
+  // changes. Cleared (not fetched) while off, so Simple mode never pays
+  // this cost.
+  useEffect(() => {
+    if (!fullView) return;
+    const uniqueGoalIds = [...new Set(goalInstances.map((i) => i.goalId))];
+    if (uniqueGoalIds.length === 0) {
+      setClusterDataByGoalId(new Map());
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      Promise.all(
+        uniqueGoalIds.map((id) =>
+          Promise.all([
+            fetchProjectsForGoal(id),
+            fetchProgressNodesForGoal(id),
+            fetchProgressNodesForProjectsOfGoal(id),
+            fetchResponsibilitiesForGoal(id),
+          ])
+        )
+      ),
+      fetchGoalWebLinksForGoals(uniqueGoalIds),
+      fetchAllCompletions(),
+    ]).then(([perGoal, allLinks, allCompletions]) => {
+      if (cancelled) return;
+      setCompletions(allCompletions);
+      const linksByGoal = new Map<number, GoalWebLink[]>();
+      for (const l of allLinks) linksByGoal.set(l.goalId, [...(linksByGoal.get(l.goalId) ?? []), l]);
+      const map = new Map<number, GoalClusterData>();
+      uniqueGoalIds.forEach((id, i) => {
+        const goal = goalById.get(id);
+        if (!goal) return;
+        const [projects, goalTasks, projectTasks, responsibilities] = perGoal[i];
+        const tasks = [...goalTasks, ...projectTasks];
+        map.set(id, {
+          goal,
+          projects,
+          tasks,
+          responsibilities,
+          links: linksByGoal.get(id) ?? [],
+          layout: computeGoalCluster(goal, projects, tasks, responsibilities, goal.webScale ?? 1, theme.goalClusterDirection as "horizontal" | "vertical"),
+        });
+      });
+      setClusterDataByGoalId(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullView, goalInstances, goalById, theme.goalClusterDirection]);
 
   // Nodes are rebuilt from `activeDreams`/`goalDreamLinks` whenever
   // either changes. A dated dream's y always comes from its date —
@@ -402,9 +673,193 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         };
       });
 
-    setNodes([...dreamNodes, ...goalNodes]);
+    // Every goal, whether attached to a dream or not — see
+    // standaloneGoals above.
+    const standaloneGoalNodes: Node[] = standaloneGoals.map((goal) => ({
+      id: standaloneGoalNodeId(goal.id),
+      type: "dreamGoalNode",
+      position: standaloneGoalPositionById.get(goal.id) ?? { x: 0, y: 0 },
+      deletable: false,
+      data: {
+        name: goal.name,
+        onOpenWeb: () => onNavigate({ type: "goal-web", goalId: goal.id }),
+      },
+    }));
+
+    const skillNodes: Node[] = dreamSkills
+      .filter((s) => dreamById.has(s.dreamId))
+      .map((s) => ({
+        id: skillNodeId(s.linkId),
+        type: "skillNode",
+        position: skillPositionById.get(skillNodeId(s.linkId)) ?? { x: 0, y: 0 },
+        deletable: false,
+        data: {
+          name: s.name,
+          currentLevelName: s.currentLevelName,
+          onOpen: () => onNavigate({ type: "skill-tree", skillId: s.id }),
+        },
+      }));
+
+    // Full view: every visible goal's projects/tasks/responsibilities,
+    // laid out by the exact same function GoalWebPage itself uses (see
+    // webGraph/goalCluster.ts) — just translated to sit under wherever
+    // this goal instance actually landed on the Dream Web.
+    const clusterNodes: Node[] = fullView
+      ? goalInstances.flatMap(({ instanceId, goalId, pos }) => {
+          const data = clusterDataByGoalId.get(goalId);
+          if (!data) return [];
+          const { layout } = data;
+          const projectNodes: Node[] = data.projects.map((project) => {
+            const p = layout.projectPos.get(project.id) ?? { x: 0, y: 0 };
+            return {
+              id: clusterNodeId(instanceId, `pr-${project.id}`),
+              type: "goalProjectNode",
+              position: { x: pos.x + p.x, y: pos.y + p.y },
+              draggable: false,
+              deletable: false,
+              data: {
+                name: project.name,
+                onUnlink: () => updateProjectGoalId(project.id, null).then(load),
+                onAddTask: () => {},
+                webFields: [],
+                widgets: [],
+                onOpenWidget: () => {},
+              },
+            };
+          });
+          const respNodes: Node[] = data.responsibilities.map((resp) => {
+            const p = layout.respPos.get(resp.id) ?? { x: 0, y: 0 };
+            return {
+              id: clusterNodeId(instanceId, `rs-${resp.id}`),
+              type: "goalRespNode",
+              position: { x: pos.x + p.x, y: pos.y + p.y },
+              draggable: false,
+              deletable: false,
+              data: {
+                name: resp.name,
+                description: resp.description,
+                consistencyPct: consistencyPercent(resp, completions),
+                daysPerWeek: daysPerWeekFor(resp),
+                onUnlink: () => unlinkResponsibilityFromGoal(resp.id, goalId).then(load),
+              } satisfies ResponsibilityCardData,
+            };
+          });
+          const taskNodes: Node[] = data.tasks.map((task) => {
+            const p = layout.taskPos.get(task.id) ?? { x: 0, y: 0 };
+            return {
+              id: clusterNodeId(instanceId, `tk-${task.id}`),
+              type: "goalTaskNode",
+              position: { x: pos.x + p.x, y: pos.y + p.y },
+              deletable: false,
+              data: {
+                category: task.category,
+                shortDescription: task.shortDescription,
+                difficulty: task.difficulty,
+                isComplete: task.isComplete,
+                isRead: task.isRead,
+                imageData: task.imageData,
+                cost: task.cost,
+              },
+            };
+          });
+          return [...projectNodes, ...respNodes, ...taskNodes];
+        })
+      : [];
+
+    // Notes attached to a dream default to a spot just below its skill
+    // row (skills sit at dp.y - 110, see skillPositionById above) until
+    // dragged, same "default near the owner, then free" convention as
+    // skill nodes use — offset per sibling so several notes on the same
+    // dream don't stack exactly on top of each other.
+    const notesByDream = new Map<number, NoteWebLink[]>();
+    for (const link of noteLinks) {
+      const list = notesByDream.get(link.ownerId) ?? [];
+      list.push(link);
+      notesByDream.set(link.ownerId, list);
+    }
+    const noteNodes: Node[] = noteLinks
+      .filter((link) => dreamById.has(link.ownerId))
+      .map((link) => {
+        const dream = dreamById.get(link.ownerId)!;
+        const dp = positionFor(dream);
+        const ds = nodeSizeFor(dream.priority, 1);
+        const siblings = notesByDream.get(link.ownerId) ?? [];
+        const idx = siblings.indexOf(link);
+        const hasStoredPos = link.posX !== 0 || link.posY !== 0;
+        return {
+          id: dreamNoteNodeId(link.id),
+          type: "noteNode",
+          position: hasStoredPos
+            ? { x: link.posX, y: link.posY }
+            : { x: dp.x + ds.width / 2 - 80 + idx * 20, y: dp.y + ds.height + 20 + idx * 20 },
+          deletable: false,
+          data: {
+            title: link.title,
+            onRemove: () => removeNoteWebLink(link.id).then(load),
+          },
+        };
+      });
+
+    // Widgets attached to a dream default to a spot just below its notes
+    // (which sit at dp.y + ds.height + 20, see noteNodes above) until
+    // dragged — same "default near the owner, then free" convention.
+    const widgetsByDream = new Map<number, ProjectWidget[]>();
+    for (const w of webWidgets) {
+      const ownerId = w.webOwnerId ?? 0;
+      const list = widgetsByDream.get(ownerId) ?? [];
+      list.push(w);
+      widgetsByDream.set(ownerId, list);
+    }
+    const widgetNodes: Node[] = webWidgets
+      .filter((w) => w.webOwnerId !== null && w.webOwnerId !== undefined && dreamById.has(w.webOwnerId))
+      .map((w) => {
+        const dream = dreamById.get(w.webOwnerId!)!;
+        const dp = positionFor(dream);
+        const ds = nodeSizeFor(dream.priority, 1);
+        const siblings = widgetsByDream.get(w.webOwnerId!) ?? [];
+        const idx = siblings.indexOf(w);
+        const hasStoredPos = (w.posX ?? 0) !== 0 || (w.posY ?? 0) !== 0;
+        return {
+          id: widgetNodeId(w.id),
+          type: "widgetNode",
+          position: hasStoredPos
+            ? { x: w.posX ?? 0, y: w.posY ?? 0 }
+            : { x: dp.x + ds.width / 2 + 100, y: dp.y + ds.height + 20 + idx * 40 },
+          deletable: false,
+          data: {
+            widget: w,
+            onDelete: () => deleteWidget(w.id).then(load),
+            onResize: (width: number, height: number) => {
+              updateWebWidgetSize(w.id, width, height);
+              setWebWidgets((prev) => prev.map((x) => (x.id === w.id ? { ...x, width, height } : x)));
+            },
+            onOpen: () => handleOpenWebWidget(w),
+          },
+        };
+      });
+
+    setNodes([...dreamNodes, ...goalNodes, ...standaloneGoalNodes, ...skillNodes, ...clusterNodes, ...noteNodes, ...widgetNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDreams, goalDreamLinks, goalById, goalPositionById, onNavigate, dreamFieldsById, freetextById]);
+  }, [
+    activeDreams,
+    goalDreamLinks,
+    goalById,
+    goalPositionById,
+    onNavigate,
+    dreamFieldsById,
+    freetextById,
+    standaloneGoals,
+    standaloneGoalPositionById,
+    dreamSkills,
+    skillPositionById,
+    dreamById,
+    fullView,
+    goalInstances,
+    clusterDataByGoalId,
+    completions,
+    noteLinks,
+    webWidgets,
+  ]);
 
   const edges: Edge[] = useMemo(() => {
     const activeIds = new Set(activeDreams.map((d) => d.id));
@@ -477,15 +932,127 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       });
     });
 
-    return [...linkEdges, ...goalEdges];
+    // Full view: each visible goal's own goal_web_links, translated by
+    // that goal instance's position — read-only here (editing them is
+    // still only done from that goal's own Goal Web page). A link
+    // touching "goal-end" itself (the 🎯 summary card) has no matching
+    // node here — Full view reuses the already-rendered dream/standalone
+    // goal node instead of duplicating a second goal card — so React
+    // Flow just silently drops that one edge; every project/task/
+    // responsibility-to-project/task/responsibility link still renders.
+    const clusterLinkEdges: Edge[] = fullView
+      ? goalInstances.flatMap(({ instanceId, goalId, pos }) => {
+          const data = clusterDataByGoalId.get(goalId);
+          if (!data) return [];
+          const { layout } = data;
+          const taskById = new Map(data.tasks.map((t) => [t.id, t]));
+          const layoutPosFor = (innerId: string): { x: number; y: number } | null => {
+            if (innerId === "goal-end") return layout.goalPos;
+            if (innerId.startsWith("pr-")) return layout.projectPos.get(Number(innerId.slice(3))) ?? null;
+            if (innerId.startsWith("rs-")) return layout.respPos.get(Number(innerId.slice(3))) ?? null;
+            if (innerId.startsWith("tk-")) return layout.taskPos.get(Number(innerId.slice(3))) ?? null;
+            return null;
+          };
+          const result: Edge[] = [];
+          for (const link of data.links) {
+            const sp = layoutPosFor(link.sourceNodeId);
+            const tp = layoutPosFor(link.targetNodeId);
+            // A link touching "goal-end" itself has no matching node
+            // here — Full view reuses the already-rendered dream/
+            // standalone goal node instead of duplicating a second goal
+            // card — so it's silently dropped; every other link renders.
+            if (!sp || !tp) continue;
+            const ss = nodeBoxFor(link.sourceNodeId, taskById);
+            const ts = nodeBoxFor(link.targetNodeId, taskById);
+            const sCenter = { x: sp.x + ss.width / 2, y: sp.y + ss.height / 2 };
+            const tCenter = { x: tp.x + ts.width / 2, y: tp.y + ts.height / 2 };
+            const sourceAngle = link.sourceAngle ?? angleFromDirection(tCenter.x - sCenter.x, tCenter.y - sCenter.y);
+            const targetAngle = link.targetAngle ?? angleFromDirection(sCenter.x - tCenter.x, sCenter.y - tCenter.y);
+            const p1 = anchorPoint({ x: pos.x + sp.x, y: pos.y + sp.y }, ss, "rectangle", sourceAngle);
+            const p2 = anchorPoint({ x: pos.x + tp.x, y: pos.y + tp.y }, ts, "rectangle", targetAngle);
+            result.push({
+              id: `wl-${instanceId}-${link.id}`,
+              source: clusterNodeId(instanceId, link.sourceNodeId),
+              target: clusterNodeId(instanceId, link.targetNodeId),
+              sourceHandle: `out-${snapToAnchor(sourceAngle)}`,
+              targetHandle: `in-${snapToAnchor(targetAngle)}`,
+              type: "angleEdge",
+              data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y },
+              deletable: false,
+              reconnectable: false,
+              style: { stroke: theme.accent, strokeWidth: 1.5, opacity: 0.75 },
+            });
+          }
+          return result;
+        })
+      : [];
+
+    // Freeform links a user draws directly on Dream Web (currently only
+    // reachable from a skill node's ring, see SkillDreamNode) — resolves
+    // against whichever of the four node kinds is at each end.
+    const boxFor = (id: string): { pos: { x: number; y: number }; size: { width: number; height: number }; shape: string } | null => {
+      if (id.startsWith("d-")) {
+        const dream = dreamById.get(parseDreamNodeId(id));
+        if (!dream) return null;
+        return { pos: positionFor(dream), size: nodeSizeFor(dream.priority, 1), shape: theme.dreamNodeShape };
+      }
+      if (id.startsWith("gs-")) {
+        const pos = standaloneGoalPositionById.get(parseStandaloneGoalNodeId(id));
+        return pos ? { pos, size: GOAL_SIZE, shape: GOAL_SHAPE } : null;
+      }
+      if (id.startsWith("g-")) {
+        const pos = goalPositionById.get(parseGoalNodeId(id));
+        return pos ? { pos, size: GOAL_SIZE, shape: GOAL_SHAPE } : null;
+      }
+      if (id.startsWith("sk-")) {
+        const pos = skillPositionById.get(id);
+        return pos ? { pos, size: { width: SKILL_NODE_WIDTH, height: SKILL_NODE_HEIGHT }, shape: "rectangle" } : null;
+      }
+      return null;
+    };
+
+    const skillWebLinkEdges: Edge[] = dreamWebLinks.flatMap((link) => {
+      const s = boxFor(link.sourceNodeId);
+      const t = boxFor(link.targetNodeId);
+      if (!s || !t) return [];
+      const sCenter = { x: s.pos.x + s.size.width / 2, y: s.pos.y + s.size.height / 2 };
+      const tCenter = { x: t.pos.x + t.size.width / 2, y: t.pos.y + t.size.height / 2 };
+      const sourceAngle = link.sourceAngle ?? angleFromDirection(tCenter.x - sCenter.x, tCenter.y - sCenter.y);
+      const targetAngle = link.targetAngle ?? angleFromDirection(sCenter.x - tCenter.x, sCenter.y - tCenter.y);
+      const p1 = anchorPoint(s.pos, s.size, s.shape, sourceAngle);
+      const p2 = anchorPoint(t.pos, t.size, t.shape, targetAngle);
+      return [
+        {
+          id: `dwl-${link.id}`,
+          source: link.sourceNodeId,
+          target: link.targetNodeId,
+          sourceHandle: `out-${snapToAnchor(sourceAngle)}`,
+          targetHandle: `in-${snapToAnchor(targetAngle)}`,
+          type: "angleEdge",
+          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y },
+          reconnectable: false,
+          style: { stroke: theme.dreamGoalNodeOutlineColor, strokeWidth: 1.5, opacity: 0.75 },
+        },
+      ];
+    });
+
+    return [...linkEdges, ...goalEdges, ...clusterLinkEdges, ...skillWebLinkEdges];
   }, [
     links,
     activeDreams,
     linksByDream,
     goalPositionById,
+    standaloneGoalPositionById,
+    skillPositionById,
+    dreamWebLinks,
+    dreamById,
     theme.dreamLinkColor,
     theme.dreamGoalNodeOutlineColor,
     theme.dreamNodeShape,
+    theme.accent,
+    fullView,
+    goalInstances,
+    clusterDataByGoalId,
   ]);
 
   const onNodesChange = (changes: NodeChange[]) => {
@@ -493,6 +1060,10 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       .filter((c) => c.type !== "remove")
       .map((c) => {
         if (c.type !== "position" || !c.position) return c;
+        // Cluster sub-nodes (Full view) and skill/standalone-goal nodes
+        // are freely draggable in both axes — only real goal attachments
+        // and dated dreams below get an axis locked.
+        if (c.id.includes("::") || c.id.startsWith("sk-") || c.id.startsWith("gs-") || c.id.startsWith("dn-")) return c;
         if (c.id.startsWith("g-")) {
           const link = linkById.get(parseGoalNodeId(c.id));
           if (!link) return c;
@@ -511,7 +1082,55 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     setNodes((nds) => applyNodeChanges(adjusted, nds));
   };
 
+  const goalInstanceById = useMemo(() => new Map(goalInstances.map((i) => [i.instanceId, i])), [goalInstances]);
+
   const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
+    const cluster = parseClusterNodeId(node.id);
+    if (cluster) {
+      // Only task cards are draggable inside a cluster (see clusterNodes
+      // above) — persisted the same way GoalWebPage's own task drag is,
+      // just working back from this instance's translated position.
+      const m = /^tk-(\d+)$/.exec(cluster.inner);
+      if (!m) return;
+      const taskId = Number(m[1]);
+      const instance = goalInstanceById.get(cluster.instanceId);
+      if (!instance) return;
+      const data = clusterDataByGoalId.get(instance.goalId);
+      const task = data?.tasks.find((t) => t.id === taskId);
+      if (!data || !task) return;
+      const scale = data.goal.webScale ?? 1;
+      const worldBase = { x: instance.pos.x + (data.layout.taskPos.get(taskId)?.x ?? 0) - task.posX * scale, y: instance.pos.y + (data.layout.taskPos.get(taskId)?.y ?? 0) - task.posY * scale };
+      const localX = (node.position.x - worldBase.x) / scale;
+      const localY = (node.position.y - worldBase.y) / scale;
+      updateProgressPosition(taskId, localX, localY);
+      return;
+    }
+    if (node.id.startsWith("sk-")) {
+      const linkId = parseSkillNodeId(node.id);
+      updateDreamSkillPosition(linkId, node.position.x, node.position.y);
+      setDreamSkills((prev) => prev.map((s) => (s.linkId === linkId ? { ...s, posX: node.position.x, posY: node.position.y } : s)));
+      return;
+    }
+    if (node.id.startsWith("dn-")) {
+      const linkId = parseDreamNoteNodeId(node.id);
+      const { x, y } = node.position;
+      updateNoteWebLinkPosition(linkId, x, y);
+      setNoteLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, posX: x, posY: y } : l)));
+      return;
+    }
+    if (node.id.startsWith("wg-")) {
+      const id = parseWidgetNodeId(node.id);
+      const { x, y } = node.position;
+      updateWebWidgetPosition(id, x, y);
+      setWebWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, posX: x, posY: y } : w)));
+      return;
+    }
+    if (isStandaloneGoalNodeId(node.id)) {
+      const goalId = parseStandaloneGoalNodeId(node.id);
+      updateGoalWebPosition(goalId, node.position.x, node.position.y);
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, posX: node.position.x, posY: node.position.y } : g)));
+      return;
+    }
     if (node.id.startsWith("g-")) {
       const linkId = parseGoalNodeId(node.id);
       if (!linkById.has(linkId)) return;
@@ -564,6 +1183,17 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       if (!link) return;
       const angle = parseAngleHandleId(dreamHandle);
       addOrUpdateGoalDreamLink(link.goalId, dreamId, angle).then(load);
+      return;
+    }
+
+    // A skill has no dedicated link system of its own — any connection
+    // touching a skill node (to a dream, a goal, or another skill) just
+    // becomes a plain freeform dream_web_link (see db/dreamWebLinks.ts).
+    if (connection.source.startsWith("sk-") || connection.target.startsWith("sk-")) {
+      if (connection.source === connection.target) return;
+      const sourceAngle = parseAngleHandleId(connection.sourceHandle);
+      const targetAngle = parseAngleHandleId(connection.targetHandle);
+      addDreamWebLink(connection.source, connection.target, sourceAngle, targetAngle).then(load);
     }
   };
 
@@ -622,11 +1252,59 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
         removeDreamLink(parseLinkEdgeId(edge.id)).then(load);
       } else if (edge.id.startsWith("goal-edge-")) {
         removeGoalDreamLink(parseGoalEdgeId(edge.id)).then(load);
+      } else if (edge.id.startsWith("dwl-")) {
+        removeDreamWebLink(Number(edge.id.slice(4))).then(load);
       }
     }
   };
 
   const onNodeClick = (event: React.MouseEvent, node: Node) => {
+    const cluster = parseClusterNodeId(node.id);
+    if (cluster) {
+      const instance = goalInstanceById.get(cluster.instanceId);
+      if (!instance) return;
+      const prM = /^pr-(\d+)$/.exec(cluster.inner);
+      if (prM) {
+        onNavigate({ type: "project-detail", projectId: Number(prM[1]) });
+        return;
+      }
+      const rsM = /^rs-(\d+)$/.exec(cluster.inner);
+      if (rsM) {
+        onNavigate({ type: "responsibility-detail", responsibilityId: Number(rsM[1]) });
+        return;
+      }
+      const tkM = /^tk-(\d+)$/.exec(cluster.inner);
+      if (tkM) {
+        const taskId = Number(tkM[1]);
+        const task = clusterDataByGoalId.get(instance.goalId)?.tasks.find((t) => t.id === taskId);
+        onNavigate({
+          type: "progress-node-detail",
+          nodeId: taskId,
+          projectId: task?.projectId ?? undefined,
+          goalId: task?.goalId ?? undefined,
+        });
+      }
+      return;
+    }
+    if (node.id.startsWith("sk-")) {
+      // Opens via the node's own onOpen click handler already.
+      return;
+    }
+    if (node.id.startsWith("dn-")) {
+      const linkId = parseDreamNoteNodeId(node.id);
+      const link = noteLinks.find((l) => l.id === linkId);
+      if (link) onNavigate({ type: "notes", pageId: link.noteId });
+      return;
+    }
+    if (node.id.startsWith("wg-")) {
+      // Opens via the node's own click handlers already (open button /
+      // inline widget content) — same as skill nodes above.
+      return;
+    }
+    if (isStandaloneGoalNodeId(node.id)) {
+      onNavigate({ type: "goal-detail", goalId: parseStandaloneGoalNodeId(node.id) });
+      return;
+    }
     if (node.id.startsWith("g-")) {
       const link = linkById.get(parseGoalNodeId(node.id));
       if (link) onNavigate({ type: "goal-detail", goalId: link.goalId });
@@ -663,7 +1341,80 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     }
   };
 
+  // One dropdown for which dream owns the attachment, one for which note
+  // (or "+ Create new") — same one-dropdown-per-choice, one-button
+  // convention GoalWebPage's add panel uses. Placed at a default spot
+  // just below that dream's skill row (see noteNodes above); only ever
+  // inserts a note_web_links row, never copies the note itself.
+  const handleNoteAction = async () => {
+    if (!noteDreamChoice) return;
+    const dreamId = Number(noteDreamChoice);
+    if (noteChoice === NEW_NOTE_SENTINEL) {
+      setCreatingNote(true);
+      try {
+        const noteId = await addPage(null, "Notes", "New Note");
+        await addNoteWebLink("dream", dreamId, noteId, 0, 0);
+        setNoteChoice("");
+        load();
+      } finally {
+        setCreatingNote(false);
+      }
+      return;
+    }
+    if (!noteChoice) return;
+    await addNoteWebLink("dream", dreamId, Number(noteChoice), 0, 0);
+    setNoteChoice("");
+    load();
+  };
+
+  // Journal/linkboard/table widgets have no inline render on the canvas
+  // (see WebWidgetNode.tsx) — clicking their "Open" button navigates to
+  // the widget's existing page, same destination GoalWebPage's own
+  // handleOpenWidget sends a grid widget to. Photo/dock/costlog/
+  // calculator render fully inline on the node itself, so they never
+  // call this.
+  const handleOpenWebWidget = (widget: ProjectWidget) => {
+    if (widget.widgetType === "table") {
+      onNavigate({ type: "project-table", widgetId: widget.id });
+    } else if (widget.widgetType === "journal") {
+      onNavigate({ type: "project-journal", widgetId: widget.id });
+    } else if (widget.widgetType === "linkboard") {
+      onNavigate({ type: "project-board", widgetId: widget.id });
+    }
+  };
+
+  // Same one-dropdown-per-choice, one-button convention as
+  // handleNoteAction just above — pick which dream owns the widget, then
+  // which type to add.
+  const handleAddWebWidget = async () => {
+    if (!widgetDreamChoice || !widgetChoice) return;
+    const dreamId = Number(widgetDreamChoice);
+    await addWebWidget(
+      "dream",
+      dreamId,
+      widgetChoice,
+      WIDGET_TYPE_LABELS[widgetChoice],
+      0,
+      0,
+      WEB_WIDGET_DEFAULT_WIDTH,
+      WEB_WIDGET_DEFAULT_HEIGHT
+    );
+    setWidgetChoice("");
+    load();
+  };
+
   const timeline = [...activeDreams].sort(timelineSort);
+  // Every goal (attached or not) belongs on the same timeline list as
+  // dreams — sorted the same "dated first, then alphabetical undated"
+  // way, just rendered as a visually distinct row (see .dream-timeline-
+  // item-goal in DreamWebPage.css) so the two kinds stay tellable apart
+  // at a glance.
+  const goalTimeline = [...goals].sort((a, b) => {
+    if (!a.expectedDateStart && !b.expectedDateStart) return a.name.localeCompare(b.name);
+    if (!a.expectedDateStart) return 1;
+    if (!b.expectedDateStart) return -1;
+    return a.expectedDateStart.localeCompare(b.expectedDateStart);
+  });
   const showMonthLines = zoom >= MONTH_ZOOM_THRESHOLD;
 
   const priorityColorFor = (p: DreamPriority) =>
@@ -678,8 +1429,12 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   }
 
   return (
-    <div className="dream-web-shell">
-      <aside className="dream-timeline">
+    <div className="dream-web-shell" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
+      <DecalLayer decals={decals} target="page-bg" />
+      {mobile && timelineOpen && (
+        <div className="dream-timeline-backdrop" onClick={() => setTimelineOpen(false)} />
+      )}
+      <aside className={`dream-timeline${mobile && timelineOpen ? " is-open" : ""}`}>
         <div className="dream-timeline-header">
           <h2 className="dream-timeline-title">Timeline</h2>
           <button className="add-button" onClick={handleAddDream} disabled={creating}>
@@ -704,6 +1459,28 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           ))}
         </ul>
 
+        {goalTimeline.length > 0 && (
+          <>
+            <h2 className="dream-timeline-title dream-timeline-title-goals">Goals</h2>
+            <ul className="dream-timeline-list">
+              {goalTimeline.map((goal) => (
+                <li key={goal.id}>
+                  <button
+                    className="dream-timeline-item dream-timeline-item-goal"
+                    onClick={() => onNavigate({ type: "goal-detail", goalId: goal.id })}
+                  >
+                    <span className="dream-timeline-dot" style={{ background: theme.dreamGoalNodeOutlineColor }} />
+                    <span className="dream-timeline-info">
+                      <span className="dream-timeline-name">{goal.name}</span>
+                      <span className="dream-timeline-date">{goal.expectedDateStart || "No date set"}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
         {sleepingDreams.length > 0 && (
           <>
             <h2 className="dream-timeline-title dream-timeline-title-sleeping">Sleeping</h2>
@@ -727,9 +1504,124 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       </aside>
 
       <div className="dream-canvas-area">
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-          <h1 style={{ margin: 0, fontSize: "22px" }}>Dream Web</h1>
-          <StyledButton buttonKey="web-zoom-back" iconKey="back" onClick={() => onNavigate({ type: "home" })} />
+        <div className="web-page-header">
+          <h1 className="page-title" style={{ margin: 0, fontSize: "22px" }}>
+            Dream Web
+          </h1>
+          <div className="web-page-header-actions">
+            {mobile && (
+              <button className="add-button secondary" onClick={() => setTimelineOpen(true)}>
+                Timeline
+              </button>
+            )}
+            <button
+              className="add-button secondary"
+              onClick={toggleFullView}
+              title="Toggle between just goals/dreams/skills and everything each goal owns"
+            >
+              {fullView ? "🕸 Full" : "🕸 Simple"}
+            </button>
+            <div style={{ position: "relative" }}>
+              <button className="add-button secondary" onClick={() => setShowNotesPanel((v) => !v)}>
+                📝 Notes
+              </button>
+              {showNotesPanel && (
+                <div className="goal-web-add-panel" style={{ position: "absolute", top: "100%", right: 0, zIndex: 20 }}>
+                  <div className="goal-web-add-panel-row">
+                    <span className="goal-web-add-panel-label">ATTACH NOTE</span>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <select
+                        className="inline-add-input"
+                        style={{ marginBottom: 0, flex: 1 }}
+                        value={noteDreamChoice}
+                        onChange={(e) => setNoteDreamChoice(e.target.value)}
+                      >
+                        <option value="">To dream…</option>
+                        {activeDreams.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <select
+                        className="inline-add-input"
+                        style={{ marginBottom: 0, flex: 1 }}
+                        value={noteChoice}
+                        onChange={(e) => setNoteChoice(e.target.value)}
+                      >
+                        <option value="">Choose note…</option>
+                        <option value={NEW_NOTE_SENTINEL}>+ Create new</option>
+                        {notePickerOptions.map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="add-button secondary"
+                        onClick={handleNoteAction}
+                        disabled={!noteDreamChoice || !noteChoice || creatingNote}
+                      >
+                        {creatingNote ? "Adding…" : noteChoice === NEW_NOTE_SENTINEL ? "New" : "Link"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{ position: "relative" }}>
+              <button className="add-button secondary" onClick={() => setShowWidgetsPanel((v) => !v)}>
+                🧩 Widgets
+              </button>
+              {showWidgetsPanel && (
+                <div className="goal-web-add-panel" style={{ position: "absolute", top: "100%", right: 0, zIndex: 20 }}>
+                  <div className="goal-web-add-panel-row">
+                    <span className="goal-web-add-panel-label">ADD WIDGET</span>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <select
+                        className="inline-add-input"
+                        style={{ marginBottom: 0, flex: 1 }}
+                        value={widgetDreamChoice}
+                        onChange={(e) => setWidgetDreamChoice(e.target.value)}
+                      >
+                        <option value="">To dream…</option>
+                        {activeDreams.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <select
+                        className="inline-add-input"
+                        style={{ marginBottom: 0, flex: 1 }}
+                        value={widgetChoice}
+                        onChange={(e) => setWidgetChoice(e.target.value as ProjectWidgetType | "")}
+                      >
+                        <option value="">Choose type…</option>
+                        {(Object.keys(WIDGET_TYPE_LABELS) as ProjectWidgetType[]).map((type) => (
+                          <option key={type} value={type}>
+                            {WIDGET_TYPE_LABELS[type]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="add-button secondary"
+                        onClick={handleAddWebWidget}
+                        disabled={!widgetDreamChoice || !widgetChoice}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <StyledButton buttonKey="web-zoom-back" iconKey="back" onClick={() => onNavigate({ type: "home" })} />
+          </div>
         </div>
 
         <div
@@ -761,6 +1653,8 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
             deleteKeyCode={["Backspace", "Delete"]}
             minZoom={0.05}
             maxZoom={4}
+            panOnDrag
+            zoomOnPinch
             proOptions={{ hideAttribution: true }}
           >
             <ViewportPortal>
@@ -770,7 +1664,11 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                   appended to the DOM after them. */}
               <div style={{ position: "absolute", top: 0, left: 0, zIndex: -1 }}>
                 {gridLines
-                  .filter((l) => l.isYear || showMonthLines)
+                  // The current-month line stays visible regardless of
+                  // zoom (it's the one fixed "you are here" marker) —
+                  // every other month line still only shows once zoomed
+                  // in enough to read them.
+                  .filter((l) => l.isYear || l.isCurrentMonth || showMonthLines)
                   .map((l, i) => (
                     <div
                       key={i}
@@ -778,29 +1676,29 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                         position: "absolute",
                         top: l.y,
                         left: -6000,
-                        height: l.isCurrentYear ? 3 : l.isYear ? 2 : 1,
+                        height: l.isCurrentMonth ? 3 : l.isYear ? 2 : 1,
                         width: 13000,
-                        background: l.isCurrentYear
+                        background: l.isCurrentMonth
                           ? "#f4c430"
                           : l.isYear
                           ? "rgba(255,255,255,0.22)"
                           : "rgba(255,255,255,0.08)",
-                        boxShadow: l.isCurrentYear ? "0 0 8px rgba(244,196,48,0.6)" : "none",
+                        boxShadow: l.isCurrentMonth ? "0 0 8px rgba(244,196,48,0.6)" : "none",
                         pointerEvents: "none",
                       }}
                     >
                       <span
                         style={{
                           position: "absolute",
-                          top: l.isCurrentYear ? -19 : -16,
+                          top: l.isCurrentMonth ? -19 : -16,
                           left: 5980,
-                          fontSize: l.isCurrentYear ? 13 : l.isYear ? 12 : 10,
-                          fontWeight: l.isCurrentYear || l.isYear ? 700 : 400,
-                          color: l.isCurrentYear ? "#f4c430" : "rgba(255,255,255,0.55)",
+                          fontSize: l.isCurrentMonth ? 13 : l.isYear ? 12 : 10,
+                          fontWeight: l.isCurrentMonth || l.isYear ? 700 : 400,
+                          color: l.isCurrentMonth ? "#f4c430" : "rgba(255,255,255,0.55)",
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {l.label}
+                        {l.isCurrentMonth ? `${l.label} (today)` : l.label}
                       </span>
                     </div>
                   ))}
@@ -855,21 +1753,77 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                         </g>
                       );
                     })}
+
+                  {/* Same flagpole convention as dreams above, just for
+                      every dated goal with a real range (attached or
+                      standalone) — a differently colored bar (the goal
+                      outline color, not the dream one) so the two read
+                      as distinct at a glance. */}
+                  {goalInstances
+                    .map((instance) => ({ instance, goal: goalById.get(instance.goalId) }))
+                    .filter(
+                      (
+                        entry
+                      ): entry is { instance: (typeof goalInstances)[number]; goal: Goal } =>
+                        !!entry.goal?.expectedDateStart &&
+                        !!entry.goal.expectedDateEnd &&
+                        entry.goal.expectedDateStart !== entry.goal.expectedDateEnd
+                    )
+                    .map(({ instance, goal }) => {
+                      const startY = isoToY(goal.expectedDateStart!);
+                      const endY = isoToY(goal.expectedDateEnd!);
+                      const centerX = instance.pos.x + GOAL_NODE_WIDTH / 2;
+                      const color = theme.dreamGoalNodeOutlineColor;
+                      const yTop = Math.min(startY, endY);
+                      const yBottom = Math.max(startY, endY);
+                      const topLabel = yTop === endY ? goal.expectedDateEnd! : goal.expectedDateStart!;
+                      const bottomLabel = yTop === endY ? goal.expectedDateStart! : goal.expectedDateEnd!;
+                      return (
+                        <g key={instance.instanceId}>
+                          <path d={rangeBarPath(centerX, yTop, yBottom)} fill={color} opacity={0.75} />
+                          <text
+                            x={centerX}
+                            y={yTop - 8}
+                            textAnchor="middle"
+                            fontSize={11}
+                            fontWeight={700}
+                            fill={color}
+                            style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                          >
+                            {formatShortDate(topLabel)}
+                          </text>
+                          <text
+                            x={centerX}
+                            y={yBottom + 18}
+                            textAnchor="middle"
+                            fontSize={11}
+                            fontWeight={700}
+                            fill={color}
+                            style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                          >
+                            {formatShortDate(bottomLabel)}
+                          </text>
+                        </g>
+                      );
+                    })}
                 </svg>
               </div>
             </ViewportPortal>
 
-            <Panel position="top-right" className="dream-canvas-hint">
-              Future is up, past is down. Drag from anywhere along a node's edge to link dreams, or to
-              attach a goal to a dream. Dated dreams and goals only move left/right — change the date
-              to move them in time.
+            <ViewportPortal>
+              <DecalLayer decals={decals} target="canvas" surface="section:dreams-web" />
+            </ViewportPortal>
+
+            <Panel position="top-right" className="web-hint-panel">
+              <HintTooltip text="Future is up, past is down. Drag from anywhere along a node's edge to link dreams, or to attach a goal to a dream. Dated dreams and goals only move left/right — change the date to move them in time." />
             </Panel>
             <Background
-              color="#64748b"
+              color={theme.webGridColor}
               bgColor={theme.dreamWebBackgroundImage ? "transparent" : theme.dreamWebBackground}
               gap={16}
             />
             <WebControls />
+            {theme.showLaborLegend !== "0" && <LaborLegend />}
           </ReactFlow>
         </div>
       </div>

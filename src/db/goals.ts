@@ -5,10 +5,11 @@ import { recordEntityHistory, deleteEntityHistoryFor } from "./entityHistory";
 
 const GOAL_COLUMNS = `
   id, dream_id as dreamId, name, goals, reasoning, needs_doing as needsDoing,
-  pos_x as posX, dream_attach_angle as dreamAttachAngle, is_passion_project as isPassionProject,
+  pos_x as posX, pos_y as posY, dream_attach_angle as dreamAttachAngle, web_scale as webScale,
+  is_passion_project as isPassionProject,
   estimated_start_date as estimatedStartDate,
   expected_date_start as expectedDateStart, expected_date_end as expectedDateEnd,
-  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt
+  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt, image_data as imageData
 `;
 
 type RawGoalRow = {
@@ -19,7 +20,9 @@ type RawGoalRow = {
   reasoning: string;
   needsDoing: string;
   posX: number | null;
+  posY: number | null;
   dreamAttachAngle: number | null;
+  webScale: number | null;
   isPassionProject: number;
   estimatedStartDate: string | null;
   expectedDateStart: string | null;
@@ -27,6 +30,7 @@ type RawGoalRow = {
   sortOrder: number;
   createdAt: string | null;
   updatedAt: string | null;
+  imageData: string | null;
 };
 
 function mapGoalRow(row: RawGoalRow): Goal {
@@ -38,7 +42,13 @@ function mapGoalRow(row: RawGoalRow): Goal {
     expectedDateEnd: row.expectedDateEnd ?? undefined,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
+    imageData: row.imageData ?? undefined,
   };
+}
+
+export async function updateGoalImage(id: number, imageData: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE goals SET image_data = $1 WHERE id = $2", [imageData, id]);
 }
 
 // Goals proper — passion projects are excluded so GoalsHomePage doesn't
@@ -175,6 +185,21 @@ export async function updateGoalEstimatedStartDate(id: number, date: string | nu
     [date, id]
   );
   await recordEntityHistory("goal", id, "Estimated start date", current[0]?.value ?? null, date);
+}
+
+// Standalone world position for a goal's Dream Web node — only
+// meaningful while the goal has zero goal_dream_links (see
+// DreamWebPage.tsx); becomes stale/unused the moment it's attached to a
+// dream, same as dreams.pos_x/pos_y going unused once a dream gets a
+// date.
+export async function updateGoalWebPosition(id: number, x: number, y: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE goals SET pos_x = $1, pos_y = $2 WHERE id = $3", [x, y, id]);
+}
+
+export async function updateGoalWebScale(id: number, scale: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE goals SET web_scale = $1 WHERE id = $2", [scale, id]);
 }
 
 export async function deleteGoal(id: number): Promise<void> {

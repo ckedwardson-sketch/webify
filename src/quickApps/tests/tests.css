@@ -1,0 +1,150 @@
+.quick-test {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  text-align: center;
+}
+
+.quick-test-progress {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.quick-test-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  max-width: 320px;
+  margin: 0;
+}
+
+.quick-test-stimulus-box {
+  width: 200px;
+  height: 140px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quick-test-stimulus-box.go {
+  background: #22c55e;
+  color: #fff;
+  border-color: #22c55e;
+}
+
+/* Digit-Symbol */
+.dst-key {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.dst-key-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 30px;
+  font-size: 0.75rem;
+}
+
+.dst-key-digit {
+  color: var(--color-text-secondary);
+}
+
+.dst-key-symbol {
+  font-size: 1.1rem;
+}
+
+.dst-digit {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dst-answers {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dst-answer-btn {
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  cursor: pointer;
+}
+
+.dst-answer-btn:hover {
+  background: var(--color-bg-secondary);
+}
+
+/* 2-Back */
+.two-back-letter {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--color-text);
+  min-height: 60px;
+}
+
+/* Stroop */
+.stroop-word {
+  font-size: 2.2rem;
+  font-weight: 700;
+}
+
+.stroop-answers {
+  display: flex;
+  gap: 10px;
+}
+
+.stroop-answer-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-strong);
+  cursor: pointer;
+}
+
+/* Short-term memory */
+.stm-digit {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--color-text);
+  min-height: 60px;
+}
+
+/* KSS */
+.kss-scale {
+  display: flex;
+  gap: 4px;
+}
+
+.kss-option {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.kss-option.selected {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}

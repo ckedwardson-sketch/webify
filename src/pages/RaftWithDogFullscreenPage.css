@@ -1,0 +1,72 @@
+.raft-dog-stats-row {
+  display: flex;
+  gap: var(--space-md);
+  margin-bottom: 20px;
+}
+
+.raft-dog-stat-tile {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  padding: 12px;
+  text-align: center;
+}
+
+.raft-dog-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.raft-dog-stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.raft-dog-fullscreen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-md);
+}
+
+.raft-dog-fullscreen-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  padding: 10px;
+}
+
+.raft-dog-fullscreen-date {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.raft-dog-fullscreen-image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.raft-dog-fullscreen-image-placeholder {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.raft-dog-fullscreen-task {
+  font-size: 0.9rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}

@@ -71,8 +71,15 @@ export interface Responsibility {
   // alongside each goal's projects/tasks. Never required or automatic —
   // can be empty, or shared across multiple goals at once.
   goalIds: number[];
+  // Dragged offset from this card's automatic grid slot on a goal's web
+  // (see webGraph/goalCluster.ts) — null = sits exactly at the grid slot.
+  webPosX: number | null;
+  webPosY: number | null;
   createdAt?: string;
   updatedAt?: string;
+  // Cover image — same convention as Project/Goal.imageData. Falls back
+  // to the `icon` emoji glyph in pane/icon-grid view when unset.
+  imageData?: string;
 }
 
 export interface ResponsibilityCompletion {

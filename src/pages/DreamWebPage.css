@@ -95,6 +95,39 @@
   min-width: 0;
 }
 
+.dream-timeline-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+html.mobile-layout .dream-web-shell {
+  position: relative;
+}
+
+html.mobile-layout .dream-timeline {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: min(280px, 86vw);
+  min-width: 0;
+  transform: translateX(-105%);
+  transition: transform 0.2s ease;
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.2);
+}
+
+html.mobile-layout .dream-timeline.is-open {
+  transform: none;
+}
+
+html.mobile-layout .dream-canvas-area {
+  padding: var(--graph-chrome-pad, 8px);
+  width: 100%;
+}
+
 .dream-canvas {
   flex: 1;
   width: 100%;
@@ -117,17 +150,31 @@ html.mobile-landscape .dream-canvas-area {
   padding: 8px;
 }
 
-.dream-canvas-hint {
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 11px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  max-width: 220px;
+.web-hint-panel {
+  margin: 8px;
+  background: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .dream-timeline-title-sleeping {
   margin-top: 16px;
+}
+
+.dream-timeline-title-goals {
+  margin-top: 16px;
+}
+
+/* Goals sit further in from the sidewall than dreams (extra left
+   padding/margin) and read in the goal accent color instead of a
+   priority dot, so the two lists stay visually distinct at a glance. */
+.dream-timeline-item-goal {
+  margin-left: 10px;
+  width: calc(100% - 10px);
+}
+
+.dream-timeline-item-goal .dream-timeline-name {
+  color: var(--color-goal-accent, #a78bfa);
 }
 
 .dream-timeline-item-sleeping .dream-timeline-name,

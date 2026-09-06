@@ -29,6 +29,9 @@ import {
   fetchFreetextFields,
   availableFieldsToAdd as computeAvailableFieldsToAdd,
   updateFieldStyle,
+  updateFieldColumn,
+  updateFieldLayoutLabel,
+  updateFieldLayoutHeight,
   FieldLayoutRow,
   FieldStylePatch,
   FieldType,
@@ -42,18 +45,21 @@ import { EstimatedStartDateField } from "../components/EstimatedStartDateField";
 import { FreetextFieldEditor } from "../components/FreetextFieldEditor";
 import { ImageDockWidget } from "../components/ImageDockWidget";
 import { QuickPhotoWidget } from "../components/QuickPhotoWidget";
+import { CostLogWidget } from "../components/CostLogWidget";
+import { CalculatorWidget } from "../components/CalculatorWidget";
 import { TableWidgetPreview } from "../components/TableWidgetPreview";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
 import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
-import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, mergeFieldStylePatch, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
 import { withFieldUndo } from "../rearrange/fieldUndo";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useTheme } from "../theme/ThemeContext";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 import "./Page.css";
 import "./ProjectDetailPage.css";
 
-const ALL_WIDGET_TYPES: ProjectWidgetType[] = ["journal", "linkboard", "table", "photo", "dock"];
+const ALL_WIDGET_TYPES: ProjectWidgetType[] = ["journal", "linkboard", "table", "photo", "dock", "costlog", "calculator"];
 const COPIABLE_FIELD_TYPES: FieldType[] = ["goals_text", "reasoning_text", "needs_doing_text", "freetext"];
 
 function gapOrderBefore(fields: FieldLayoutRow[], index: number): number {
@@ -96,6 +102,7 @@ export function ProjectDetailPage({
     active: rearranging,
     deleteToolActive,
     copyToolActive,
+    columnToolActive,
     copiedFieldId,
     copyField,
     insertAt,
@@ -104,6 +111,12 @@ export function ProjectDetailPage({
     pushUndo,
   } = useRearrangeMode();
   const { registerFieldStyleTarget } = useFieldStyleRegistry();
+  const { theme } = useTheme();
+  const detailColumnCount = Math.max(1, Math.min(3, Number(theme.detailColumnCount) || 1));
+  // "auto" keeps this page's original look (tiles); "cards"/"tiles" force
+  // that style on both Goal and Project Detail — see GoalDetailPage's
+  // mirror of this same field.
+  const widgetGridStyle = theme.widgetGridStyle === "cards" ? "cards" : "tiles";
 
   const load = async () => {
     const p = await fetchProject(projectId);
@@ -218,6 +231,8 @@ export function ProjectDetailPage({
     table: "Table",
     photo: "Quick Photo",
     dock: "Image Dock",
+    costlog: "Cost Log",
+    calculator: "Calculator",
   };
 
   const WIDGET_ICON_KEYS: Record<ProjectWidgetType, string> = {
@@ -226,6 +241,8 @@ export function ProjectDetailPage({
     table: "widget-table",
     photo: "widget-photo",
     dock: "widget-dock",
+    costlog: "widget-costlog",
+    calculator: "widget-calculator",
   };
 
   const handleAddWidget = async (type: ProjectWidgetType) => {
@@ -353,6 +370,16 @@ export function ProjectDetailPage({
     updateFieldStyle(row.id, patch);
   };
 
+  const handleFieldStyleRename = (fieldId: number, label: string | null) => {
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, customLabel: label } : f)));
+    updateFieldLayoutLabel(fieldId, label);
+  };
+
+  const handleFieldResize = (fieldId: number, heightPx: number | null) => {
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, heightPx } : f)));
+    updateFieldLayoutHeight(fieldId, heightPx);
+  };
+
   // Lets ctrl+click on any field (see RearrangeableField.tsx) open its
   // style controls in the Dynamic Settings panel — see
   // FieldStyleRegistryContext.tsx and overlay/FieldStyleQuickEdit.tsx.
@@ -363,6 +390,7 @@ export function ProjectDetailPage({
         const row = fields.find((f) => f.id === fieldId);
         if (row) handleFieldStyleSave(row, patch);
       },
+      onRename: handleFieldStyleRename,
     });
     return () => registerFieldStyleTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -395,6 +423,11 @@ export function ProjectDetailPage({
   const availableFieldsToAdd: AddableField[] = computeAvailableFieldsToAdd("project", fields);
   const hasWidgetsField = fields.some((f) => f.fieldType === "widgets");
 
+  const handleCycleColumn = async (f: FieldLayoutRow) => {
+    await updateFieldColumn(f.id, (f.column + 1) % detailColumnCount);
+    load();
+  };
+
   // Registers this page as rearrange mode's active target whenever it's
   // mounted with a loaded project — see rearrange/RearrangeModeContext.tsx.
   // Re-registers on every widgets/fields/project change so the toolbar's
@@ -416,10 +449,12 @@ export function ProjectDetailPage({
       availableFieldsToAdd,
       onAddField: handleAddField,
       onPasteField: handlePasteField,
+      columnCount: detailColumnCount > 1 ? detailColumnCount : undefined,
+      onSetFieldColumn: (fieldId, column) => updateFieldColumn(fieldId, column).then(load),
     });
     return () => registerTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, widgets, fields, insertAt]);
+  }, [project, widgets, fields, insertAt, detailColumnCount]);
 
   // Widget cards: only the small ⠿ handle is the native drag source —
   // NOT the whole card — deliberately: this card sits nested inside the
@@ -520,11 +555,84 @@ export function ProjectDetailPage({
           <button className="add-button secondary" onClick={() => handleAddWidget("dock")}>
             Image Dock
           </button>
+          <button className="add-button secondary" onClick={() => handleAddWidget("costlog")}>
+            Cost Log
+          </button>
+          <button className="add-button secondary" onClick={() => handleAddWidget("calculator")}>
+            Calculator
+          </button>
         </div>
       )}
 
       {widgets.length === 0 ? (
         <p className="page-text">No widgets yet.</p>
+      ) : widgetGridStyle === "cards" ? (
+        <div className="project-widget-grid">
+          {widgets.map((w) => (
+            <div
+              key={w.id}
+              className={`project-widget-card${["dock", "photo", "table", "costlog", "calculator"].includes(w.widgetType) ? " project-widget-card-inline" : ""}${rearranging ? " project-widget-card-rearranging" : ""}${dragOverId === w.id ? " project-widget-card-drop-target" : ""}${rearranging && deleteToolActive ? " project-widget-card-delete-armed" : ""}`}
+              onDragOver={(e) => handleWidgetDragOver(e, w.id)}
+              onDragLeave={() => setDragOverId((id) => (id === w.id ? null : id))}
+              onDrop={(e) => handleWidgetDrop(e, w.id)}
+              onClickCapture={(e) => {
+                if (rearranging && (deleteToolActive || copyToolActive)) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleWidgetCardClick(w.id, () => {});
+                }
+              }}
+            >
+              {rearranging && (
+                <span
+                  className="project-widget-card-drag-handle"
+                  draggable
+                  title="Drag to reorder"
+                  onDragStart={(e) => handleWidgetDragStart(e, w.id)}
+                >
+                  ⠿
+                </span>
+              )}
+              {w.widgetType === "dock" ? (
+                <ImageDockWidget widgetId={w.id} />
+              ) : w.widgetType === "photo" ? (
+                <QuickPhotoWidget widgetId={w.id} />
+              ) : w.widgetType === "costlog" ? (
+                <CostLogWidget widgetId={w.id} />
+              ) : w.widgetType === "calculator" ? (
+                <CalculatorWidget widgetId={w.id} />
+              ) : w.widgetType === "table" ? (
+                <TableWidgetPreview
+                  widgetId={w.id}
+                  onOpen={() => onNavigate({ type: "project-table", widgetId: w.id, projectId: project.id })}
+                />
+              ) : (
+                <button
+                  className="project-widget-card-open"
+                  onClick={() =>
+                    onNavigate(
+                      w.widgetType === "journal"
+                        ? { type: "project-journal", widgetId: w.id, projectId: project.id }
+                        : { type: "project-board", widgetId: w.id, projectId: project.id }
+                    )
+                  }
+                >
+                  <span className="project-widget-card-icon">
+                    {w.widgetType === "journal" ? "📓" : "🧷"}
+                  </span>
+                  <span className="project-widget-card-title">{w.title}</span>
+                </button>
+              )}
+              <button
+                className="project-widget-card-delete"
+                onClick={() => handleDeleteWidget(w.id)}
+                title="Delete widget"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
       ) : (
         // A menu of uniform rounded tiles, not a mixed bag of button
         // sizes — every widget gets the same icon+title header, whether
@@ -534,7 +642,8 @@ export function ProjectDetailPage({
         // dock). Click a tile to go in, same as a console's game grid.
         <div className="project-wii-grid">
           {widgets.map((w) => {
-            const isInline = w.widgetType === "dock" || w.widgetType === "photo" || w.widgetType === "table";
+            const isInline =
+              w.widgetType === "dock" || w.widgetType === "photo" || w.widgetType === "table" || w.widgetType === "costlog" || w.widgetType === "calculator";
             return (
               <div
                 key={w.id}
@@ -571,6 +680,10 @@ export function ProjectDetailPage({
                         <ImageDockWidget widgetId={w.id} />
                       ) : w.widgetType === "photo" ? (
                         <QuickPhotoWidget widgetId={w.id} />
+                      ) : w.widgetType === "costlog" ? (
+                        <CostLogWidget widgetId={w.id} />
+                      ) : w.widgetType === "calculator" ? (
+                        <CalculatorWidget widgetId={w.id} />
                       ) : (
                         <TableWidgetPreview
                           widgetId={w.id}
@@ -653,6 +766,7 @@ export function ProjectDetailPage({
               value={goalsDraft}
               onChange={(e) => setGoalsDraft(e.target.value)}
               onBlur={saveGoals}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="What is this project trying to achieve?"
             />
           </div>
@@ -670,6 +784,7 @@ export function ProjectDetailPage({
               value={reasoningDraft}
               onChange={(e) => setReasoningDraft(e.target.value)}
               onBlur={saveReasoning}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="Why does this project matter?"
             />
           </div>
@@ -687,6 +802,7 @@ export function ProjectDetailPage({
               value={needsDoingDraft}
               onChange={(e) => setNeedsDoingDraft(e.target.value)}
               onBlur={saveNeedsDoing}
+              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
               placeholder="What actually has to happen?"
             />
           </div>
@@ -730,18 +846,22 @@ export function ProjectDetailPage({
             label={ft.label}
             content={ft.content}
             field={f}
+            onResize={handleFieldResize}
           />
         );
       }
     }
   };
 
-  const fieldElements: React.ReactNode[] = [];
-  fields.forEach((f, i) => {
+  // Renders one field (+ its preceding gap, in rearrange mode) — shared
+  // by both the single-column path and the per-column buckets below, so
+  // the two rendering modes can't drift apart.
+  const renderFieldWithGap = (f: FieldLayoutRow, i: number): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
     if (rearranging) {
-      fieldElements.push(<FieldGap key={`gap-${f.id}`} order={gapOrderBefore(fields, i)} />);
+      nodes.push(<FieldGap key={`gap-${f.id}`} order={gapOrderBefore(fields, i)} />);
     }
-    fieldElements.push(
+    nodes.push(
       <RearrangeableField
         key={f.id}
         id={f.id}
@@ -758,13 +878,27 @@ export function ProjectDetailPage({
         onDrop={handleFieldDrop}
         onDelete={() => handleDeleteField(f)}
         onCopy={() => handleCopyField(f)}
+        columnToolActive={columnToolActive}
+        column={detailColumnCount > 1 ? f.column % detailColumnCount : undefined}
+        onCycleColumn={detailColumnCount > 1 ? () => handleCycleColumn(f) : undefined}
       >
         {renderField(f)}
       </RearrangeableField>
     );
+    return nodes;
+  };
+
+  // Column grouping is purely a display-time partition of the same flat,
+  // globally-ordered `fields` list (see FieldLayoutRow.column's comment)
+  // — sort_order/gap math is entirely unaffected by which column a field
+  // renders in.
+  const columnBuckets: React.ReactNode[][] = Array.from({ length: detailColumnCount }, () => []);
+  fields.forEach((f, i) => {
+    const col = detailColumnCount > 1 ? f.column % detailColumnCount : 0;
+    columnBuckets[col].push(...renderFieldWithGap(f, i));
   });
   if (rearranging) {
-    fieldElements.push(<FieldGap key="gap-end" order={gapOrderAfterLast(fields)} />);
+    columnBuckets[0].push(<FieldGap key="gap-end" order={gapOrderAfterLast(fields)} />);
   }
 
   return (
@@ -779,7 +913,7 @@ export function ProjectDetailPage({
         ]}
       />
 
-      <div className="page-header">
+      <div className="page-header detail-page-header-area">
         {editingName ? (
           <input
             className="title-rename-input"
@@ -829,7 +963,15 @@ export function ProjectDetailPage({
         </div>
       </div>
 
-      {fieldElements}
+      <div className="detail-page-body">
+        <div className="detail-columns">
+          {columnBuckets.map((bucket, i) => (
+            <div className="detail-column" key={i}>
+              {bucket}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

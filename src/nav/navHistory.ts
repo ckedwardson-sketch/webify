@@ -17,6 +17,10 @@ import { fetchResponsibility } from "../db/responsibilities";
 import { fetchProgressNode } from "../db/progress";
 import { fetchRecipe } from "../db/recipes";
 import { fetchPage } from "../db/notes";
+import { fetchSkill } from "../db/skills";
+import { fetchQuickAppTitle } from "../db/quickApps";
+import { RAFT_DOG_APP_KEY, RAFT_DOG_DEFAULT_TITLE } from "../quickApps/raftWithDogConstants";
+import { SLEEP_STUDY_APP_KEY, SLEEP_STUDY_DEFAULT_TITLE } from "../quickApps/sleepStudyConstants";
 
 const STATIC_LABELS: Partial<Record<View["type"], string>> = {
   home: "Home",
@@ -26,13 +30,19 @@ const STATIC_LABELS: Partial<Record<View["type"], string>> = {
   "settings-text": "Text",
   "settings-buttons": "Buttons",
   "settings-theme": "Theme",
+  "settings-mobile": "Mobile",
   "settings-issues": "Issues",
+  "settings-sync": "Sync",
   "responsibilities-home": "Responsibilities",
   "responsibilities-manage": "Manage",
   "dreams-web": "Dream Web",
   "goals-home": "Goals",
   "projects-home": "Projects",
   notes: "Notes",
+  "skills-home": "Skills",
+  "quick-apps-home": "Quick Apps",
+  "quick-apps-raft-dog-fullscreen": "Raft With Dog",
+  "quick-apps-sleep-study": "Sleep Study",
 };
 
 // Identity for path compaction/dedup purposes — deliberately ignores
@@ -68,6 +78,8 @@ export function viewKey(view: View): string {
       return `progress-node-detail:${view.nodeId}`;
     case "notes":
       return `notes:${view.pageId ?? "root"}`;
+    case "skill-tree":
+      return `skill-tree:${view.skillId}`;
     default:
       return view.type;
   }
@@ -125,6 +137,14 @@ export async function resolveLabel(view: View): Promise<string> {
         const p = await fetchPage(view.pageId);
         return p?.title ?? "Note";
       }
+      case "skill-tree": {
+        const s = await fetchSkill(view.skillId);
+        return s ? `${s.name} Tree` : "Skill Tree";
+      }
+      case "quick-apps-raft-dog-fullscreen":
+        return fetchQuickAppTitle(RAFT_DOG_APP_KEY, RAFT_DOG_DEFAULT_TITLE);
+      case "quick-apps-sleep-study":
+        return fetchQuickAppTitle(SLEEP_STUDY_APP_KEY, SLEEP_STUDY_DEFAULT_TITLE);
       default:
         return staticLabel(view);
     }

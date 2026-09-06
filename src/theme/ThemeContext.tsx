@@ -20,6 +20,9 @@ import { backgroundPatternFor } from "./backgroundPresets";
 import { motionFor } from "./motionPresets";
 import { clampSliderValue, CustomSliderDef, CustomSliderState } from "./customSliders";
 import { computeMobileLayout, computeMobileLandscape, MobileMode } from "./mobileLayout";
+import { fetchPresets, fetchPresetData } from "../db/themePresets";
+import { ThemeExport } from "./themeExport";
+import { parseTimeBasedThemeSchedule, activeScheduleEntry } from "./timeBasedTheme";
 
 interface ThemeContextValue {
   theme: ThemeSettings;
@@ -58,6 +61,12 @@ function applyTileVars(prefix: string, tile?: string, scale?: string): void {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [overrides, setOverrides] = useState<Partial<ThemeSettings>>({});
   const [customSliders, setCustomSlidersState] = useState<CustomSliderState[]>([]);
+  // Tracked alongside the html.mobile-layout class below so the density
+  // effect (which sets --space-page-x/-y as an inline style) knows when
+  // to back off and let the mobile page-spacing vars in theme.css win —
+  // otherwise the inline style would always beat the class rule, no
+  // matter which platform the user is actually on.
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     fetchThemeSettings()
@@ -84,6 +93,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute("data-nav-layout", theme.navLayout);
   }, [theme.navLayout]);
 
+  // Sidebar item flow/shape — orthogonal to navLayout above (see
+  // LayoutThemeSettings.sidebarMode).
+  useEffect(() => {
+    document.documentElement.setAttribute("data-sidebar-mode", theme.sidebarMode);
+  }, [theme.sidebarMode]);
+
+  // Detail page header position + column count — see theme.css's
+  // [data-detail-header]/.detail-columns rules, shared by Project/Goal/
+  // Dream Detail pages.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-detail-header", theme.detailHeaderPosition);
+  }, [theme.detailHeaderPosition]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--detail-column-count", theme.detailColumnCount || "1");
+  }, [theme.detailColumnCount]);
+
   // Mobile layout: html.mobile-layout / html.mobile-landscape, kept live
   // against the actual window in "auto" mode and re-applied whenever the
   // Settings toggle changes — see theme/mobileLayout.ts for why this is a
@@ -95,6 +121,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const landscape = computeMobileLandscape(mobile);
       document.documentElement.classList.toggle("mobile-layout", mobile);
       document.documentElement.classList.toggle("mobile-landscape", landscape);
+      setIsMobile(mobile);
     };
     apply();
     window.addEventListener("resize", apply);
@@ -104,6 +131,33 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("orientationchange", apply);
     };
   }, [theme.mobileMode]);
+
+  // Keyboard / shrinking visual viewport — used so floating controls and
+  // page content stay above the on-screen keyboard instead of sitting
+  // under it. 0 when the keyboard is closed.
+  //
+  // vv.offsetTop also grows whenever the OS temporarily steals space from
+  // the top of the viewport without changing safe-area-inset-top — e.g. an
+  // Android heads-up notification banner, or the browser chrome sliding
+  // back into view. --ui-protected-top exposes that so floating top
+  // controls (sidebar toggle, Web hint panel) can shift down and stay
+  // reachable/visible instead of being covered.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      const keyboardInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--keyboard-inset", `${keyboardInset}px`);
+      document.documentElement.style.setProperty("--ui-protected-top", `${Math.max(0, vv.offsetTop)}px`);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+    };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement.style;
@@ -156,11 +210,82 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     else root.removeProperty("--sidebar-item-gap");
   }, [overrides.sidebarItemGap]);
 
+  // Per-side page/card padding overrides — see Page.css's .page rule and
+  // theme.css's .pane-shape-surface rule, which fall back to the
+  // symmetric --space-page-x/-y defaults when these are unset.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const sides: [keyof typeof overrides, string][] = [
+      ["pagePaddingTop", "--space-page-top"],
+      ["pagePaddingRight", "--space-page-right"],
+      ["pagePaddingBottom", "--space-page-bottom"],
+      ["pagePaddingLeft", "--space-page-left"],
+      ["cardPaddingTop", "--card-padding-top"],
+      ["cardPaddingRight", "--card-padding-right"],
+      ["cardPaddingBottom", "--card-padding-bottom"],
+      ["cardPaddingLeft", "--card-padding-left"],
+    ];
+    for (const [key, cssVar] of sides) {
+      const value = overrides[key];
+      if (value) root.setProperty(cssVar, `${value}px`);
+      else root.removeProperty(cssVar);
+    }
+  }, [
+    overrides.pagePaddingTop,
+    overrides.pagePaddingRight,
+    overrides.pagePaddingBottom,
+    overrides.pagePaddingLeft,
+    overrides.cardPaddingTop,
+    overrides.cardPaddingRight,
+    overrides.cardPaddingBottom,
+    overrides.cardPaddingLeft,
+  ]);
+
   useEffect(() => {
     const root = document.documentElement.style;
     if (overrides.fieldSpacing) root.setProperty("--field-spacing", `${overrides.fieldSpacing}px`);
     else root.removeProperty("--field-spacing");
   }, [overrides.fieldSpacing]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.skillCardWidth) root.setProperty("--skill-card-width", `${overrides.skillCardWidth}px`);
+    else root.removeProperty("--skill-card-width");
+  }, [overrides.skillCardWidth]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.paneGridGap) root.setProperty("--pane-grid-gap", `${overrides.paneGridGap}px`);
+    else root.removeProperty("--pane-grid-gap");
+  }, [overrides.paneGridGap]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.skillCardHeight) root.setProperty("--skill-card-height", `${overrides.skillCardHeight}px`);
+    else root.removeProperty("--skill-card-height");
+  }, [overrides.skillCardHeight]);
+
+  // Mobile-only page spacing (Settings > Mobile > Page Spacing) — see
+  // the matching var(--mobile-*, default) fallbacks in theme.css /
+  // theme/mobile.css, which is what keeps these from ever touching the
+  // desktop layout: the fallback only resolves inside html.mobile-layout.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.mobilePagePaddingX) root.setProperty("--mobile-page-padding-x", `${overrides.mobilePagePaddingX}px`);
+    else root.removeProperty("--mobile-page-padding-x");
+  }, [overrides.mobilePagePaddingX]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.mobilePagePaddingY) root.setProperty("--mobile-page-padding-y", `${overrides.mobilePagePaddingY}px`);
+    else root.removeProperty("--mobile-page-padding-y");
+  }, [overrides.mobilePagePaddingY]);
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (overrides.mobileCardGap) root.setProperty("--mobile-card-gap", `${overrides.mobileCardGap}px`);
+    else root.removeProperty("--mobile-card-gap");
+  }, [overrides.mobileCardGap]);
 
   // Color Mode's tiling controls (see overlay/ColorModePanel.tsx) for
   // the three CSS-var-driven backgrounds — page, sidebar, field. Each
@@ -204,8 +329,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.setProperty("--space-sm", d.sm);
       root.setProperty("--space-md", d.md);
       root.setProperty("--space-lg", d.lg);
-      root.setProperty("--space-page-x", d.pageX);
-      root.setProperty("--space-page-y", d.pageY);
+      // On mobile, page padding is governed by Settings > Mobile > Page
+      // Spacing (--mobile-page-padding-x/-y, applied via the
+      // html.mobile-layout rule in theme.css). Leaving these inline
+      // properties unset there lets that class rule win instead of the
+      // desktop density preset flattening it out.
+      if (isMobile) {
+        root.removeProperty("--space-page-x");
+        root.removeProperty("--space-page-y");
+      } else {
+        root.setProperty("--space-page-x", d.pageX);
+        root.setProperty("--space-page-y", d.pageY);
+      }
     } else {
       root.removeProperty("--space-xs");
       root.removeProperty("--space-sm");
@@ -214,7 +349,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.removeProperty("--space-page-x");
       root.removeProperty("--space-page-y");
     }
-  }, [overrides.density]);
+  }, [overrides.density, isMobile]);
 
   // Surface/heading/background/motion are named presets, same pattern
   // as font/radius/density above — each fans out to several properties.
@@ -334,6 +469,48 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     setOverrides(next);
   };
+
+  // Device/time-based theme switching (see theme/timeBasedTheme.ts).
+  // Checks the schedule against the current hour on mount, whenever the
+  // schedule itself changes, and once a minute thereafter — applying a
+  // saved preset's themeSettings via the same full-replace path as a
+  // manual preset apply. lastAppliedHourRef guards against re-applying
+  // every tick once the correct entry is already active (replaceTheme
+  // is a real DB write + full override reset, not free).
+  const lastAppliedStartHourRef = React.useRef<number | null>(null);
+  useEffect(() => {
+    const entries = parseTimeBasedThemeSchedule(overrides.timeBasedThemeSchedule || "");
+    if (entries.length === 0) {
+      lastAppliedStartHourRef.current = null;
+      return;
+    }
+    const check = async () => {
+      const active = activeScheduleEntry(entries, new Date().getHours());
+      if (!active || active.startHour === lastAppliedStartHourRef.current) return;
+      const presets = await fetchPresets();
+      const match = presets.find((p) => p.name === active.presetName);
+      if (!match) return;
+      const raw = await fetchPresetData(match.id);
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as Partial<ThemeExport>;
+        lastAppliedStartHourRef.current = active.startHour;
+        await replaceTheme({ ...(parsed.themeSettings || {}), timeBasedThemeSchedule: overrides.timeBasedThemeSchedule });
+      } catch (err) {
+        console.warn("Failed to apply time-based theme preset:", err);
+      }
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+    // replaceTheme closes over `overrides` (for its "clear stale keys"
+    // logic), so it's a new function every render — included here
+    // rather than omitted, so a schedule fire always uses the current
+    // overrides snapshot instead of whatever was live when this effect
+    // last re-subscribed. lastAppliedStartHourRef makes the resulting
+    // per-render interval churn cheap: check() no-ops once the correct
+    // entry is already active.
+  }, [overrides.timeBasedThemeSchedule, replaceTheme]);
 
   const setCustomSliderValue = async (id: string, rawValue: number) => {
     const slider = customSliders.find((s) => s.id === id);

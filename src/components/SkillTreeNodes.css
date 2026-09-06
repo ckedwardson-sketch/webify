@@ -1,0 +1,240 @@
+.skill-goal-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: var(--surface-shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.skill-goal-node:hover {
+  transform: scale(1.03);
+}
+
+.skill-goal-node.status-active {
+  border-color: var(--color-accent);
+}
+
+.skill-goal-node.is-active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 40%, transparent), var(--surface-shadow);
+}
+
+.skill-goal-node.status-completed {
+  border-color: #d4af37;
+  background: linear-gradient(135deg, #7a5c14, #d4af37);
+  color: #fff8e0;
+}
+
+.skill-goal-node.status-put_to_bed {
+  border-color: #555;
+  background: #3a3a3a;
+  color: #999;
+  opacity: 0.7;
+}
+
+.skill-goal-node.status-historical {
+  border-color: #555;
+  background: #333;
+  color: #9a9a9a;
+  opacity: 0.75;
+}
+
+.skill-goal-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.9rem;
+}
+
+.skill-goal-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 2px solid var(--color-accent);
+  animation: skill-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes skill-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.04); }
+}
+
+.skill-goal-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.skill-goal-thumb {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.skill-add-control {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-md);
+  border: 2px dashed color-mix(in srgb, var(--color-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: color-mix(in srgb, var(--color-accent) 80%, white);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  opacity: 0.7;
+}
+
+.skill-add-control:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+  transform: scale(1.05);
+}
+
+.skill-tree-edge {
+  stroke: var(--color-border-strong);
+  stroke-width: 2.5;
+  fill: none;
+}
+
+.skill-tree-edge.historical {
+  stroke: #555;
+  stroke-dasharray: 5 4;
+}
+
+/* ---- Task node ---------------------------------------------------- */
+
+.react-flow__node-skillTaskNode {
+  overflow: visible !important;
+}
+
+.skill-task-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.skill-task-node.archived {
+  opacity: 0.4;
+}
+
+/* Rings + core are both anchored to the exact same point (this box's own
+   center) instead of relying on matching margin-top numbers to line them
+   up — the previous approach drifted "off-center" any time the node's own
+   width/height changed. */
+.skill-task-visual {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin: 6px auto 0;
+  flex-shrink: 0;
+}
+
+.skill-task-rings-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.skill-task-ring {
+  position: absolute;
+  border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.skill-task-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  border: 2px solid var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: var(--surface-shadow);
+}
+
+.skill-task-label {
+  z-index: 2;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: all;
+  margin-top: 4px;
+  max-width: 130px;
+}
+
+.skill-task-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-task-meta {
+  font-size: 0.68rem;
+  color: var(--color-text-secondary);
+}
+
+.skill-task-log-btn {
+  z-index: 2;
+  pointer-events: all;
+  margin-top: 4px;
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.skill-task-log-btn:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
+}
+
+.skill-task-connector {
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}

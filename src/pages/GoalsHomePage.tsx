@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "../types/nav";
 import { Goal } from "../types/project";
 import { Dream } from "../types/models";
-import { fetchAllGoals, addGoal } from "../db/goals";
+import { fetchAllGoals, addGoal, updateGoalField, updateGoalImage, deleteGoal } from "../db/goals";
 import { fetchDreamGraphData } from "../db/dreams";
+import { PaneGrid } from "../components/PaneGrid";
+import { useTheme } from "../theme/ThemeContext";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { parseDecals } from "../theme/decals";
+import { DecalLayer } from "../theme/DecalLayer";
 import "./Page.css";
 import "./ProjectsHomePage.css";
 
@@ -13,6 +18,9 @@ const NO_DREAM = "none";
 // above a project (a bigger aim a handful of projects might serve),
 // same optional dream link, same "just add it" flow.
 export function GoalsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const { theme } = useTheme();
+  const { overrides: pageBgOverrides, scopeKey: pageBgScopeKey } = usePageBackground();
+  const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [dreams, setDreams] = useState<Dream[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +38,32 @@ export function GoalsHomePage({ onNavigate }: { onNavigate: (view: View) => void
   };
 
   useEffect(load, []);
+
+  const handleSetImage = (id: number, file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      await updateGoalImage(id, reader.result as string);
+      load();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // "manual" leaves fetch order untouched (today's behavior). "created"/
+  // "updated" go newest-first, matching the convention used elsewhere in
+  // the app (see theme_presets/issue_reports ORDER BY created_at DESC).
+  const sortedGoals = useMemo(() => {
+    const order = theme.goalsHomeSortOrder;
+    if (order === "name") {
+      return [...goals].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (order === "created") {
+      return [...goals].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    }
+    if (order === "updated") {
+      return [...goals].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+    }
+    return goals;
+  }, [goals, theme.goalsHomeSortOrder]);
 
   const dreamNames = Object.fromEntries(dreams.map((d) => [d.id, d.name]));
 
@@ -68,7 +102,8 @@ export function GoalsHomePage({ onNavigate }: { onNavigate: (view: View) => void
   }
 
   return (
-    <div className="page">
+    <div className="page" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
+      <DecalLayer decals={decals} target="page-bg" surface={pageBgScopeKey ?? undefined} />
       <div className="page-header">
         <h1 className="page-title">Goals</h1>
         <button className="add-button" onClick={startAdd}>
@@ -116,9 +151,19 @@ export function GoalsHomePage({ onNavigate }: { onNavigate: (view: View) => void
 
       {goals.length === 0 ? (
         <p className="page-text">No goals yet.</p>
+      ) : theme.goalViewMode === "pane-small" || theme.goalViewMode === "pane-large" || theme.goalViewMode === "icon-grid" ? (
+        <PaneGrid
+          items={sortedGoals.map((g) => ({ id: g.id, label: g.name, imageUrl: g.imageData }))}
+          size={theme.goalViewMode === "pane-large" ? "large" : "small"}
+          surface="project"
+          onOpen={(id) => onNavigate({ type: "goal-detail", goalId: id })}
+          onRename={(id, name) => updateGoalField(id, "name", name).then(load)}
+          onDelete={(id) => deleteGoal(id).then(load)}
+          onSetImage={handleSetImage}
+        />
       ) : (
         <ul className="list">
-          {goals.map((g) => (
+          {sortedGoals.map((g) => (
             <li key={g.id}>
               <div className="projects-list-row">
                 <button

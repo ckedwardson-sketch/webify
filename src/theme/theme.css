@@ -18,6 +18,8 @@
   --color-sidebar-active-bg: #e8e8e8;
   --color-input-bg: #ffffff;
   --color-input-text: #1a1a1a;
+  --color-checkbox-accent: #2563eb;
+  --color-checkbox-bg: #ffffff;
   --color-primary-bg: #333333;
   --color-primary-text: #ffffff;
   --color-primary-hover-bg: #000000;
@@ -84,15 +86,22 @@
    comfortable-desktop page padding above (48px/40px) eats a huge chunk
    of a phone-width screen, so mobile gets its own, much tighter values —
    higher specificity than :root above, so this wins whenever the class
-   is present. An explicit Density override from Settings still wins over
-   both (inline style beats any stylesheet rule regardless of
-   specificity), which is intentional: it's an explicit user choice on
-   both platforms. */
+   is present. A Density override from Settings still wins on desktop
+   (inline style beats any stylesheet rule regardless of specificity),
+   but ThemeContext deliberately leaves --space-page-x/-y unset on mobile
+   so this class rule (and Settings > Mobile > Page Spacing) stays in
+   control there instead of being flattened by the desktop preset. */
 html.mobile-layout {
+  --space-xs: 4px;
+  --space-sm: 8px;
   --space-md: 10px;
-  --space-lg: 18px;
-  --space-page-x: 16px;
-  --space-page-y: 18px;
+  --space-lg: 16px;
+  /* Settable from Settings > Mobile > Page Spacing (ThemeContext writes
+     --mobile-page-padding-x/-y as inline overrides on <html> when set);
+     20px/20px is the built-in default otherwise — up from an earlier
+     14px/16px that read as cramped against the phone's physical edge. */
+  --space-page-x: var(--mobile-page-padding-x, 20px);
+  --space-page-y: var(--mobile-page-padding-y, 20px);
 }
 
 /* Mobile + landscape (see theme/mobileLayout.ts) — a landscape phone is
@@ -120,9 +129,130 @@ html.mobile-landscape {
   --color-sidebar-active-bg: #2c3038;
   --color-input-bg: #22252c;
   --color-input-text: #e8e8e8;
+  --color-checkbox-accent: #60a5fa;
+  --color-checkbox-bg: #22252c;
   --color-primary-bg: #4b5563;
   --color-primary-text: #ffffff;
   --color-primary-hover-bg: #64748b;
   --color-accent: #60a5fa;
   --color-danger: #f87171;
+}
+
+/* Native checkbox/radio theming is limited to these two properties —
+   there's no cross-browser way to restyle more of a plain
+   <input type="checkbox"> without replacing it with a custom widget. */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-checkbox-accent);
+  background-color: var(--color-checkbox-bg);
+}
+
+/* Pane shape utility classes — consumed by any pane/icon-grid surface
+   (Projects, Skills, Recipes, Responsibilities) wrapped in a
+   PaneShapeScope (see theme/paneShape.ts / PaneShapeScope.tsx). The
+   vars fall back to sane defaults so a surface using this class outside
+   a scope (or before its own PaneShapeScope wiring lands) still renders
+   normally instead of unstyled. */
+.pane-shape-surface {
+  border-radius: var(--pane-radius, var(--radius-md));
+  box-shadow: var(--pane-border-shadow, none);
+}
+
+/* Falls back to 16px on every side (matching .skill-card's own
+   fallback) so pane-card text never sits flush against the edge until
+   an AI explicitly sets one of the --card-padding-* vars (see
+   theme/ThemeContext.tsx) to something else. */
+.pane-shape-surface {
+  padding: var(--card-padding-top, 16px) var(--card-padding-right, 16px)
+    var(--card-padding-bottom, 16px) var(--card-padding-left, 16px);
+}
+
+.pane-shape-label {
+  overflow: hidden;
+}
+
+[data-pane-truncation="clip"] .pane-shape-label {
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+[data-pane-truncation="ellipsis"] .pane-shape-label {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-pane-truncation="wrap"] .pane-shape-label {
+  white-space: normal;
+}
+
+[data-pane-truncation="wrap-2"] .pane-shape-label,
+[data-pane-truncation="wrap-3"] .pane-shape-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+}
+
+[data-pane-truncation="wrap-2"] .pane-shape-label {
+  -webkit-line-clamp: 2;
+}
+
+[data-pane-truncation="wrap-3"] .pane-shape-label {
+  -webkit-line-clamp: 3;
+}
+
+/* Detail page header position + column layout (theme.detailHeaderPosition
+   / detailColumnCount) — shared structural CSS for ProjectDetailPage,
+   GoalDetailPage, DreamDetailPage. Each page wraps its title/actions in
+   .detail-page-header-area and its field list in .detail-page-body >
+   .detail-columns > one .detail-column per column, with the
+   data-detail-header attribute set on a shared ancestor. */
+[data-detail-header="none"] .detail-page-header-area {
+  display: none;
+}
+
+[data-detail-header="beside"] .detail-page-body {
+  display: flex;
+  gap: var(--space-lg, 24px);
+  align-items: flex-start;
+}
+
+[data-detail-header="beside"] .detail-page-header-area {
+  flex: 0 0 220px;
+  position: sticky;
+  top: 16px;
+}
+
+[data-detail-header="beside"] .detail-page-body > .detail-columns {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-detail-header="overlay"] .detail-page-body {
+  position: relative;
+}
+
+[data-detail-header="overlay"] .detail-page-header-area {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--color-bg-elevated) 85%, transparent);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-detail-header="overlay"] .detail-page-body > .detail-columns {
+  padding-top: 64px;
+}
+
+.detail-columns {
+  display: grid;
+  grid-template-columns: repeat(var(--detail-column-count, 1), 1fr);
+  gap: 0 var(--space-lg, 24px);
+  align-items: start;
+}
+
+.detail-column {
+  min-width: 0;
 }

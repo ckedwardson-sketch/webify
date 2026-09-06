@@ -4,10 +4,15 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Node,
+  Edge,
+  Connection,
   NodeChange,
   Background,
   Panel,
   Viewport,
+  ConnectionMode,
+  ConnectionLineType,
+  ViewportPortal,
   applyNodeChanges,
   useReactFlow,
 } from "@xyflow/react";
@@ -17,13 +22,18 @@ import {
   fetchAllProjects,
   addProject,
   updateProjectGoalId,
+  updateProjectWebPosition,
   fetchWidgetsForProject,
+  fetchWidgetsForWeb,
+  addWebWidget,
+  updateWebWidgetPosition,
+  updateWebWidgetSize,
+  deleteWidget,
 } from "../db/projects";
-import { fetchWidgetsForGoal } from "../db/goals";
+import { fetchWidgetsForGoal, updateGoalWebScale } from "../db/goals";
 import { fetchFieldLayout, fetchFreetextFields, updateFieldStyle, FieldLayoutRow, FieldStylePatch, FreetextField } from "../db/fieldLayout";
-import { buildNodeCardTextItems, widgetsVisibleOnWeb, NodeCardTextItem } from "../theme/nodeCardFields";
+import { buildNodeCardTextItems, widgetsVisibleOnWeb } from "../theme/nodeCardFields";
 import { mergeFieldStylePatch } from "../rearrange/fieldStyle";
-import { NodeCardFields } from "../components/NodeCardFields";
 import { NodeWidgetOverlay } from "../components/NodeWidgetOverlay";
 import { NodeFieldVisibilityPopover } from "../components/NodeFieldVisibilityPopover";
 import { fetchGoal } from "../db/goals";
@@ -40,18 +50,46 @@ import {
   addResponsibility,
   linkResponsibilityToGoal,
   unlinkResponsibilityFromGoal,
+  updateResponsibilityWebPosition,
 } from "../db/responsibilities";
 import { consistencyPercent, daysPerWeek as daysPerWeekFor } from "../responsibilities/scheduling";
 import { fetchViewport, saveViewport } from "../db/viewports";
 import { fetchBookmarksForGoal, addBookmark, deleteBookmark, GoalWebBookmark } from "../db/goalWebBookmarks";
-import { Goal, Project, ProjectWidget } from "../types/project";
+import { fetchGoalWebLinks, addGoalWebLink, removeGoalWebLink, GoalWebLink } from "../db/goalWebLinks";
+import {
+  fetchNoteWebLinks,
+  addNoteWebLink,
+  removeNoteWebLink,
+  updateNoteWebLinkPosition,
+  fetchNotePagesForPicker,
+  NoteWebLink,
+  NotePickerOption,
+} from "../db/noteWebLinks";
+import { addPage } from "../db/notes";
+import { WIDGET_TYPE_LABELS } from "../rearrange/AddFieldMenu";
+import { computeGoalCluster, nextTaskGridPosition, nodeBoxFor } from "../webGraph/goalCluster";
+import { Goal, Project, ProjectWidget, ProjectWidgetType } from "../types/project";
 import { ProgressNode as ProgressNodeModel } from "../types/models";
 import { Responsibility, ResponsibilityCompletion, DailySchedule } from "../types/responsibility";
 import { ProgressNode as ProgressNodeView } from "../components/ProgressGraphNodes";
+import { GoalSummaryNode, ProjectCardNode, ResponsibilityCardNode, ResponsibilityCardData } from "../components/GoalGraphNodes";
+import { NoteWebNode } from "../components/NoteWebNode";
+import { WebWidgetNode, WEB_WIDGET_DEFAULT_WIDTH, WEB_WIDGET_DEFAULT_HEIGHT } from "../components/WebWidgetNode";
+import { AngleEdge, anchorPoint, parseAngleHandleId, snapToAnchor } from "../components/DreamGraphNodes";
+import { angleFromDirection } from "../theme/nodeBoundary";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { WebControls } from "../components/WebControls";
+import { LaborLegend } from "../components/LaborLegend";
+import { OutputWebNode } from "../components/OutputWebNode";
+import { OutputEditorModal } from "../components/OutputEditorModal";
+import { fetchOutputsForTasks, deleteOutput, updateOutputPosition, Output } from "../db/outputs";
+import { HintTooltip } from "../components/HintTooltip";
 import { useTheme } from "../theme/ThemeContext";
+import { parseDecals } from "../theme/decals";
+import { DecalLayer } from "../theme/DecalLayer";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useMobileLayout } from "../theme/useMobileLayout";
 import "./Page.css";
 import "./GoalWebPage.css";
 
@@ -61,308 +99,31 @@ const taskNodeId = (id: number) => `tk-${id}`;
 const parseTaskNodeId = (nodeId: string) => Number(nodeId.slice(3));
 const respNodeId = (id: number) => `rs-${id}`;
 const parseRespNodeId = (nodeId: string) => Number(nodeId.slice(3));
+const noteNodeId = (id: number) => `nt-${id}`;
+const parseNoteNodeId = (nodeId: string) => Number(nodeId.slice(3));
+const outputNodeId = (id: number) => `op-${id}`;
+const widgetNodeId = (id: number) => `wg-${id}`;
+const parseWidgetNodeId = (nodeId: string) => Number(nodeId.slice(3));
 const GOAL_NODE_ID = "goal-end";
 const NEW_RESP_SENTINEL = "__new__";
-
-const GOAL_NODE_POS = { x: -260, y: -40 };
-const GOAL_TASKS_BASE = { x: -260, y: 110 };
-const RESPONSIBILITIES_BASE = { x: -260, y: 420 };
-const PROJECT_TASKS_Y_OFFSET = 120;
-
-// Cascading grid, same idea as the old Progress Web's positionForIndex —
-// just enough spread that new items never land exactly on top of each
-// other. Used for project cards (world coords) and, offset from an
-// owner's base, for that owner's own tasks (local/relative coords).
-function gridPosition(index: number, colWidth: number, rowHeight: number, perRow: number): { x: number; y: number } {
-  const col = index % perRow;
-  const row = Math.floor(index / perRow);
-  return { x: col * colWidth, y: row * rowHeight };
-}
-
-// The one fixed, non-draggable, non-deletable node every goal's web
-// starts with: its own goals text — a live read of the goal's own goals
-// field, not a DB row.
-interface GoalSummaryNodeData {
-  webFields: NodeCardTextItem[];
-  widgets: ProjectWidget[];
-  onOpenWidget: (widget: ProjectWidget) => void;
-}
-
-function GoalSummaryNode({ data }: { data: GoalSummaryNodeData }) {
-  const { theme } = useTheme();
-  const hasExtras = data.webFields.length > 0 || data.widgets.length > 0;
-  const growToFit = theme.nodeCardGrowToFit === "1";
-  return (
-    <div
-      style={{
-        width: "180px",
-        minHeight: "90px",
-        borderRadius: "14px",
-        border: `2px dashed ${theme.accent}`,
-        background: "rgba(0,0,0,0.35)",
-        color: "#ffffff",
-        padding: "10px 12px",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap: "4px",
-        cursor: "pointer",
-      }}
-      title="Goal's own goals — click to edit on the goal page"
-    >
-      <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: theme.accent }}>
-        🎯 GOAL
-      </span>
-      {hasExtras ? (
-        <NodeCardFields
-          items={data.webFields}
-          widgets={data.widgets}
-          onOpenWidget={data.onOpenWidget}
-          fullText={growToFit}
-          capHeightPx={growToFit ? undefined : 70}
-        />
-      ) : (
-        <span style={{ fontSize: "11px", opacity: 0.7 }}>
-          Nothing shown yet — pick fields to show on the web via 🎨 on the goal page.
-        </span>
-      )}
-    </div>
-  );
-}
-
-// One card per project linked to this goal — click opens the project,
-// the small ✕ detaches it from the goal (the project itself isn't
-// deleted, just unlinked, same as every other detach-not-destroy flow
-// in this app), and the small + adds a task owned by this project
-// (rather than the goal directly) — the replacement for the old global
-// "which owner?" dropdown in the add panel (see item 1's design note on
-// handleAddTask below): adding a project-scoped task is now something
-// you do right at the project it belongs to.
-interface ProjectCardNodeData {
-  name: string;
-  onUnlink: () => void;
-  onAddTask: () => void;
-  webFields: NodeCardTextItem[];
-  widgets: ProjectWidget[];
-  onOpenWidget: (widget: ProjectWidget) => void;
-}
-
-function ProjectCardNode({ data }: { data: ProjectCardNodeData }) {
-  const { theme } = useTheme();
-  const growToFit = theme.nodeCardGrowToFit === "1";
-  return (
-    <div
-      style={{
-        width: "180px",
-        minHeight: "84px",
-        borderRadius: "12px",
-        border: `2px solid ${theme.goalProjectNodeOutlineColor}`,
-        background: theme.goalProjectNodeBackground,
-        color: "#ffffff",
-        padding: "9px 11px",
-        boxSizing: "border-box",
-        cursor: "pointer",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-        position: "relative",
-      }}
-    >
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onAddTask();
-        }}
-        title="Add a task to this project"
-        style={{
-          position: "absolute",
-          top: 4,
-          left: 4,
-          border: "none",
-          background: "rgba(0,0,0,0.3)",
-          color: "#fff",
-          borderRadius: "4px",
-          width: 16,
-          height: 16,
-          lineHeight: "16px",
-          fontSize: "11px",
-          cursor: "pointer",
-          padding: 0,
-        }}
-      >
-        +
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onUnlink();
-        }}
-        title="Detach from this goal"
-        style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          border: "none",
-          background: "rgba(0,0,0,0.3)",
-          color: "#fff",
-          borderRadius: "4px",
-          width: 16,
-          height: 16,
-          lineHeight: "16px",
-          fontSize: "10px",
-          cursor: "pointer",
-          padding: 0,
-        }}
-      >
-        ✕
-      </button>
-      <div
-        style={{
-          fontWeight: 700,
-          fontSize: "13px",
-          marginBottom: "4px",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          paddingRight: "18px",
-        }}
-      >
-        📁 {data.name}
-      </div>
-      {data.webFields.length > 0 || data.widgets.length > 0 ? (
-        <NodeCardFields
-          items={data.webFields}
-          widgets={data.widgets}
-          onOpenWidget={data.onOpenWidget}
-          fullText={growToFit}
-          capHeightPx={growToFit ? undefined : 60}
-        />
-      ) : (
-        <div style={{ fontSize: "11px", opacity: 0.7 }}>No details shown — see 🎨 on the project page.</div>
-      )}
-    </div>
-  );
-}
-
-export interface ResponsibilityCardData {
-  name: string;
-  description: string;
-  consistencyPct: number | null; // null = not meaningful (yearly) — see responsibilities/scheduling.ts
-  daysPerWeek: number | null;
-  taskTimeHours?: number;
-  onUnlink: () => void;
-}
-
-// One card per responsibility linked to this goal — click opens the
-// responsibility on its own page, ✕ unlinks it (never deletes it).
-// Packs in the 4 extra bits items 3-6 asked for (consistency, days/wk,
-// task time, description) as one compact stat row + a short clamp,
-// rather than growing into a second detail page.
-function ResponsibilityCardNode({ data }: { data: ResponsibilityCardData }) {
-  const stats: string[] = [];
-  if (data.consistencyPct !== null) stats.push(`${data.consistencyPct}%`);
-  if (data.daysPerWeek !== null) stats.push(`${data.daysPerWeek}d/wk`);
-  if (data.taskTimeHours) stats.push(`${data.taskTimeHours}h`);
-
-  return (
-    <div
-      style={{
-        width: "170px",
-        minHeight: "104px",
-        borderRadius: "10px",
-        border: "2px solid #f59e0b",
-        background: "#78350f",
-        color: "#ffffff",
-        padding: "8px 10px",
-        boxSizing: "border-box",
-        cursor: "pointer",
-        boxShadow: "0 3px 8px rgba(0,0,0,0.3)",
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        gap: "5px",
-      }}
-    >
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onUnlink();
-        }}
-        title="Unlink from this goal"
-        style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          border: "none",
-          background: "rgba(0,0,0,0.3)",
-          color: "#fff",
-          borderRadius: "4px",
-          width: 16,
-          height: 16,
-          lineHeight: "16px",
-          fontSize: "10px",
-          cursor: "pointer",
-          padding: 0,
-        }}
-      >
-        ✕
-      </button>
-
-      <span
-        style={{
-          fontSize: "12px",
-          fontWeight: 700,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          paddingRight: "18px",
-        }}
-      >
-        📋 {data.name}
-      </span>
-
-      {data.consistencyPct !== null && (
-        <div style={{ height: "4px", borderRadius: "2px", background: "rgba(0,0,0,0.3)", overflow: "hidden" }}>
-          <div
-            style={{
-              height: "100%",
-              width: `${data.consistencyPct}%`,
-              background: data.consistencyPct >= 70 ? "#4ade80" : data.consistencyPct >= 40 ? "#facc15" : "#f87171",
-            }}
-            title={`${data.consistencyPct}% checked off in the last 30 days`}
-          />
-        </div>
-      )}
-
-      {stats.length > 0 && (
-        <span style={{ fontSize: "10px", opacity: 0.85 }} title="Consistency · days/week · task duration">
-          {stats.join(" · ")}
-        </span>
-      )}
-
-      <span
-        style={{
-          fontSize: "10px",
-          opacity: 0.75,
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-        }}
-      >
-        {data.description || "No description yet."}
-      </span>
-    </div>
-  );
-}
+const NEW_NOTE_SENTINEL = "__new__";
 
 const nodeTypes = {
   goalNode: GoalSummaryNode,
   projectNode: ProjectCardNode,
   taskNode: ProgressNodeView,
   responsibilityNode: ResponsibilityCardNode,
+  noteNode: NoteWebNode,
+  outputNode: OutputWebNode,
+  widgetNode: WebWidgetNode,
 };
+const edgeTypes = { angleEdge: AngleEdge };
 
 function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (view: View) => void }) {
   const { theme } = useTheme();
+  const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
+  const { overrides: pageBgOverrides } = usePageBackground();
+  const mobile = useMobileLayout();
   const { setViewport, getViewport } = useReactFlow();
   const [goal, setGoal] = useState<Goal | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -374,6 +135,8 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   const [bookmarks, setBookmarks] = useState<GoalWebBookmark[]>([]);
   const [initialViewport, setInitialViewport] = useState<Viewport | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [webLinks, setWebLinks] = useState<GoalWebLink[]>([]);
+  const [showSizeControl, setShowSizeControl] = useState(false);
   // "Show on web" field config + widget rows for the goal card and every
   // linked project card (see FieldStylePopover.tsx's "On the web"
   // section / theme/nodeCardFields.ts) — fetched alongside everything
@@ -397,6 +160,18 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   // below does (see handleRespAction).
   const [respChoice, setRespChoice] = useState("");
   const [creatingResp, setCreatingResp] = useState(false);
+  const [noteLinks, setNoteLinks] = useState<NoteWebLink[]>([]);
+  const [notePickerOptions, setNotePickerOptions] = useState<NotePickerOption[]>([]);
+  const [noteChoice, setNoteChoice] = useState("");
+  const [creatingNote, setCreatingNote] = useState(false);
+  const [outputs, setOutputs] = useState<Output[]>([]);
+  const [editingOutput, setEditingOutput] = useState<Output | null>(null);
+  // Free-floating widgets placed directly on this canvas (see
+  // components/WebWidgetNode.tsx) — same project_widgets rows as the
+  // grid, just with web_type/web_owner_id set instead of project_id/
+  // goal_id.
+  const [webWidgets, setWebWidgets] = useState<ProjectWidget[]>([]);
+  const [widgetChoice, setWidgetChoice] = useState<ProjectWidgetType | "">("");
 
   const scopeKey = `goal-web:${goalId}`;
 
@@ -412,6 +187,10 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       fetchResponsibilities(),
       fetchBookmarksForGoal(goalId),
       fetchViewport(scopeKey),
+      fetchGoalWebLinks(goalId),
+      fetchNoteWebLinks("goal", goalId),
+      fetchNotePagesForPicker(),
+      fetchWidgetsForWeb("goal", goalId),
     ]).then(
       ([
         g,
@@ -424,6 +203,10 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         allResps,
         goalBookmarks,
         viewport,
+        links,
+        noteWebLinks,
+        notePages,
+        webWidgetRows,
       ]) => {
         setGoal(g);
         setProjects(goalProjects);
@@ -434,6 +217,10 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         setUnclaimedResponsibilities(allResps.filter((r) => !r.goalIds.includes(goalId)));
         setBookmarks(goalBookmarks);
         setInitialViewport(viewport);
+        setWebLinks(links);
+        setNoteLinks(noteWebLinks);
+        setNotePickerOptions(notePages);
+        setWebWidgets(webWidgetRows);
         setLoading(false);
 
         loadWebFieldConfig(goalProjects);
@@ -464,24 +251,29 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goalId]);
 
+  const loadOutputs = () => {
+    fetchOutputsForTasks(tasks.map((t) => t.id)).then(setOutputs);
+  };
+
+  useEffect(() => {
+    loadOutputs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  // Every project card's world position, keyed by project id — tasks
-  // owned by that project render relative to this, and dragging a task
-  // is saved back relative to it too (see onNodeDragStop).
-  const projectBases = useMemo(() => {
-    const map = new Map<number, { x: number; y: number }>();
-    projects.forEach((p, i) => map.set(p.id, gridPosition(i, 260, 360, 4)));
-    return map;
-  }, [projects]);
+  const scale = goal?.webScale ?? 1;
 
-  const taskOwnerBase = (task: ProgressNodeModel): { x: number; y: number } => {
-    if (task.projectId != null) {
-      const base = projectBases.get(task.projectId) ?? { x: 0, y: 0 };
-      return { x: base.x, y: base.y + PROJECT_TASKS_Y_OFFSET };
-    }
-    return GOAL_TASKS_BASE;
-  };
+  // Shared with DreamWebPage's "full" view (see webGraph/goalCluster.ts)
+  // — both pages compute positions from the exact same function so a
+  // goal's web looks pixel-identical wherever it's rendered.
+  const cluster = useMemo(
+    () =>
+      goal
+        ? computeGoalCluster(goal, projects, tasks, responsibilities, scale, theme.goalClusterDirection as "horizontal" | "vertical")
+        : null,
+    [goal, projects, tasks, responsibilities, scale, theme.goalClusterDirection]
+  );
 
   const handleUpdateFieldWeb = (
     category: "goal" | "project",
@@ -516,11 +308,28 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     }
   };
 
+  // Journal/linkboard floating widgets have no inline render on the
+  // canvas (see WebWidgetNode.tsx) — clicking their "Open" button
+  // navigates to the widget's existing page instead, same destination
+  // handleOpenWidget above sends a grid widget to. Table opens its own
+  // preview→page flow the same way. Photo/dock/costlog/calculator render
+  // fully inline on the node itself, so they never call this.
+  const handleOpenWebWidget = (widget: ProjectWidget) => {
+    if (widget.widgetType === "table") {
+      onNavigate({ type: "project-table", widgetId: widget.id, goalId });
+    } else if (widget.widgetType === "journal") {
+      onNavigate({ type: "project-journal", widgetId: widget.id, goalId });
+    } else if (widget.widgetType === "linkboard") {
+      onNavigate({ type: "project-board", widgetId: widget.id, goalId });
+    }
+  };
+
   useEffect(() => {
+    if (!cluster) return;
     const goalNode: Node = {
       id: GOAL_NODE_ID,
       type: "goalNode",
-      position: GOAL_NODE_POS,
+      position: cluster.goalPos,
       draggable: false,
       deletable: false,
       data: {
@@ -546,8 +355,8 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     const projectNodes: Node[] = projects.map((project) => ({
       id: projectNodeId(project.id),
       type: "projectNode",
-      position: projectBases.get(project.id) ?? { x: 0, y: 0 },
-      draggable: false,
+      position: cluster.projectPos.get(project.id) ?? { x: 0, y: 0 },
+      deletable: false,
       data: {
         name: project.name,
         onUnlink: () => updateProjectGoalId(project.id, null).then(load),
@@ -571,14 +380,11 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       },
     }));
 
-    const responsibilityNodes: Node[] = responsibilities.map((resp, i) => ({
+    const responsibilityNodes: Node[] = responsibilities.map((resp) => ({
       id: respNodeId(resp.id),
       type: "responsibilityNode",
-      position: {
-        x: RESPONSIBILITIES_BASE.x + gridPosition(i, 190, 130, 5).x,
-        y: RESPONSIBILITIES_BASE.y + gridPosition(i, 190, 130, 5).y,
-      },
-      draggable: false,
+      position: cluster.respPos.get(resp.id) ?? { x: 0, y: 0 },
+      deletable: false,
       data: {
         name: resp.name,
         description: resp.description,
@@ -589,55 +395,240 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       } satisfies ResponsibilityCardData,
     }));
 
-    const taskNodes: Node[] = tasks.map((task) => {
-      const base = taskOwnerBase(task);
+    const taskNodes: Node[] = tasks.map((task) => ({
+      id: taskNodeId(task.id),
+      type: "taskNode",
+      position: cluster.taskPos.get(task.id) ?? { x: 0, y: 0 },
+      deletable: false,
+      data: {
+        category: task.category,
+        shortDescription: task.shortDescription,
+        difficulty: task.difficulty,
+        isComplete: task.isComplete,
+        isRead: task.isRead,
+        imageData: task.imageData,
+        cost: task.cost,
+      },
+    }));
+
+    const noteNodes: Node[] = noteLinks.map((link) => ({
+      id: noteNodeId(link.id),
+      type: "noteNode",
+      position: { x: link.posX, y: link.posY },
+      deletable: false,
+      data: {
+        title: link.title,
+        onRemove: () => removeNoteWebLink(link.id).then(load),
+      },
+    }));
+
+    // Outputs have no pos of their own until a user drags one — until
+    // then, cluster them in a small stagger just below/right of their
+    // parent task's own current position (cluster.taskPos), same
+    // "computed until moved" convention task/project/resp nodes use for
+    // their own cluster placement.
+    const outputsByTask = new Map<number, typeof outputs>();
+    for (const o of outputs) {
+      const list = outputsByTask.get(o.taskId) ?? [];
+      list.push(o);
+      outputsByTask.set(o.taskId, list);
+    }
+    const outputNodes: Node[] = outputs.map((o) => {
+      let pos = { x: o.posX ?? 0, y: o.posY ?? 0 };
+      if (o.posX === null || o.posY === null) {
+        const taskPos = cluster?.taskPos.get(o.taskId) ?? { x: 0, y: 0 };
+        const siblings = outputsByTask.get(o.taskId) ?? [];
+        const index = siblings.findIndex((s) => s.id === o.id);
+        pos = { x: taskPos.x + 90, y: taskPos.y + index * 60 };
+      }
       return {
-        id: taskNodeId(task.id),
-        type: "taskNode",
-        position: { x: base.x + task.posX, y: base.y + task.posY },
+        id: outputNodeId(o.id),
+        type: "outputNode",
+        position: pos,
+        deletable: false,
         data: {
-          category: task.category,
-          shortDescription: task.shortDescription,
-          difficulty: task.difficulty,
-          isComplete: task.isComplete,
-          isRead: task.isRead,
-          imageData: task.imageData,
+          title: o.title,
+          onOpen: () => setEditingOutput(o),
+          onDelete: () => deleteOutput(o.id).then(loadOutputs),
         },
       };
     });
 
-    setNodes([goalNode, ...projectNodes, ...responsibilityNodes, ...taskNodes]);
+    const widgetNodes: Node[] = webWidgets.map((w) => ({
+      id: widgetNodeId(w.id),
+      type: "widgetNode",
+      position: { x: w.posX ?? 0, y: w.posY ?? 0 },
+      deletable: false,
+      data: {
+        widget: w,
+        onDelete: () => deleteWidget(w.id).then(load),
+        onResize: (width: number, height: number) => {
+          updateWebWidgetSize(w.id, width, height);
+          setWebWidgets((prev) => prev.map((x) => (x.id === w.id ? { ...x, width, height } : x)));
+        },
+        onOpen: () => handleOpenWebWidget(w),
+      },
+    }));
+
+    setNodes([goalNode, ...projectNodes, ...responsibilityNodes, ...taskNodes, ...noteNodes, ...outputNodes, ...widgetNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    cluster,
     goal,
     projects,
     responsibilities,
     completions,
     tasks,
-    projectBases,
     goalFields,
     projectFieldsById,
     freetextById,
     goalWidgets,
     projectWidgetsById,
+    noteLinks,
+    outputs,
+    webWidgets,
   ]);
+
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  // A node's world position by its plain id string (same scheme
+  // webLinks store their endpoints under) — used only for anchor-ring
+  // math below, so a link can be resolved regardless of which of the
+  // four node kinds it points at.
+  const nodePosById = (id: string): { x: number; y: number } | null => {
+    if (!cluster) return null;
+    if (id === GOAL_NODE_ID) return cluster.goalPos;
+    if (id.startsWith("pr-")) return cluster.projectPos.get(parseProjectNodeId(id)) ?? null;
+    if (id.startsWith("rs-")) return cluster.respPos.get(parseRespNodeId(id)) ?? null;
+    if (id.startsWith("tk-")) return cluster.taskPos.get(parseTaskNodeId(id)) ?? null;
+    if (id.startsWith("nt-")) {
+      const link = noteLinks.find((l) => noteNodeId(l.id) === id);
+      return link ? { x: link.posX, y: link.posY } : null;
+    }
+    if (id.startsWith("op-")) {
+      const o = outputs.find((out) => outputNodeId(out.id) === id);
+      return o ? { x: o.posX ?? 0, y: o.posY ?? 0 } : null;
+    }
+    if (id.startsWith("wg-")) {
+      const w = webWidgets.find((wid) => widgetNodeId(wid.id) === id);
+      return w ? { x: w.posX ?? 0, y: w.posY ?? 0 } : null;
+    }
+    return null;
+  };
+
+  const edges: Edge[] = useMemo(() => {
+    const result: Edge[] = [];
+    for (const link of webLinks) {
+      const sp = nodePosById(link.sourceNodeId);
+      const tp = nodePosById(link.targetNodeId);
+      if (!sp || !tp) continue;
+      const ss = nodeBoxFor(link.sourceNodeId, taskById);
+      const ts = nodeBoxFor(link.targetNodeId, taskById);
+      const sCenter = { x: sp.x + ss.width / 2, y: sp.y + ss.height / 2 };
+      const tCenter = { x: tp.x + ts.width / 2, y: tp.y + ts.height / 2 };
+      const sourceAngle = link.sourceAngle ?? angleFromDirection(tCenter.x - sCenter.x, tCenter.y - sCenter.y);
+      const targetAngle = link.targetAngle ?? angleFromDirection(sCenter.x - tCenter.x, sCenter.y - tCenter.y);
+      const p1 = anchorPoint(sp, ss, "rectangle", sourceAngle);
+      const p2 = anchorPoint(tp, ts, "rectangle", targetAngle);
+      result.push({
+        id: `wl-${link.id}`,
+        source: link.sourceNodeId,
+        target: link.targetNodeId,
+        sourceHandle: `out-${snapToAnchor(sourceAngle)}`,
+        targetHandle: `in-${snapToAnchor(targetAngle)}`,
+        reconnectable: false,
+        type: "angleEdge",
+        data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y },
+        style: { stroke: theme.accent, strokeWidth: 2 },
+      });
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webLinks, theme.accent, cluster, taskById]);
 
   const onNodesChange = (changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes.filter((c) => c.type !== "remove"), nds));
   };
 
-  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const taskOwnerBase = (task: ProgressNodeModel): { x: number; y: number } => {
+    if (!cluster) return { x: 0, y: 0 };
+    const pos = cluster.taskPos.get(task.id);
+    if (!pos) return { x: 0, y: 0 };
+    return { x: pos.x - task.posX * scale, y: pos.y - task.posY * scale };
+  };
 
   const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
-    if (!node.id.startsWith("tk-")) return;
-    const id = parseTaskNodeId(node.id);
-    const task = taskById.get(id);
-    if (!task) return;
-    const base = taskOwnerBase(task);
-    const localX = node.position.x - base.x;
-    const localY = node.position.y - base.y;
-    updateProgressPosition(id, localX, localY);
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, posX: localX, posY: localY } : t)));
+    if (node.id.startsWith("tk-")) {
+      const id = parseTaskNodeId(node.id);
+      const task = taskById.get(id);
+      if (!task) return;
+      const base = taskOwnerBase(task);
+      const localX = (node.position.x - base.x) / scale;
+      const localY = (node.position.y - base.y) / scale;
+      updateProgressPosition(id, localX, localY);
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, posX: localX, posY: localY } : t)));
+      return;
+    }
+    if (node.id.startsWith("pr-")) {
+      const id = parseProjectNodeId(node.id);
+      const project = projectById.get(id);
+      const pos = cluster?.projectPos.get(id);
+      if (!project || !pos) return;
+      const base = { x: pos.x - (project.webPosX ?? 0) * scale, y: pos.y - (project.webPosY ?? 0) * scale };
+      const localX = (node.position.x - base.x) / scale;
+      const localY = (node.position.y - base.y) / scale;
+      updateProjectWebPosition(id, localX, localY);
+      setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, webPosX: localX, webPosY: localY } : p)));
+      return;
+    }
+    if (node.id.startsWith("rs-")) {
+      const id = parseRespNodeId(node.id);
+      const resp = responsibilities.find((r) => r.id === id);
+      const pos = cluster?.respPos.get(id);
+      if (!resp || !pos) return;
+      const base = { x: pos.x - (resp.webPosX ?? 0) * scale, y: pos.y - (resp.webPosY ?? 0) * scale };
+      const localX = (node.position.x - base.x) / scale;
+      const localY = (node.position.y - base.y) / scale;
+      updateResponsibilityWebPosition(id, localX, localY);
+      setResponsibilities((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, webPosX: localX, webPosY: localY } : r))
+      );
+      return;
+    }
+    if (node.id.startsWith("nt-")) {
+      const id = parseNoteNodeId(node.id);
+      const { x, y } = node.position;
+      updateNoteWebLinkPosition(id, x, y);
+      setNoteLinks((prev) => prev.map((l) => (l.id === id ? { ...l, posX: x, posY: y } : l)));
+      return;
+    }
+    if (node.id.startsWith("op-")) {
+      const id = Number(node.id.slice(3));
+      const { x, y } = node.position;
+      updateOutputPosition(id, x, y);
+      setOutputs((prev) => prev.map((o) => (o.id === id ? { ...o, posX: x, posY: y } : o)));
+      return;
+    }
+    if (node.id.startsWith("wg-")) {
+      const id = parseWidgetNodeId(node.id);
+      const { x, y } = node.position;
+      updateWebWidgetPosition(id, x, y);
+      setWebWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, posX: x, posY: y } : w)));
+    }
+  };
+
+  const onConnect = (connection: Connection) => {
+    if (!connection.source || !connection.target || connection.source === connection.target) return;
+    const sourceAngle = parseAngleHandleId(connection.sourceHandle);
+    const targetAngle = parseAngleHandleId(connection.targetHandle);
+    addGoalWebLink(goalId, connection.source, connection.target, sourceAngle, targetAngle).then(load);
+  };
+
+  const onEdgesDelete = (deleted: Edge[]) => {
+    for (const edge of deleted) {
+      const id = Number(edge.id.slice(3));
+      if (!Number.isNaN(id)) removeGoalWebLink(id).then(load);
+    }
   };
 
   const onNodeClick = (event: React.MouseEvent, node: Node) => {
@@ -673,6 +664,13 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         projectId: task.projectId ?? undefined,
         goalId: task.goalId ?? undefined,
       });
+      return;
+    }
+    if (node.id.startsWith("nt-")) {
+      const id = parseNoteNodeId(node.id);
+      const link = noteLinks.find((l) => l.id === id);
+      if (!link) return;
+      onNavigate({ type: "notes", pageId: link.noteId });
     }
   };
 
@@ -702,7 +700,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     const countForOwner = tasks.filter((t) =>
       projectId !== undefined ? t.projectId === projectId : t.goalId === goalId && t.projectId == null
     ).length;
-    const { x, y } = gridPosition(countForOwner, 110, 110, 5);
+    const { x, y } = nextTaskGridPosition(countForOwner);
     const id = await addProgressNode(owner, x, y);
     onNavigate({
       type: "progress-node-detail",
@@ -733,6 +731,38 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     if (!respChoice) return;
     await linkResponsibilityToGoal(Number(respChoice), goalId);
     setRespChoice("");
+    load();
+  };
+
+  // Same one-dropdown-one-button convention as handleRespAction — pick
+  // an existing note to attach it as a reference, or "+ Create new" to
+  // make a fresh note page and attach that. Either way this only ever
+  // inserts a note_web_links row; the note itself is never duplicated.
+  const handleNoteAction = async () => {
+    const { x, y } = nextTaskGridPosition(noteLinks.length);
+    if (noteChoice === NEW_NOTE_SENTINEL) {
+      setCreatingNote(true);
+      try {
+        const noteId = await addPage(null, "Notes", "New Note");
+        await addNoteWebLink("goal", goalId, noteId, x, y);
+        setNoteChoice("");
+        load();
+      } finally {
+        setCreatingNote(false);
+      }
+      return;
+    }
+    if (!noteChoice) return;
+    await addNoteWebLink("goal", goalId, Number(noteChoice), x, y);
+    setNoteChoice("");
+    load();
+  };
+
+  const handleAddWebWidget = async () => {
+    if (!widgetChoice) return;
+    const { x, y } = nextTaskGridPosition(webWidgets.length);
+    await addWebWidget("goal", goalId, widgetChoice, WIDGET_TYPE_LABELS[widgetChoice], x, y, WEB_WIDGET_DEFAULT_WIDTH, WEB_WIDGET_DEFAULT_HEIGHT);
+    setWidgetChoice("");
     load();
   };
 
@@ -786,21 +816,45 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   }
 
   return (
-    <div className="goal-web-shell">
+    <div className="goal-web-shell" data-color-surface="page-bg" style={pageSurfaceStyle(pageBgOverrides["page-bg"])}>
       <div className="goal-web-canvas-area">
         <Breadcrumb
           crumbs={[
-            { label: "Goals", onClick: () => onNavigate({ type: "goals-home" }) },
+            goal.isPassionProject
+              ? { label: "Projects", onClick: () => onNavigate({ type: "projects-home" }) }
+              : { label: "Goals", onClick: () => onNavigate({ type: "goals-home" }) },
             { label: goal.name, onClick: () => onNavigate({ type: "goal-detail", goalId }) },
             { label: "Goal Web" },
           ]}
         />
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <h1 style={{ margin: 0, fontSize: "22px" }}>{goal.name} — Goal Web</h1>
-          <div style={{ display: "flex", gap: "8px" }}>
+        <div className="web-page-header">
+          <h1 className="page-title" style={{ margin: 0, fontSize: "22px" }}>
+            {goal.name} — Goal Web
+          </h1>
+          <div className="web-page-header-actions" style={{ position: "relative" }}>
+            <button className="add-button secondary" onClick={() => setShowSizeControl((v) => !v)}>
+              ⚄ Size
+            </button>
+            {showSizeControl && (
+              <div className="goal-web-size-popover">
+                <label style={{ fontSize: "11px", opacity: 0.8 }}>Web size: {scale.toFixed(2)}x</label>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={2}
+                  step={0.05}
+                  value={scale}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setGoal((g) => (g ? { ...g, webScale: v } : g));
+                    updateGoalWebScale(goalId, v);
+                  }}
+                />
+              </div>
+            )}
             <button className="add-button secondary" onClick={() => setShowBookmarks((v) => !v)}>
-              📍 Zooms ({bookmarks.length})
+              {mobile ? `📍 ${bookmarks.length}` : `📍 Zooms (${bookmarks.length})`}
             </button>
             <button className="add-button" onClick={() => setShowAddPanel((v) => !v)}>
               + Add
@@ -889,6 +943,57 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
                   </button>
                 </div>
               </div>
+
+              <div className="goal-web-add-panel-row">
+                <span className="goal-web-add-panel-label">NOTES</span>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <select
+                    className="inline-add-input"
+                    style={{ marginBottom: 0, flex: 1 }}
+                    value={noteChoice}
+                    onChange={(e) => setNoteChoice(e.target.value)}
+                  >
+                    <option value="">Choose…</option>
+                    <option value={NEW_NOTE_SENTINEL}>+ Create new</option>
+                    {notePickerOptions
+                      .filter((n) => !noteLinks.some((l) => l.noteId === n.id))
+                      .map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.title}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    className="add-button secondary"
+                    onClick={handleNoteAction}
+                    disabled={!noteChoice || creatingNote}
+                  >
+                    {creatingNote ? "Adding…" : noteChoice === NEW_NOTE_SENTINEL ? "New" : "Link"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="goal-web-add-panel-row">
+                <span className="goal-web-add-panel-label">WIDGETS</span>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <select
+                    className="inline-add-input"
+                    style={{ marginBottom: 0, flex: 1 }}
+                    value={widgetChoice}
+                    onChange={(e) => setWidgetChoice(e.target.value as ProjectWidgetType | "")}
+                  >
+                    <option value="">Choose…</option>
+                    {(Object.keys(WIDGET_TYPE_LABELS) as ProjectWidgetType[]).map((type) => (
+                      <option key={type} value={type}>
+                        {WIDGET_TYPE_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="add-button secondary" onClick={handleAddWebWidget} disabled={!widgetChoice}>
+                    Add
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -915,29 +1020,39 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
 
           <ReactFlow
             nodes={nodes}
+            edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={onNodeClick}
+            onConnect={onConnect}
+            onEdgesDelete={onEdgesDelete}
             onMoveEnd={handleMoveEnd}
             defaultViewport={initialViewport ?? undefined}
             fitView={!initialViewport}
+            connectionMode={ConnectionMode.Loose}
+            connectionLineType={ConnectionLineType.Straight}
             minZoom={0.05}
             maxZoom={4}
+            panOnDrag
+            zoomOnPinch
             proOptions={{ hideAttribution: true }}
-            deleteKeyCode={null}
+            deleteKeyCode={["Backspace", "Delete"]}
           >
-            <Panel position="top-right" className="goal-web-canvas-hint" style={{ marginTop: showAddPanel ? 300 : 0 }}>
-              Everything linked to this goal — projects, their tasks, direct tasks, and responsibilities —
-              lives on this one canvas. Zoom out to see it all; save a zoom to jump straight back to a
-              cluster you're focused on.
+            <Panel position="top-right" className="web-hint-panel">
+              <HintTooltip text="Everything linked to this goal — projects, their tasks, direct tasks, and responsibilities — lives on this one canvas. Drag from a node's edge to link two nodes together; Backspace/Delete removes a selected link. Zoom out to see it all; save a zoom to jump straight back to a cluster you're focused on." />
             </Panel>
             <Background
-              color="#64748b"
+              color={theme.webGridColor}
               bgColor={theme.goalWebBackgroundImage ? "transparent" : theme.goalWebBackground}
               gap={16}
             />
             <WebControls />
+            {theme.showLaborLegend !== "0" && <LaborLegend />}
+            <ViewportPortal>
+              <DecalLayer decals={decals} target="canvas" surface="section:goal-web" />
+            </ViewportPortal>
           </ReactFlow>
         </div>
       </div>
@@ -958,6 +1073,20 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
             handleUpdateFieldWeb(fieldVisibilityTarget.category, fieldVisibilityTarget.ownerId, fieldId, patch)
           }
           onClose={() => setFieldVisibilityTarget(null)}
+        />
+      )}
+      {editingOutput && (
+        <OutputEditorModal
+          output={editingOutput}
+          onNavigate={onNavigate}
+          onClose={() => {
+            setEditingOutput(null);
+            loadOutputs();
+          }}
+          onDeleted={() => {
+            setEditingOutput(null);
+            loadOutputs();
+          }}
         />
       )}
     </div>

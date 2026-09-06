@@ -1,0 +1,111 @@
+/* Central mobile presentation rules. Keys off html.mobile-layout
+   (see mobileLayout.ts) rather than scattered @media queries, so the
+   Settings > Mobile layout mode can force the same presentation. */
+
+html.mobile-layout {
+  --touch-min: 44px;
+  /* Settable from Settings > Mobile > Page Spacing — see
+     --mobile-card-gap in ThemeContext.tsx. */
+  --space-card-gap: var(--mobile-card-gap, 10px);
+  --space-control-gap: 8px;
+  --graph-chrome-pad: 8px;
+  --keyboard-inset: 0px;
+  --ui-protected-top: 0px;
+  --ui-protected-bottom: 0px;
+}
+
+html.mobile-layout .app-content {
+  overflow-x: clip;
+  padding-bottom: var(--keyboard-inset);
+}
+
+html.mobile-layout .page {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html.mobile-layout .page-header,
+html.mobile-layout .detail-header,
+html.mobile-layout .web-page-header {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-control-gap);
+  margin-bottom: 12px;
+}
+
+html.mobile-layout .page-header .page-title,
+html.mobile-layout .detail-header .page-title,
+html.mobile-layout .web-page-header .page-title {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html.mobile-layout .page-header-actions,
+html.mobile-layout .detail-header-actions,
+html.mobile-layout .web-page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-control-gap);
+  width: 100%;
+}
+
+html.mobile-layout .icon-button,
+html.mobile-layout .sidebar-toggle {
+  width: var(--touch-min);
+  height: var(--touch-min);
+}
+
+html.mobile-layout .add-button {
+  min-height: var(--touch-min);
+}
+
+html.mobile-layout .cover-image-actions {
+  right: calc(10px + env(safe-area-inset-right));
+  bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+html.mobile-layout .sidebar-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+html.mobile-layout .dyn-overlay-toggle {
+  bottom: calc(12px + env(safe-area-inset-bottom) + var(--keyboard-inset) + var(--ui-protected-bottom));
+  right: calc(12px + env(safe-area-inset-right));
+  min-height: var(--touch-min);
+}
+
+html.mobile-layout .dyn-overlay-panel {
+  padding-top: calc(14px + env(safe-area-inset-top) + var(--ui-protected-top));
+  padding-bottom: calc(14px + env(safe-area-inset-bottom) + var(--keyboard-inset));
+}
+
+html.mobile-layout .web-hint-panel {
+  margin-top: calc(8px + var(--ui-protected-top));
+}
+
+html.mobile-layout .web-controls {
+  flex-direction: column;
+  right: 8px;
+  bottom: calc(8px + var(--keyboard-inset));
+  border-top-left-radius: var(--radius-md);
+  border-bottom-left-radius: var(--radius-md);
+}
+
+html.mobile-layout .web-controls-button {
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  padding: 8px;
+}
+
+html.mobile-layout .recipe-web-shell {
+  padding: var(--graph-chrome-pad, 8px) !important;
+}

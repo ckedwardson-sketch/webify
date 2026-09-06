@@ -1,5 +1,5 @@
 import { getDb } from "./database";
-import { ProjectWidgetType, ProjectWidget, ProjectBoardItem, PhotoWidgetSettings, PhotoEntry, DockImage, ProjectTableData } from "../types/project";
+import { ProjectWidgetType, ProjectWidget, ProjectBoardItem, PhotoWidgetSettings, PhotoEntry, DockImage, ProjectTableData, CostEntry } from "../types/project";
 import {
   fetchJournalEntries,
   addJournalEntry,
@@ -11,6 +11,7 @@ import {
 import { fetchTable, saveTable } from "./tables";
 import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto } from "./photos";
 import { fetchDockImages, addDockImage } from "./dockImages";
+import { fetchCostEntries, addCostEntry } from "./costLog";
 
 // A "layout" is a saved snapshot of one page's widget list — see
 // components/RearrangeToolbar.tsx. `category` is where it was saved
@@ -86,6 +87,10 @@ export async function captureWidgetContent(w: ProjectWidget): Promise<unknown> {
       return { settings: await fetchPhotoSettings(w.id), photos: await fetchPhotos(w.id) };
     case "dock":
       return await fetchDockImages(w.id);
+    case "costlog":
+      return await fetchCostEntries(w.id);
+    case "calculator":
+      return undefined;
   }
 }
 
@@ -146,6 +151,11 @@ export async function applyWidgetContent(
     }
     case "dock":
       for (const img of content as DockImage[]) await addDockImage(newWidgetId, img.imageData);
+      break;
+    case "costlog":
+      for (const e of content as CostEntry[]) await addCostEntry(newWidgetId, e.amount, e.description);
+      break;
+    case "calculator":
       break;
   }
 }

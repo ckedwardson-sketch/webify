@@ -1,6 +1,6 @@
 // src/pages/RecipesGraphPage.tsx
-import React, { useEffect, useState } from "react";
-import { ReactFlow, Node, Edge, Background, Panel } from "@xyflow/react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ReactFlow, Node, Edge, Background, Panel, ViewportPortal } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { fetchAllGraphData, GraphRecipeNode } from "../db/recipes";
 import { CategoryNode, RecipeCardNode, IterationNode } from "../components/GraphNodes";
@@ -9,7 +9,18 @@ import { View } from "../types/nav";
 import { StyledButton } from "../icons/StyledButton";
 import { WebControls } from "../components/WebControls";
 import { useTheme } from "../theme/ThemeContext";
+import { parseDecals } from "../theme/decals";
+import { DecalLayer } from "../theme/DecalLayer";
+import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useNodeScaleSettings } from "../webGraph/useNodeScaleSettings";
+import { computeNodeScales } from "../webGraph/nodeScale";
 import "./Page.css";
+
+const RECIPE_WEB_SCOPE_KEY = "section:recipes-graph";
+// Never auto-zoom out past this on load/"Fit" — see the fitViewOptions
+// comment below for why. 0.65 keeps the ~13px card labels rendering at
+// a comfortably readable on-screen size.
+const RECIPE_WEB_FIT_MIN_ZOOM = 0.65;
 
 const nodeTypes = {
   categoryNode: CategoryNode,
@@ -26,6 +37,7 @@ export function RecipesGraphPage({
   categoryName?: string;
   onNavigate: (view: View) => void;
 }) {
+  const { overrides: pageBgOverrides } = usePageBackground();
   const [rawData, setRawData] = useState<{
     categories: Array<{ id: number; name: string }>;
     recipes: GraphRecipeNode[];
@@ -35,6 +47,8 @@ export function RecipesGraphPage({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [expandedIterations, setExpandedIterations] = useState<Record<number, boolean>>({});
   const { theme } = useTheme();
+  const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
+  const { settings: nodeScaleSettings, loaded: nodeScaleLoaded } = useNodeScaleSettings(RECIPE_WEB_SCOPE_KEY);
 
   const [filters, setFilters] = useState<FilterState>({
     frozen: false,
@@ -60,7 +74,7 @@ export function RecipesGraphPage({
   // Layout is pure, synchronous, in-memory work — recomputing it on
   // every filter/expand change is effectively free. No DB, no IPC.
   useEffect(() => {
-    if (!rawData) return;
+    if (!rawData || !nodeScaleLoaded) return;
     const { categories, recipes } = rawData;
 
       // Filter categories if single category view is selected
@@ -83,15 +97,17 @@ export function RecipesGraphPage({
       const computedNodes: Node[] = [];
       const computedEdges: Edge[] = [];
 
-      // Layout constants. Category width now scales with how many
-      // recipes it actually has, so categories don't bleed into each
-      // other. Each column tracks its own vertical cursor, so an
-      // expanded iteration reserves real space instead of just
-      // floating at a fixed offset on top of whatever's already there.
-      const CARD_WIDTH = 210;
-      const CARD_HEIGHT = 144;
-      const COLUMN_GAP = 90; // wide enough that a 2-wide iteration cluster (which overhangs its own card by ~53px per side) can't reach the next column
-      const ROW_GAP = 50;
+      // Layout constants. Card width/height/columns now come from the
+      // shared node-scaling engine (see webGraph/nodeScale.ts) instead
+      // of being fixed — a category's cards grow or shrink based on how
+      // many recipes it actually has (and the user's Page Settings for
+      // this web). Column/row gaps scale alongside the card size so
+      // spacing stays visually consistent whether cards are tiny or huge.
+      // Each column tracks its own vertical cursor, so an expanded
+      // iteration reserves real space instead of just floating at a
+      // fixed offset on top of whatever's already there.
+      const COLUMN_GAP_BASE = 90; // wide enough that a 2-wide iteration cluster (which overhangs its own card by ~53px per side) can't reach the next column
+      const ROW_GAP_BASE = 50;
       const CATEGORY_GAP = 100;
       const TOP_MARGIN = 220;
       const ITER_WIDTH = 150;
@@ -100,6 +116,14 @@ export function RecipesGraphPage({
       const ITER_GAP = 50; // was tighter than ROW_GAP, leaving too little clearance to the next card above
       const CAT_Y = 700;
 
+      const categoryCounts: Record<string, number> = {};
+      filteredCategories.forEach((cat) => {
+        categoryCounts[String(cat.id)] = recipes.filter(
+          (r) => r.categoryId === cat.id && !r.parentRecipeId && matchesFilter(r)
+        ).length;
+      });
+      const categoryScales = computeNodeScales(categoryCounts, nodeScaleSettings);
+
       let cursorX = 0;
 
       filteredCategories.forEach((cat) => {
@@ -107,10 +131,15 @@ export function RecipesGraphPage({
           (r) => r.categoryId === cat.id && !r.parentRecipeId && matchesFilter(r)
         );
 
-        // Roughly-square grid: more recipes -> more columns, so a big
-        // category grows both wider and taller instead of just taller.
-        const columns = Math.max(1, Math.ceil(Math.sqrt(catRecipes.length || 1)));
-        const clusterWidth = columns * CARD_WIDTH + (columns - 1) * COLUMN_GAP;
+        const scale = categoryScales[String(cat.id)];
+        const cardWidth = scale.width;
+        const cardHeight = scale.height;
+        const fontScale = scale.fontScale;
+        const columns = scale.columns;
+        const sizeRatio = cardWidth / nodeScaleSettings.baseWidth;
+        const columnGap = Math.max(30, COLUMN_GAP_BASE * sizeRatio);
+        const rowGap = Math.max(20, ROW_GAP_BASE * sizeRatio);
+        const clusterWidth = columns * cardWidth + (columns - 1) * columnGap;
         const clusterLeft = cursorX;
         const catX = clusterLeft + clusterWidth / 2;
 
@@ -128,9 +157,9 @@ export function RecipesGraphPage({
 
         catRecipes.forEach((rec, rIdx) => {
           const col = rIdx % columns;
-          const recX = clusterLeft + col * (CARD_WIDTH + COLUMN_GAP);
+          const recX = clusterLeft + col * (cardWidth + columnGap);
           const recY = columnCursors[col];
-          columnCursors[col] -= CARD_HEIGHT + ROW_GAP;
+          columnCursors[col] -= cardHeight + rowGap;
 
           const recNodeId = `rec-${rec.id}`;
           computedNodes.push({
@@ -144,10 +173,14 @@ export function RecipesGraphPage({
               isHomegrown: rec.isHomegrown,
               isFavorite: rec.isFavorite,
               isProven: rec.isProven,
+              isFutureSlot: rec.isFutureSlot,
               recipeId: rec.id,
               categoryId: cat.id,
               categoryName: cat.name,
               onIterationClick: () => toggleIteration(rec.id),
+              width: cardWidth,
+              height: cardHeight,
+              fontScale,
             },
           });
 
@@ -169,7 +202,7 @@ export function RecipesGraphPage({
             const iterColumns = 2;
             const iterClusterWidth =
               iterColumns * ITER_WIDTH + (iterColumns - 1) * ITER_COL_GAP;
-            const iterClusterLeft = recX + CARD_WIDTH / 2 - iterClusterWidth / 2;
+            const iterClusterLeft = recX + cardWidth / 2 - iterClusterWidth / 2;
             const iterRows = Math.ceil(iterations.length / iterColumns);
 
             for (let row = 0; row < iterRows; row++) {
@@ -212,7 +245,7 @@ export function RecipesGraphPage({
 
       setNodes(computedNodes);
       setEdges(computedEdges);
-  }, [rawData, categoryId, filters, expandedIterations, theme]);
+  }, [rawData, categoryId, filters, expandedIterations, theme, nodeScaleSettings, nodeScaleLoaded]);
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     if (node.type === "recipeCardNode" || node.type === "iterationNode") {
@@ -235,23 +268,26 @@ export function RecipesGraphPage({
 
   return (
     <div
+      className="recipe-web-shell"
+      data-color-surface="page-bg"
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
+        height: "100%",
         width: "100%",
         padding: "16px",
         boxSizing: "border-box",
+        ...pageSurfaceStyle(pageBgOverrides["page-bg"]),
       }}
     >
       {/* Top Controls Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-        <h1 style={{ margin: 0, fontSize: "22px" }}>
+      <div className="web-page-header">
+        <h1 className="page-title" style={{ margin: 0 }}>
           {categoryName ? `${categoryName} Web` : "Recipe Web"}
         </h1>
 
         {/* Top Right Filter Toggle */}
-        <div style={{ position: "relative" }}>
+        <div className="web-page-header-actions" style={{ position: "relative" }}>
           <StyledButton
             buttonKey="web-filter-toggle"
             iconKey="filter"
@@ -348,8 +384,19 @@ export function RecipesGraphPage({
           nodeTypes={nodeTypes}
           onNodeClick={handleNodeClick}
           fitView
+          // A "fit everything" zoom shrinks text (rendered in
+          // canvas-space) proportionally with it — with more than a
+          // few categories, that means the default view lands at a
+          // zoom where no card is legible no matter how big its box is.
+          // Flooring the automatic fit keeps the initial view readable;
+          // if the whole graph doesn't fit at that floor, it overflows
+          // the viewport and you pan/scroll to the rest instead of
+          // everything shrinking to fit on screen at once.
+          fitViewOptions={{ minZoom: RECIPE_WEB_FIT_MIN_ZOOM, padding: 0.15 }}
           minZoom={0.05}
           maxZoom={4}
+          panOnDrag
+          zoomOnPinch
           proOptions={{ hideAttribution: true }}
         >
           {/* Zoom Out & Reset Controls embedded inside Canvas Top-Left */}
@@ -362,11 +409,14 @@ export function RecipesGraphPage({
           </Panel>
 
           <Background
-            color="#64748b"
+            color={theme.webGridColor}
             bgColor={theme.webBackgroundImage ? "transparent" : theme.webBackground}
             gap={16}
           />
-          <WebControls />
+          <WebControls fitViewMinZoom={RECIPE_WEB_FIT_MIN_ZOOM} />
+          <ViewportPortal>
+            <DecalLayer decals={decals} target="canvas" surface="section:recipes-graph" />
+          </ViewportPortal>
         </ReactFlow>
       </div>
     </div>

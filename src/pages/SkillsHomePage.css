@@ -1,0 +1,106 @@
+.skills-intro {
+  margin: -8px 0 16px;
+  max-width: 640px;
+}
+
+.skills-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* theme.skillAddControlPosition — top-left (default) needs no rule.
+   top-right/bottom-right just flip alignment; bottom placement itself is
+   handled in SkillsHomePage.tsx by rendering the row after the grid. */
+.skills-add-row--top-right,
+.skills-add-row--bottom-right {
+  justify-content: flex-end;
+}
+
+.skills-add-row--bottom-left,
+.skills-add-row--bottom-right {
+  margin-bottom: 0;
+  margin-top: 20px;
+}
+
+.skills-add-row--floating {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  right: calc(24px + env(safe-area-inset-right));
+  z-index: 25;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.skills-add-row .inline-add-input {
+  margin-bottom: 0;
+  flex: 1;
+  max-width: 360px;
+}
+
+.skills-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--skill-card-width, 200px), 1fr));
+  gap: var(--pane-grid-gap, 12px);
+}
+
+.skill-card-item {
+  touch-action: none;
+}
+
+.skill-card-item-dragging {
+  opacity: 0.6;
+}
+
+.skill-card {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  padding: var(--card-padding-top, 16px) var(--card-padding-right, 16px) var(--card-padding-bottom, 16px)
+    var(--card-padding-left, 16px);
+  height: var(--skill-card-height, auto);
+  border: var(--surface-border-width) solid var(--color-border-strong);
+  border-radius: var(--pane-radius, var(--radius-lg));
+  box-shadow: var(--pane-border-shadow, var(--surface-shadow));
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text);
+  transition: transform var(--motion-speed) var(--motion-easing);
+}
+
+.skill-card:hover {
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
+}
+
+.skill-card-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.skill-card-level {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.skill-card-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity var(--motion-speed) var(--motion-easing);
+}
+
+.skill-card:hover .skill-card-delete {
+  opacity: 1;
+}

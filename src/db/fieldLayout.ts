@@ -24,7 +24,14 @@ export type FieldType =
   | "dream_notes_text"
   | "dream_linked"
   | "dream_memory"
-  | "memory";
+  | "memory"
+  | "task_labor_type"
+  | "task_difficulty"
+  | "task_description"
+  | "task_reason"
+  | "task_instructions"
+  | "task_completion_image"
+  | "task_cost";
 
 export type PairMode = "compact" | "expand";
 
@@ -49,6 +56,13 @@ export const REMOVABLE_FIELD_TYPES: FieldType[] = [
   "dream_linked",
   "dream_memory",
   "memory",
+  "task_labor_type",
+  "task_difficulty",
+  "task_description",
+  "task_reason",
+  "task_instructions",
+  "task_completion_image",
+  "task_cost",
 ];
 
 // TS enforces this covers every FieldType (a missing key is a compile
@@ -70,6 +84,13 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   dream_linked: "Linked dreams",
   dream_memory: "Memory",
   memory: "Memory",
+  task_labor_type: "Labor type",
+  task_difficulty: "Difficulty",
+  task_description: "Description",
+  task_reason: "Reason",
+  task_instructions: "Instructions",
+  task_completion_image: "Completion image",
+  task_cost: "Cost",
 };
 
 export type FieldTypeGroup = "text" | "dates" | "widgets" | "other";
@@ -77,7 +98,19 @@ export type FieldTypeGroup = "text" | "dates" | "widgets" | "other";
 // Drives both the Add-field menu's categorized sections and which
 // fields the Copy tool treats as copiable (plain text content only).
 export function fieldTypeGroup(type: FieldType): FieldTypeGroup {
-  if (["goals_text", "reasoning_text", "needs_doing_text", "dream_reasoning_text", "dream_notes_text", "freetext"].includes(type)) {
+  if (
+    [
+      "goals_text",
+      "reasoning_text",
+      "needs_doing_text",
+      "dream_reasoning_text",
+      "dream_notes_text",
+      "freetext",
+      "task_description",
+      "task_reason",
+      "task_instructions",
+    ].includes(type)
+  ) {
     return "text";
   }
   if (["estimated_start", "expected_range", "dream_expected_date"].includes(type)) return "dates";
@@ -128,6 +161,11 @@ export interface FieldLayoutRow {
   // even meaningful for.
   showOnWeb: boolean;
   webHeader: boolean;
+  // Which column (0-indexed) this field renders in when
+  // theme.detailColumnCount > 1 — see updateFieldColumn below. Doesn't
+  // affect sort_order/gap math at all; columns are purely a display-time
+  // grouping of the same flat, globally-ordered field list.
+  column: number;
 }
 
 const PROJECT_DEFAULT_FIELDS: FieldType[] = [
@@ -158,6 +196,18 @@ const DREAM_DEFAULT_FIELDS: FieldType[] = [
   "dream_memory",
 ];
 
+// Short description isn't here — it's the task's title-equivalent,
+// always rendered above the field list (same convention as name on
+// Project/Goal/Dream), not a removable/reorderable row of its own.
+const TASK_DEFAULT_FIELDS: FieldType[] = [
+  "task_labor_type",
+  "task_difficulty",
+  "task_description",
+  "task_reason",
+  "task_instructions",
+  "task_completion_image",
+];
+
 // The portable extras each category *can* add beyond its defaults, on
 // top of whatever it already starts with — this is what makes "the
 // memory which is in dream" addable to a Project, and "the start date in
@@ -169,18 +219,24 @@ const DREAM_DEFAULT_FIELDS: FieldType[] = [
 const PROJECT_PORTABLE_EXTRAS: FieldType[] = ["memory"];
 const GOAL_PORTABLE_EXTRAS: FieldType[] = ["memory"];
 const DREAM_PORTABLE_EXTRAS: FieldType[] = ["estimated_start", "memory"];
+// Cost is opt-in, not a default field — added via the Add-field menu
+// only when a task actually needs one tracked, per the "optional cost"
+// requirement.
+const TASK_PORTABLE_EXTRAS: FieldType[] = ["task_cost"];
 
-export type FieldCategory = "project" | "goal" | "dream";
+export type FieldCategory = "project" | "goal" | "dream" | "task";
 
 function defaultFieldsFor(category: FieldCategory): FieldType[] {
   if (category === "project") return PROJECT_DEFAULT_FIELDS;
   if (category === "goal") return GOAL_DEFAULT_FIELDS;
+  if (category === "task") return TASK_DEFAULT_FIELDS;
   return DREAM_DEFAULT_FIELDS;
 }
 
 function portableExtrasFor(category: FieldCategory): FieldType[] {
   if (category === "project") return PROJECT_PORTABLE_EXTRAS;
   if (category === "goal") return GOAL_PORTABLE_EXTRAS;
+  if (category === "task") return TASK_PORTABLE_EXTRAS;
   return DREAM_PORTABLE_EXTRAS;
 }
 
@@ -213,11 +269,12 @@ export function availableFieldsToAdd(category: FieldCategory, present: FieldLayo
 // SQLite has no real boolean type — header_bold/header_underline come
 // back as 0/1/null, coerced to real booleans by mapFieldLayoutRow below
 // so every consumer can just check `if (f.headerBold)`.
-type RawFieldLayoutRow = Omit<FieldLayoutRow, "headerBold" | "headerUnderline" | "showOnWeb" | "webHeader"> & {
+type RawFieldLayoutRow = Omit<FieldLayoutRow, "headerBold" | "headerUnderline" | "showOnWeb" | "webHeader" | "column"> & {
   headerBold: number | null;
   headerUnderline: number | null;
   showOnWeb: number | null;
   webHeader: number | null;
+  column: number | null;
 };
 
 function mapFieldLayoutRow(r: RawFieldLayoutRow): FieldLayoutRow {
@@ -227,6 +284,7 @@ function mapFieldLayoutRow(r: RawFieldLayoutRow): FieldLayoutRow {
     headerUnderline: !!r.headerUnderline,
     showOnWeb: !!r.showOnWeb,
     webHeader: !!r.webHeader,
+    column: r.column ?? 0,
   };
 }
 
@@ -239,7 +297,7 @@ const FIELD_LAYOUT_SELECT = `SELECT id, field_type as fieldType, ref_id as refId
             content_border_width as contentBorderWidth,
             header_font_size as headerFontSize, header_color as headerColor,
             header_bold as headerBold, header_underline as headerUnderline,
-            show_on_web as showOnWeb, web_header as webHeader
+            show_on_web as showOnWeb, web_header as webHeader, column_index as column
      FROM field_layout WHERE category = $1 AND owner_id = $2 ORDER BY sort_order`;
 
 export async function fetchFieldLayout(category: FieldCategory, ownerId: number): Promise<FieldLayoutRow[]> {
@@ -352,6 +410,11 @@ export async function updateFieldLayoutLabel(id: number, label: string | null): 
 export async function updateFieldLayoutHeight(id: number, heightPx: number | null): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE field_layout SET height_px = $1 WHERE id = $2", [heightPx, id]);
+}
+
+export async function updateFieldColumn(id: number, column: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE field_layout SET column_index = $1 WHERE id = $2", [column, id]);
 }
 
 // A patch over a field's content/header style columns — see
@@ -513,8 +576,8 @@ export async function restoreFieldLayoutSnapshot(
       `INSERT INTO field_layout (
          id, category, owner_id, field_type, ref_id, sort_order, custom_label, height_px, paired_with_id, pair_mode,
          content_font_size, content_color, content_background_color, content_radius, content_border_color, content_border_width,
-         header_font_size, header_color, header_bold, header_underline, show_on_web, web_header
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+         header_font_size, header_color, header_bold, header_underline, show_on_web, web_header, column_index
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
       [
         f.id,
         category,
@@ -538,6 +601,7 @@ export async function restoreFieldLayoutSnapshot(
         f.headerUnderline ? 1 : 0,
         f.showOnWeb ? 1 : 0,
         f.webHeader ? 1 : 0,
+        f.column,
       ]
     );
   }

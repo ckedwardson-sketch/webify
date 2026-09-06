@@ -342,6 +342,15 @@
   border-radius: var(--radius-md);
 }
 
+html.mobile-layout .project-add-widget-menu {
+  flex-wrap: wrap;
+}
+
+html.mobile-layout .project-widget-card,
+html.mobile-layout .project-widget-card-inline {
+  width: 100%;
+}
+
 html.mobile-layout .project-wii-grid {
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 10px;

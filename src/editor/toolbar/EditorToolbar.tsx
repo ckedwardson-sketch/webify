@@ -7,10 +7,13 @@ import { Icon } from "../../icons/Icon";
 import "./EditorToolbar.css";
 
 // A toolbar slot is either a registry command key (rendered as a plain
-// toggle button) or an arbitrary React node (the bespoke popovers —
-// ListPopover, LinkPopover, ImageButton — that don't fit the "single
-// command" shape). Grouping into `groups` reproduces the visually
-// separated clusters both Recipe and Notes want.
+// toggle button) or an arbitrary React node (bespoke popovers like
+// ListPopover that don't fit the "single command" shape). Link/Image
+// live in the editor's right-click menu instead (see LinkPanel and
+// NoteContentEditor/RecipeEditor's insertSections) since they need a
+// popover UI unlike this toolbar's plain toggle buttons. Grouping into
+// `groups` reproduces the visually separated clusters both Recipe and
+// Notes want.
 export type ToolbarSlot = string | React.ReactNode;
 
 export function CommandButton({ editor, commandKey }: { editor: Editor; commandKey: string }) {
@@ -28,9 +31,20 @@ export function CommandButton({ editor, commandKey }: { editor: Editor; commandK
   );
 }
 
-export function EditorToolbar({ editor, groups }: { editor: Editor; groups: ToolbarSlot[][] }) {
+export function EditorToolbar({
+  editor,
+  groups,
+  orientation = "vertical",
+}: {
+  editor: Editor;
+  groups: ToolbarSlot[][];
+  orientation?: "vertical" | "horizontal";
+}) {
   return (
-    <div className="recipe-editor-toolbar" data-overlay-target="editor-toolbar">
+    <div
+      className={`recipe-editor-toolbar${orientation === "horizontal" ? " toolbar-horizontal" : ""}`}
+      data-overlay-target="editor-toolbar"
+    >
       {groups.map((slots, gi) => (
         <div className="toolbar-group" key={gi}>
           {slots.map((slot, si) =>

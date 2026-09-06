@@ -23,6 +23,7 @@ export async function buildCaptureTargets(): Promise<CaptureTarget[]> {
     { key: "static:settings-text", label: "Settings: Text Elements", group: "App Pages", view: { type: "settings-text" } },
     { key: "static:settings-buttons", label: "Settings: Buttons", group: "App Pages", view: { type: "settings-buttons" } },
     { key: "static:settings-theme", label: "Settings: Theme", group: "App Pages", view: { type: "settings-theme" } },
+    { key: "static:settings-mobile", label: "Settings: Mobile", group: "App Pages", view: { type: "settings-mobile" } },
     { key: "static:dreams-web", label: "Dream Web", group: "App Pages", view: { type: "dreams-web" } },
     { key: "static:goals-home", label: "Goals Home", group: "App Pages", view: { type: "goals-home" } },
     { key: "static:projects-home", label: "Projects Home", group: "App Pages", view: { type: "projects-home" } },

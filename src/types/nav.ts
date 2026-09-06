@@ -16,10 +16,15 @@ export type View =
   | { type: "settings-text"; focusKey?: string }
   | { type: "settings-buttons"; focusKey?: string }
   | { type: "settings-theme"; focusKey?: string }
+  | { type: "settings-mobile" }
   | { type: "settings-editor"; focusKey?: string }
   | { type: "settings-headers"; focusKey?: string }
   | { type: "settings-issues" }
+  | { type: "settings-sync" }
+  | { type: "settings-widget-visibility"; focusKey?: string }
+  | { type: "settings-panel-memory"; focusKey?: string }
   | { type: "settings-dynamic-search" }
+  | { type: "settings-page-settings"; focusKey?: string }
   | { type: "responsibilities-home" }
   | { type: "responsibilities-manage" }
   | { type: "responsibility-detail"; responsibilityId: number }
@@ -40,4 +45,10 @@ export type View =
   // (exactly one of projectId/goalId, same dual-ownership rule as the
   // task itself) so "back" can return to the right Goal Web.
   | { type: "progress-node-detail"; nodeId: number; projectId?: number; goalId?: number }
-  | { type: "notes"; pageId?: number };
+  | { type: "notes"; pageId?: number }
+  | { type: "vault" }
+  | { type: "skills-home" }
+  | { type: "skill-tree"; skillId: number }
+  | { type: "quick-apps-home" }
+  | { type: "quick-apps-raft-dog-fullscreen" }
+  | { type: "quick-apps-sleep-study" };

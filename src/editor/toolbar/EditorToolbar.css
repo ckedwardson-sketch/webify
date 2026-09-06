@@ -1,6 +1,6 @@
 /* src/editor/toolbar/EditorToolbar.css — shared by every Tiptap editor
    (Recipe, Notes, and any future one) via EditorToolbar/ListPopover/
-   LinkPopover/ImageButton. */
+   LinkPanel (the right-click "Insert" panel). */
 
 .recipe-editor-toolbar {
   display: flex;
@@ -24,6 +24,37 @@
 .toolbar-group:last-child {
   border-bottom: none;
   padding-bottom: 0;
+}
+
+/* Notes uses a horizontal bar (it sits above the page, not beside it —
+   see NoteContentEditor.css's column layout). Recipe keeps the default
+   vertical strip since its wrapper places it beside the content. */
+.recipe-editor-toolbar.toolbar-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.toolbar-horizontal .toolbar-group {
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding-bottom: 0;
+  padding-right: 8px;
+  border-bottom: none;
+  border-right: 1px solid var(--color-border);
+}
+
+.toolbar-horizontal .toolbar-group:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.toolbar-horizontal .toolbar-popover {
+  left: 0;
+  top: 100%;
+  margin-left: 0;
+  margin-top: 8px;
 }
 
 .recipe-editor-toolbar button {
@@ -88,6 +119,13 @@
 
 .link-popover {
   min-width: 240px;
+}
+
+/* Opened from the editor's right-click menu at the click position,
+   rather than anchored to a toolbar button — see LinkPanel. */
+.link-panel-floating {
+  position: fixed;
+  z-index: 260;
 }
 
 .link-mode-tabs {

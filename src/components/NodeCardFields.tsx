@@ -14,6 +14,8 @@ const WIDGET_EMOJI: Record<ProjectWidgetType, string> = {
   table: "📊",
   photo: "📷",
   dock: "🖼️",
+  costlog: "💰",
+  calculator: "🧮",
 };
 
 export function NodeCardFields({

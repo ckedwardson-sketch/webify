@@ -17,9 +17,16 @@
 
 /* A fixed 260px tree pane leaves almost nothing for the editor on a
    phone-width screen — narrow it sharply instead of the desktop split. */
+html.mobile-layout .notes-shell {
+  flex-direction: column;
+}
+
 html.mobile-layout .notes-tree {
-  width: 120px;
-  padding: 10px 4px;
+  width: 100%;
+  height: auto;
+  max-height: 34%;
+  border-right: none;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .notes-tree-header {
@@ -27,6 +34,110 @@ html.mobile-layout .notes-tree {
   align-items: center;
   justify-content: space-between;
   padding: 0 4px 10px;
+}
+
+.notes-tree-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 10px;
+}
+
+.notes-tool-btn {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  padding: 5px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.notes-tool-btn:hover {
+  background: var(--color-border);
+}
+
+.notes-tool-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.notes-tool-btn.secondary {
+  background: none;
+}
+
+.notes-tool-status {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.notes-tool-status-banner {
+  margin: 0 4px 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-text);
+  font-size: 0.78rem;
+}
+
+.notes-tree-row-picked {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.notes-tree-row-checkbox {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+.notes-tree-drag-handle {
+  flex-shrink: 0;
+  width: 12px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+}
+
+.notes-tree-row:hover .notes-tree-drag-handle {
+  opacity: 1;
+}
+
+.notes-tree-row-dragging {
+  opacity: 0.5;
+}
+
+.notes-tree-category-drop-target {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+/* The dual-pane left column reuses NotesPage restricted to just its
+   tree (see NotesPage.tsx's `treeOnly` prop) — it should always fill
+   its column, never collapse into the phone-width stacked layout the
+   full page uses (that layout assumes an editor pane sits below it). */
+.notes-shell.notes-tree-only .notes-tree {
+  width: 100%;
+  height: 100%;
+}
+
+html.mobile-layout .notes-shell.notes-tree-only {
+  flex-direction: row;
+}
+
+html.mobile-layout .notes-shell.notes-tree-only .notes-tree {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-right: none;
+  border-bottom: none;
 }
 
 .notes-tree-title {
@@ -64,15 +175,35 @@ html.mobile-layout .notes-tree {
 
 .notes-tree-category {
   margin-bottom: 10px;
+  border-radius: var(--radius-md);
 }
 
 .notes-tree-category-title {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  font: inherit;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-text-secondary);
   padding: 6px 8px 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.notes-tree-category-caret {
+  font-size: 8px;
+  flex-shrink: 0;
+}
+
+.notes-tree-row-drop-target {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 .notes-tree-node {

@@ -72,6 +72,26 @@ html.mobile-layout .field-row-expand > .field-slot {
   background: color-mix(in srgb, var(--color-accent) 8%, transparent);
 }
 
+/* Column tool armed: a purple-ish preview on hover, plus an always-on
+   badge (below) showing the field's current column. */
+.field-slot-column-armed:hover {
+  outline: 2px solid #8b5cf6;
+  background: color-mix(in srgb, #8b5cf6 8%, transparent);
+}
+
+.field-slot-column-badge {
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  background: #8b5cf6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
 /* The field currently sitting in the copy clipboard — stays highlighted
    (not just on hover) so it's obvious what Paste will place. Click it
    again to cancel (see useFieldLayout.ts's handleCopyField) — the small

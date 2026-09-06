@@ -50,6 +50,19 @@
   gap: 10px;
 }
 
+html.mobile-layout .image-dock-overlay {
+  top: calc(env(safe-area-inset-top) + var(--ui-protected-top, 0px) + 12px);
+  left: 12px;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + 12px);
+}
+
+html.mobile-layout .image-dock-trash,
+html.mobile-layout .image-dock-resize-handle {
+  width: var(--touch-min);
+  height: var(--touch-min);
+}
+
 .image-dock-toolbar {
   display: flex;
   align-items: center;

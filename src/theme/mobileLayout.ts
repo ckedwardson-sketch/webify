@@ -35,3 +35,7 @@ export function computeMobileLandscape(isMobile: boolean): boolean {
 export function isMobileLayoutActive(): boolean {
   return document.documentElement.classList.contains("mobile-layout");
 }
+
+export function isMobileLandscapeActive(): boolean {
+  return document.documentElement.classList.contains("mobile-landscape");
+}

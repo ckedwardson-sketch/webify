@@ -17,6 +17,10 @@
   border-right: 1px solid var(--color-border);
   padding: var(--space-md) var(--space-sm);
   box-sizing: border-box;
+  /* Without this, scrolling past the end of the sidebar list triggers
+     the WebView's native elastic-overscroll, which flashes the native
+     window background (white) through instead of the themed sidebar. */
+  overscroll-behavior: contain;
 }
 
 .sidebar-header {
@@ -61,6 +65,10 @@
   left: calc(12px + env(safe-area-inset-left));
   z-index: 40;
   background: var(--color-sidebar-bg);
+}
+
+html.mobile-layout .sidebar-toggle-floating {
+  top: calc(12px + env(safe-area-inset-top) + var(--ui-protected-top));
 }
 
 /* Driven by html.mobile-layout (see theme/mobileLayout.ts /
@@ -133,6 +141,8 @@ html.mobile-layout[data-nav-layout="top"] .sidebar {
   display: flex;
   flex-direction: column;
   gap: var(--sidebar-item-gap);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sidebar-item {
@@ -148,6 +158,79 @@ html.mobile-layout[data-nav-layout="top"] .sidebar {
   font: inherit;
   transition: transform var(--motion-speed) var(--motion-easing),
     background-color var(--motion-speed) var(--motion-easing);
+}
+
+/* Icon is always in the markup (see Sidebar.tsx) but only shown in the
+   icon-based sidebar modes below, so plain vertical/horizontal modes
+   render exactly as before. */
+.sidebar-item-icon {
+  display: none;
+}
+
+/* --- Sidebar item flow (theme.sidebarMode / data-sidebar-mode) ---
+   Orthogonal to data-nav-layout (dock position) above: nav-layout=top
+   already forces a horizontal row for backward compatibility, so these
+   rules layer on top rather than replacing it. */
+[data-sidebar-mode="horizontal"] .sidebar-list,
+[data-sidebar-mode="horizontal-tiled"] .sidebar-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+[data-sidebar-mode="horizontal-tiled"] .sidebar-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, auto);
+}
+
+[data-sidebar-mode="icon-small"] .sidebar-list,
+[data-sidebar-mode="icon-large"] .sidebar-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--sidebar-icon-pane-size), 1fr));
+}
+
+[data-sidebar-mode="icon-small"],
+[data-sidebar-mode="icon-large"] {
+  --sidebar-icon-pane-size: 64px;
+}
+
+[data-sidebar-mode="icon-large"] {
+  --sidebar-icon-pane-size: 96px;
+}
+
+[data-sidebar-mode="icon-small"] .sidebar-item,
+[data-sidebar-mode="icon-large"] .sidebar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  aspect-ratio: 1;
+  width: 100%;
+  text-align: center;
+}
+
+[data-sidebar-mode="icon-small"] .sidebar-item-icon,
+[data-sidebar-mode="icon-large"] .sidebar-item-icon {
+  display: block;
+  line-height: 1;
+}
+
+[data-sidebar-mode="icon-small"] .sidebar-item-icon {
+  font-size: 20px;
+}
+
+[data-sidebar-mode="icon-large"] .sidebar-item-icon {
+  font-size: 32px;
+}
+
+[data-sidebar-mode="icon-small"] .sidebar-item-label,
+[data-sidebar-mode="icon-large"] .sidebar-item-label {
+  font-size: 0.7rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-item:hover {

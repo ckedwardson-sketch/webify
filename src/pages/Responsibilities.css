@@ -538,6 +538,152 @@
   gap: 8px;
 }
 
+.resp-home-header.is-stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.resp-home-header.is-stacked .page-title {
+  margin-bottom: 0;
+}
+
+.resp-manage-action {
+  width: auto;
+}
+
+html.mobile-layout .resp-home-header {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+html.mobile-layout .resp-home-header .page-title {
+  margin-bottom: 0;
+}
+
+html.mobile-layout .resp-manage-action {
+  width: 100%;
+}
+
+.resp-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 12px 8px;
+  min-height: 44px;
+  font: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.resp-list-item:hover {
+  background: var(--color-bg-secondary);
+}
+
+.resp-mobile-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resp-mobile-timeline-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: var(--color-bg-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  min-height: 44px;
+  font: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.resp-mobile-timeline-row.done {
+  opacity: 0.55;
+}
+
+.resp-mobile-timeline-when {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 52px;
+}
+
+.resp-mobile-timeline-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.resp-mobile-timeline-time {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.resp-mobile-timeline-arrow {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.resp-mobile-timeline-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-top: 10px;
+}
+
+.resp-mobile-week {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resp-mobile-week-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.resp-mobile-week-day {
+  width: 36px;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding-top: 6px;
+}
+
+.resp-mobile-week-items {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resp-mobile-week-items .resp-week-marker {
+  width: 100%;
+  text-align: left;
+  padding: 8px 8px;
+  min-height: 40px;
+}
+
+html.mobile-layout .resp-progress-track {
+  height: 18px;
+}
+
 /* Mobile: the Today/This Week/Completion cards were a hard 2-up grid
    that never fit a phone width (each card's own content — the hourly
    ticks, the 7-day week strip — has a minimum width wider than half a
@@ -559,8 +705,10 @@ html.mobile-layout .resp-category-section {
   margin-bottom: 18px;
 }
 
-html.mobile-layout .resp-schedule-grid,
-html.mobile-layout .resp-yearly-grid {
-  grid-template-columns: 1fr;
-  gap: 10px;
+html.mobile-layout .resp-detail-header {
+  flex-wrap: wrap;
+}
+
+html.mobile-layout .resp-tab-bar {
+  overflow-x: auto;
 }

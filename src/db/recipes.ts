@@ -13,6 +13,7 @@ export interface GraphRecipeNode {
   isProven?: boolean;
   parentRecipeId?: number;
   iterationDifference?: string;
+  isFutureSlot?: boolean;
 }
 
 export interface GraphData {
@@ -43,6 +44,10 @@ type RawRecipeRow = {
   displayId?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  isFutureSlot: number;
+  futureSlotOrigin: number;
+  inspiration?: string | null;
+  futureSlotLinks?: string | null; // JSON-encoded number[]
 };
 
 function mapRecipeRow(row: RawRecipeRow): Recipe {
@@ -57,6 +62,16 @@ function mapRecipeRow(row: RawRecipeRow): Recipe {
     );
   }
 
+  let futureSlotRecipeLinks: number[] | undefined;
+  if (row.futureSlotLinks) {
+    try {
+      const parsed = JSON.parse(row.futureSlotLinks);
+      if (Array.isArray(parsed)) futureSlotRecipeLinks = parsed;
+    } catch {
+      // Ignore malformed JSON rather than throwing — treat as "no links".
+    }
+  }
+
   return {
     ...row,
     imageData: row.imageData ?? undefined,
@@ -69,6 +84,10 @@ function mapRecipeRow(row: RawRecipeRow): Recipe {
     displayId: row.displayId ?? undefined,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
+    isFutureSlot: toBool(row.isFutureSlot),
+    futureSlotOrigin: toBool(row.futureSlotOrigin),
+    inspiration: row.inspiration ?? undefined,
+    futureSlotRecipeLinks,
   };
 }
 
@@ -87,7 +106,11 @@ const RECIPE_COLUMNS = `
   iteration_difference as iterationDifference,
   display_id as displayId,
   created_at as createdAt,
-  updated_at as updatedAt
+  updated_at as updatedAt,
+  is_future_slot as isFutureSlot,
+  future_slot_origin as futureSlotOrigin,
+  inspiration,
+  future_slot_links as futureSlotLinks
 `;
 
 export async function fetchAllGraphData(): Promise<GraphData> {
@@ -119,7 +142,11 @@ export async function fetchRecipe(id: number): Promise<Recipe | null> {
   return rows[0] ? mapRecipeRow(rows[0]) : null;
 }
 
-export async function addRecipe(categoryId: number, name: string): Promise<number> {
+export async function addRecipe(
+  categoryId: number,
+  name: string,
+  isFutureSlot = false
+): Promise<number> {
   const db = await getDb();
   const existing = await db.select<{ maxOrder: number | null }[]>(
     "SELECT MAX(sort_order) as maxOrder FROM recipes WHERE category_id = $1",
@@ -128,8 +155,10 @@ export async function addRecipe(categoryId: number, name: string): Promise<numbe
   const nextOrder = (existing[0].maxOrder ?? -1) + 1;
   const displayId = await generateUniqueDisplayId(db);
   const result = await db.execute(
-    "INSERT INTO recipes (category_id, name, instructions, sort_order, display_id, created_at, updated_at) VALUES ($1, $2, '', $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-    [categoryId, name, nextOrder, displayId]
+    `INSERT INTO recipes
+      (category_id, name, instructions, sort_order, display_id, is_future_slot, future_slot_origin, created_at, updated_at)
+     VALUES ($1, $2, '', $3, $4, $5, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [categoryId, name, nextOrder, displayId, isFutureSlot ? 1 : 0]
   );
   return result.lastInsertId as number;
 }
@@ -285,4 +314,30 @@ export async function updateIterationDifference(
     text,
     id,
   ]);
+}
+
+// ---- Future Slot ----------------------------------------------------
+
+export async function updateRecipeInspiration(id: number, text: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE recipes SET inspiration = $1 WHERE id = $2", [text, id]);
+}
+
+export async function updateFutureSlotRecipeLinks(
+  id: number,
+  linkedRecipeIds: number[]
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE recipes SET future_slot_links = $1 WHERE id = $2", [
+    JSON.stringify(linkedRecipeIds),
+    id,
+  ]);
+}
+
+// Flips isFutureSlot off ("Make it a Real Recipe"). future_slot_origin
+// is left at 1 so the inspiration/links stay reachable afterwards,
+// just tucked behind a collapsed section instead of front-and-center.
+export async function convertFutureSlotToRecipe(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE recipes SET is_future_slot = 0 WHERE id = $1", [id]);
 }

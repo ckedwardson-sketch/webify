@@ -1,0 +1,125 @@
+.pane-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--pane-grid-size), 1fr));
+  gap: var(--pane-grid-gap, var(--space-md));
+}
+
+.pane-grid--small {
+  --pane-grid-size: 88px;
+}
+
+.pane-grid--large {
+  --pane-grid-size: 140px;
+}
+
+.pane-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  touch-action: none;
+}
+
+.pane-grid-item-dragging {
+  opacity: 0.6;
+}
+
+.pane-grid-pane {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  transition: transform var(--motion-speed) var(--motion-easing);
+}
+
+.pane-grid-pane:hover {
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
+}
+
+.pane-grid-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pane-grid-initial {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.pane-grid-glyph {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.pane-grid-label {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  text-align: center;
+  max-width: 100%;
+}
+
+.pane-grid-rename-input {
+  width: 100%;
+  font-size: 0.85rem;
+  text-align: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+}
+
+/* The trigger itself is CornerMenu's own .corner-menu-trigger (see
+   components/CornerMenu.css) — these rules just add the hover-reveal
+   behavior this grid wants that other CornerMenu consumers don't. */
+.pane-grid-item .corner-menu-trigger {
+  opacity: 0;
+  transition: opacity var(--motion-speed) var(--motion-easing);
+}
+
+.pane-grid-item:hover .corner-menu-trigger,
+.pane-grid-item:focus-within .corner-menu-trigger {
+  opacity: 1;
+}
+
+html.mobile-layout .pane-grid-item .corner-menu-trigger {
+  opacity: 1;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+}
+
+/* ---- Future Slot: stand out from every other pane in the grid ---- */
+
+.pane-grid-pane-future-slot {
+  border: 2px solid rgba(192, 132, 252, 0.75);
+  box-shadow: 0 0 14px rgba(192, 132, 252, 0.4);
+  background: linear-gradient(135deg, rgba(192, 132, 252, 0.18), rgba(139, 92, 246, 0.1));
+}
+
+.pane-grid-future-slot-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  box-shadow: 0 0 6px rgba(192, 132, 252, 0.7);
+}

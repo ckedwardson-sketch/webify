@@ -1,0 +1,142 @@
+.cost-log-widget {
+  position: relative;
+  width: 100%;
+  max-height: 320px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.cost-log-total {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.cost-log-add-button {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cost-log-add-button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.cost-log-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  background: var(--color-bg-elevated);
+}
+
+.cost-log-amount-input,
+.cost-log-description-input {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
+
+.cost-log-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cost-log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.cost-log-empty {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.cost-log-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 6px 2px;
+}
+
+.cost-log-entry:last-child {
+  border-bottom: none;
+}
+
+.cost-log-entry-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cost-log-entry-amount {
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.cost-log-entry-description {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cost-log-entry-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cost-log-entry-date {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.cost-log-entry-delete {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cost-log-entry-delete:hover {
+  background: var(--color-danger);
+  color: #fff;
+}

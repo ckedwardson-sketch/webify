@@ -1,6 +1,6 @@
 // src/components/GraphNodes.tsx
 import React from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useViewport } from "@xyflow/react";
 import { Icon } from "../icons/Icon";
 import { useTheme } from "../theme/ThemeContext";
 import { clipPathFor, contentInsetFor } from "../theme/nodeShapes";
@@ -10,6 +10,20 @@ const CARD_SHADOWS: Record<string, string> = {
   soft: "0 4px 10px rgba(0,0,0,0.3)",
   strong: "0 8px 22px rgba(0,0,0,0.55)",
 };
+
+// Text is rendered in canvas-space, so its on-screen size is
+// fontSize * zoom no matter how big the card's own box is — category
+// sizing alone can't keep cards legible once React Flow's fitView
+// zooms out to show every category at once. This claws some of that
+// back the same way DreamGraphNodes.zoomCompensation does: the card
+// grows visually (around its own center, via the anchor/visual split
+// below) as the view zooms out, capped so it doesn't dominate the
+// canvas or swallow neighboring cards. Capped lower than Dream's 1.6x
+// since Recipe Web cards sit much closer together (column grids, not
+// free-floating).
+export function recipeZoomCompensation(zoom: number): number {
+  return Math.min(1.35, Math.max(1, 1 / Math.pow(Math.max(zoom, 0.15), 0.45)));
+}
 
 export function CategoryNode({ data }: { data: { label: string } }) {
   const { theme } = useTheme();
@@ -44,16 +58,38 @@ export function RecipeCardNode({
     isHomegrown?: boolean;
     isFavorite?: boolean;
     isProven?: boolean;
+    isFutureSlot?: boolean;
     onIterationClick?: (e: React.MouseEvent) => void;
+    width?: number;
+    height?: number;
+    fontScale?: number;
   };
 }) {
   const isProven = data.isProven ?? false;
   const isFavorite = data.isFavorite ?? false;
+  const isFutureSlot = data.isFutureSlot ?? false;
   const hasImage = !!data.imageData;
   const { theme } = useTheme();
+  const { zoom } = useViewport();
   const isFill = theme.webCardImageStyle === "fill" && hasImage;
   const radius = `${theme.webCardRadius || 10}px`;
   const inset = contentInsetFor(theme.webCardShape);
+  // Anchor size — the category-scale size, NOT zoom-compensated. React
+  // Flow's Handles (and RecipesGraphPage's own column/gap layout math)
+  // stay pinned to this so edges and card positions never drift as you
+  // zoom; only the inner visual box below grows/shrinks around its
+  // center on top of it.
+  const anchorWidth = data.width ?? 210;
+  const anchorHeight = data.height ?? 144;
+  const comp = recipeZoomCompensation(zoom);
+  const width = anchorWidth * comp;
+  const height = anchorHeight * comp;
+  const fontScale = (data.fontScale ?? 1) * comp;
+  // Hard floors independent of any scale setting — text must stay
+  // legible no matter how aggressively a category shrinks.
+  const labelFontSize = Math.max(10, Math.round(13 * fontScale));
+  const iconSize = Math.max(11, Math.round(14 * fontScale));
+  const iterBtnSize = Math.max(18, Math.round(22 * fontScale));
 
   // Split in two: shapeBgStyle is the only thing clipped to a
   // non-rectangular silhouette (background/border/shadow, plus the photo
@@ -67,9 +103,19 @@ export function RecipeCardNode({
     inset: 0,
     borderRadius: radius,
     overflow: "hidden",
-    backgroundColor: isProven ? theme.webNodeProvenBackground : theme.webNodeUnprovenBackground,
-    border: isFavorite ? "3px solid #facc15" : `2px solid ${theme.webNodeOutlineColor}`, // Gold lining for favorite
-    boxShadow: isFavorite
+    backgroundColor: isFutureSlot
+      ? "#3a1f5c"
+      : isProven
+      ? theme.webNodeProvenBackground
+      : theme.webNodeUnprovenBackground,
+    border: isFutureSlot
+      ? "3px solid #c084fc" // future slot planning card — stands out from every other flag
+      : isFavorite
+      ? "3px solid #facc15" // Gold lining for favorite
+      : `2px solid ${theme.webNodeOutlineColor}`,
+    boxShadow: isFutureSlot
+      ? "0 0 16px rgba(192, 132, 252, 0.65)"
+      : isFavorite
       ? "0 0 12px rgba(250, 204, 21, 0.5)"
       : CARD_SHADOWS[theme.webCardShadow] ?? CARD_SHADOWS.soft,
     clipPath: clipPathFor(theme.webCardShape),
@@ -93,8 +139,8 @@ export function RecipeCardNode({
       title="Toggle Iterations"
       style={{
         flexShrink: 0,
-        width: "22px",
-        height: "22px",
+        width: `${iterBtnSize}px`,
+        height: `${iterBtnSize}px`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -103,11 +149,11 @@ export function RecipeCardNode({
         borderRadius: "4px",
         color: "#fff",
         cursor: "pointer",
-        fontSize: "12px",
+        fontSize: `${Math.round(12 * fontScale)}px`,
         padding: 0,
       }}
     >
-      <Icon iconKey="iteration" size={12} />
+      <Icon iconKey="iteration" size={Math.round(12 * fontScale)} />
     </button>
   );
 
@@ -115,12 +161,12 @@ export function RecipeCardNode({
     <>
       {data.isFrozen && (
         <span title="Frozen">
-          <Icon iconKey="frozen" size={14} />
+          <Icon iconKey="frozen" size={iconSize} />
         </span>
       )}
       {data.isHomegrown && (
         <span title="Homegrown">
-          <Icon iconKey="homegrown" size={14} />
+          <Icon iconKey="homegrown" size={iconSize} />
         </span>
       )}
     </>
@@ -128,9 +174,19 @@ export function RecipeCardNode({
 
   if (isFill) {
     return (
-      <div style={{ width: "210px", height: "144px", position: "relative" }}>
+      <div style={{ width: `${anchorWidth}px`, height: `${anchorHeight}px`, position: "relative" }}>
         <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
 
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            width: `${width}px`,
+            height: `${height}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
         <div style={shapeBgStyle}>
           <img
             src={data.imageData}
@@ -158,7 +214,7 @@ export function RecipeCardNode({
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-start",
               justifyContent: "space-between",
               gap: "6px",
             }}
@@ -166,10 +222,12 @@ export function RecipeCardNode({
             <span
               style={{
                 fontWeight: "bold",
-                fontSize: "12px",
-                whiteSpace: "nowrap",
+                fontSize: `${labelFontSize}px`,
+                lineHeight: 1.2,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
                 overflow: "hidden",
-                textOverflow: "ellipsis",
                 textShadow: "0 1px 3px rgba(0,0,0,0.8)",
               }}
             >
@@ -184,11 +242,12 @@ export function RecipeCardNode({
               display: "flex",
               alignItems: "center",
               gap: "6px",
-              fontSize: "14px",
+              fontSize: `${iconSize}px`,
             }}
           >
             {statusIcons}
           </div>
+        </div>
         </div>
 
         <Handle type="source" position={Position.Top} style={{ opacity: 0 }} />
@@ -197,17 +256,29 @@ export function RecipeCardNode({
   }
 
   return (
-    <div style={{ width: "210px", height: "144px", position: "relative" }}>
+    <div style={{ width: `${anchorWidth}px`, height: `${anchorHeight}px`, position: "relative" }}>
       <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
 
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: `${width}px`,
+          height: `${height}px`,
+          transform: "translate(-50%, -50%)",
+        }}
+      >
       <div style={shapeBgStyle} />
 
       <div style={contentStyle}>
-        {/* Header row: recipe name left, iteration button top-right */}
+        {/* Header row: recipe name left (wraps to 2 lines instead of
+            truncating — this is the primary information on the card and
+            should get the space it needs), iteration button top-right */}
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
             gap: "6px",
             flexShrink: 0,
@@ -216,10 +287,12 @@ export function RecipeCardNode({
           <span
             style={{
               fontWeight: "bold",
-              fontSize: "12px",
-              whiteSpace: "nowrap",
+              fontSize: `${labelFontSize}px`,
+              lineHeight: 1.2,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              textOverflow: "ellipsis",
             }}
           >
             {data.label}
@@ -239,13 +312,13 @@ export function RecipeCardNode({
         >
           <div
             style={{
-              width: "22px",
+              width: `${iterBtnSize}px`,
               flexShrink: 0,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               gap: "6px",
-              fontSize: "14px",
+              fontSize: `${iconSize}px`,
             }}
           >
             {statusIcons}
@@ -270,10 +343,13 @@ export function RecipeCardNode({
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
-              <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)" }}>Image</span>
+              <span style={{ fontSize: `${Math.round(10 * fontScale)}px`, color: "rgba(255,255,255,0.6)" }}>
+                Image
+              </span>
             )}
           </div>
         </div>
+      </div>
       </div>
 
       <Handle type="source" position={Position.Top} style={{ opacity: 0 }} />

@@ -1,4 +1,6 @@
 // src/editor/RecipeEditor.tsx
+import { useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -16,12 +18,11 @@ import { fetchAllNotePagesFlat } from "../db/notes";
 import { toEditorContent } from "./htmlContent";
 import { EditorToolbar } from "./toolbar/EditorToolbar";
 import { ListPopover } from "./toolbar/ListPopover";
-import { LinkPopover, LinkTargetProvider } from "./toolbar/LinkPopover";
-import { ImageButton } from "./toolbar/ImageButton";
+import { LinkPanel, LinkTargetProvider } from "./toolbar/LinkPopover";
 import { EditorBubbleMenu } from "./EditorBubbleMenu";
 import { useEditorContextMenu } from "./useEditorContextMenu";
 import { useEditorSettings } from "./EditorSettingsContext";
-import { ContextMenu } from "../components/ContextMenu";
+import { ContextMenu, ContextMenuSection } from "../components/ContextMenu";
 import { EDITOR_COMMAND_REGISTRY } from "./commands/registry";
 import "./RecipeEditor.css";
 
@@ -97,7 +98,47 @@ export function RecipeEditor({
     [settings.slashCommandEnabled]
   );
 
-  const { menuPos, sections, close, handlers } = useEditorContextMenu(editor);
+  const { menuPos, sections: baseSections, close, handlers } = useEditorContextMenu(editor);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [linkPanelPos, setLinkPanelPos] = useState<{ x: number; y: number } | null>(null);
+
+  const handleImageSelected = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !editor) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      editor.chain().focus().setImage({ src: reader.result as string }).run();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const insertSections: ContextMenuSection[] = editor
+    ? [
+        {
+          label: "Insert",
+          items: [
+            {
+              key: "link",
+              label: "Link",
+              onSelect: () => {
+                if (menuPos) setLinkPanelPos(menuPos);
+                close();
+              },
+            },
+            {
+              key: "image",
+              label: "Image",
+              onSelect: () => {
+                imageInputRef.current?.click();
+                close();
+              },
+            },
+          ],
+        },
+      ]
+    : [];
+  const sections = [...baseSections, ...insertSections];
 
   if (!editor) return null;
 
@@ -118,15 +159,19 @@ export function RecipeEditor({
               />,
               "blockquote",
               "codeBlock",
-            ],
-            [
-              <LinkPopover key="link" editor={editor} providers={[RECIPE_LINK_PROVIDER, NOTE_LINK_PROVIDER]} />,
-              <ImageButton key="image" editor={editor} />,
               "horizontalRule",
             ],
           ]}
         />
       )}
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleImageSelected}
+      />
 
       <div
         className="recipe-editor-body"
@@ -137,7 +182,16 @@ export function RecipeEditor({
         <EditorContent editor={editor} className="recipe-editor-content" />
       </div>
 
-      {menuPos && <ContextMenu x={menuPos.x} y={menuPos.y} sections={sections} onClose={close} />}
+      {menuPos && !linkPanelPos && <ContextMenu x={menuPos.x} y={menuPos.y} sections={sections} onClose={close} />}
+      {linkPanelPos && (
+        <LinkPanel
+          x={linkPanelPos.x}
+          y={linkPanelPos.y}
+          editor={editor}
+          providers={[RECIPE_LINK_PROVIDER, NOTE_LINK_PROVIDER]}
+          onClose={() => setLinkPanelPos(null)}
+        />
+      )}
     </div>
   );
 }

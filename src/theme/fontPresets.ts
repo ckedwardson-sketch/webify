@@ -35,6 +35,11 @@ export const FONT_PRESETS: FontPreset[] = [
     label: "Monospace",
     stack: '"Consolas", "SF Mono", Menlo, monospace',
   },
+  {
+    key: "playful",
+    label: "Playful / Handwritten",
+    stack: '"Comic Sans MS", "Segoe Print", "Bradley Hand", "Chalkboard SE", cursive',
+  },
 ];
 
 export const DEFAULT_FONT_KEY = "system";

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
+import { useTheme } from "../theme/ThemeContext";
 import "./WebControls.css";
 
 // Replaces React Flow's default <Controls/> (a hardcoded white panel,
@@ -10,8 +11,9 @@ import "./WebControls.css";
 // fullscreen toggle in place of the interactivity lock, which nobody
 // was using and just added a confusing extra state to canvases that are
 // otherwise always interactive.
-export function WebControls() {
+export function WebControls({ fitViewMinZoom }: { fitViewMinZoom?: number } = {}) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const { theme } = useTheme();
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
@@ -28,6 +30,8 @@ export function WebControls() {
     }
   };
 
+  if (theme.showWebControls === "0") return null;
+
   return (
     <div className="web-controls">
       <button className="web-controls-button" onClick={() => zoomIn({ duration: 150 })} title="Zoom in">
@@ -38,7 +42,7 @@ export function WebControls() {
       </button>
       <button
         className="web-controls-button web-controls-fit"
-        onClick={() => fitView({ duration: 300 })}
+        onClick={() => fitView({ duration: 300, minZoom: fitViewMinZoom })}
         title="Fit everything in view"
       >
         ⛶ Fit

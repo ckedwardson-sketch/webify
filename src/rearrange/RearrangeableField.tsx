@@ -325,6 +325,9 @@ export function RearrangeableField({
   onDrop,
   onDelete,
   onCopy,
+  columnToolActive,
+  column,
+  onCycleColumn,
   children,
 }: {
   id: number;
@@ -341,10 +344,16 @@ export function RearrangeableField({
   onDrop: (e: React.DragEvent, id: number) => void;
   onDelete?: () => void;
   onCopy?: () => void;
+  // Columns tool (see RearrangeToolbar.tsx) — omit all three when the
+  // page isn't using multi-column layout.
+  columnToolActive?: boolean;
+  column?: number;
+  onCycleColumn?: () => void;
   children: ReactNode;
 }) {
   const deleteArmed = rearranging && deleteToolActive && removable;
   const copyArmed = rearranging && copyToolActive && copiable;
+  const columnArmed = rearranging && columnToolActive && !!onCycleColumn;
   const { colorModeOpen, openFieldStyle } = useDynamicOverlay();
 
   return (
@@ -352,8 +361,8 @@ export function RearrangeableField({
       className={`field-slot${rearranging ? " field-slot-rearranging" : ""}${
         dragOverId === id ? " field-slot-drop-target" : ""
       }${deleteArmed ? " field-slot-delete-armed" : ""}${copyArmed ? " field-slot-copy-armed" : ""}${
-        copied ? " field-slot-copied" : ""
-      }`}
+        columnArmed ? " field-slot-column-armed" : ""
+      }${copied ? " field-slot-copied" : ""}`}
       // Nearer than the page's own data-color-surface="page-bg" ancestor
       // (see PageBackgroundContext.tsx), so ctrl+hovering a field while
       // Color Mode is on edits the field background default, not the
@@ -375,6 +384,10 @@ export function RearrangeableField({
           e.preventDefault();
           e.stopPropagation();
           onCopy();
+        } else if (columnToolActive && onCycleColumn) {
+          e.preventDefault();
+          e.stopPropagation();
+          onCycleColumn();
         }
       }}
       onClick={(e) => {
@@ -406,6 +419,11 @@ export function RearrangeableField({
           }}
         >
           ⠿
+        </span>
+      )}
+      {rearranging && columnToolActive && column !== undefined && (
+        <span className="field-slot-column-badge" title="Click to move to the next column">
+          Col {column + 1}
         </span>
       )}
       {children}

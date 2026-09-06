@@ -4,15 +4,15 @@
 }
 
 .hint-tooltip-trigger {
-  width: 22px;
-  height: 22px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
-  cursor: help;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,12 +29,12 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 20;
-  width: 240px;
+  width: min(280px, calc(100vw - 32px));
   background: rgba(0, 0, 0, 0.85);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   pointer-events: none;
   opacity: 0;
@@ -42,8 +42,15 @@
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-.hint-tooltip:hover .hint-tooltip-bubble,
-.hint-tooltip:focus-within .hint-tooltip-bubble {
+.hint-tooltip:not(.is-mobile):hover .hint-tooltip-bubble,
+.hint-tooltip:not(.is-mobile):focus-within .hint-tooltip-bubble,
+.hint-tooltip.is-open .hint-tooltip-bubble {
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
+}
+
+html.mobile-layout .hint-tooltip-trigger {
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
 }

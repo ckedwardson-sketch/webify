@@ -14,7 +14,7 @@ import { useHeaderStyles } from "../icons/HeaderStyleContext";
 import { HEADER_STYLE_REGISTRY } from "../icons/headerRegistry";
 import { useTheme } from "../theme/ThemeContext";
 import { defaultsForMode } from "../theme/themeDefaults";
-import { THEME_COLOR_GROUPS, ThemeColorField } from "../theme/themeFieldGroups";
+import { MOBILE_LAYOUT_FIELD, THEME_COLOR_GROUPS, ThemeColorField } from "../theme/themeFieldGroups";
 import { useEditorSettings } from "../editor/EditorSettingsContext";
 import { EditorToolSettings } from "../db/editorSettings";
 import "./OverlayQuickEdit.css";
@@ -45,6 +45,8 @@ export function OverlayQuickEdit({ item, onFallback }: QuickEditProps) {
       return <HeaderQuickEdit item={item} onFallback={onFallback} />;
     case "settings-theme":
       return <ThemeQuickEdit item={item} onFallback={onFallback} />;
+    case "settings-mobile":
+      return <ThemeQuickEdit item={item} onFallback={onFallback} fieldOverride={MOBILE_LAYOUT_FIELD} />;
     case "settings-editor":
       return <EditorQuickEdit item={item} onFallback={onFallback} />;
     default:
@@ -296,15 +298,21 @@ function HeaderQuickEdit({ item, onFallback }: QuickEditProps) {
   );
 }
 
-function ThemeQuickEdit({ item, onFallback }: QuickEditProps) {
+function ThemeQuickEdit({
+  item,
+  onFallback,
+  fieldOverride,
+}: QuickEditProps & { fieldOverride?: ThemeColorField }) {
   const { theme, overrides, setThemeValue, resetThemeValue } = useTheme();
   const modeDefaults = defaultsForMode(theme.mode);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  let field: ThemeColorField | undefined;
-  for (const group of THEME_COLOR_GROUPS) {
-    field = group.fields.find((f) => f.key === item.key);
-    if (field) break;
+  let field: ThemeColorField | undefined = fieldOverride;
+  if (!field) {
+    for (const group of THEME_COLOR_GROUPS) {
+      field = group.fields.find((f) => f.key === item.key);
+      if (field) break;
+    }
   }
   if (!field) return <Fallback onFallback={onFallback} />;
 

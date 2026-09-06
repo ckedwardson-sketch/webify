@@ -38,13 +38,32 @@ html.mobile-landscape .goal-web-bookmarks-panel {
   max-height: 140px;
 }
 
-.goal-web-canvas-hint {
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 11px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  max-width: 240px;
+html.mobile-layout .goal-web-canvas-area {
+  padding: var(--graph-chrome-pad, 8px);
+}
+
+html.mobile-layout .goal-web-add-panel {
+  left: 8px;
+  right: 8px;
+  width: auto;
+  top: auto;
+  bottom: calc(72px + var(--keyboard-inset, 0px));
+  max-height: 45%;
+  overflow-y: auto;
+}
+
+html.mobile-layout .goal-web-bookmarks-panel {
+  left: 8px;
+  right: auto;
+  width: min(220px, calc(100% - 16px));
+  max-height: 36%;
+}
+
+.web-hint-panel {
+  margin: 8px;
+  background: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .goal-web-empty-hint {
@@ -136,4 +155,34 @@ html.mobile-landscape .goal-web-bookmarks-panel {
   cursor: pointer;
   font-size: 12px;
   padding: 2px 4px;
+}
+
+.goal-web-size-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 180px;
+  background: rgba(20, 20, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  color: #fff;
+}
+
+/* Small invisible drag points at the bottom of a Goal Web card (see
+   GoalGraphNodes.tsx's GoalWebLinkHandles) — same "big invisible hit
+   area, no visible dot" convention as DreamWebPage.css's
+   .dream-edge-handle. */
+.goal-web-link-handle {
+  width: 22px !important;
+  height: 22px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 50% !important;
+  opacity: 0 !important;
+  cursor: crosshair;
 }

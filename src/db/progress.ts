@@ -5,7 +5,7 @@ const PROGRESS_COLUMNS = `
   id, project_id as projectId, goal_id as goalId, category, short_description as shortDescription, description,
   difficulty, reason, instructions, image_data as imageData,
   is_complete as isComplete, is_read as isRead,
-  pos_x as posX, pos_y as posY, created_at as createdAt, updated_at as updatedAt
+  pos_x as posX, pos_y as posY, cost, completed_at as completedAt, created_at as createdAt, updated_at as updatedAt
 `;
 
 type RawProgressRow = {
@@ -23,6 +23,8 @@ type RawProgressRow = {
   isRead: number;
   posX: number;
   posY: number;
+  cost: number | null;
+  completedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -144,10 +146,22 @@ export async function setProgressImage(id: number, imageData: string | null): Pr
   );
 }
 
+export async function setProgressCost(id: number, cost: number | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE progress_nodes SET cost = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [
+    cost,
+    id,
+  ]);
+}
+
+// Stamps completed_at when marking complete, clears it when un-marking —
+// so "time to complete" (see ProgressNodeDetailPage's duration display)
+// only ever reflects the most recent completion, same convention as
+// is_read resetting on edit.
 export async function setProgressComplete(id: number, isComplete: boolean): Promise<void> {
   const db = await getDb();
   await db.execute(
-    "UPDATE progress_nodes SET is_complete = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    `UPDATE progress_nodes SET is_complete = $1, completed_at = ${isComplete ? "CURRENT_TIMESTAMP" : "NULL"}, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
     [isComplete ? 1 : 0, id]
   );
 }

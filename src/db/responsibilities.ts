@@ -20,15 +20,19 @@ type RawRow = {
   scheduleJson: string;
   sortOrder: number;
   pendingLeadTimeHours: number;
+  webPosX: number | null;
+  webPosY: number | null;
   createdAt: string | null;
   updatedAt: string | null;
+  imageData: string | null;
 };
 
 const COLUMNS = `
   id, name, description, consequences, reasoning, category, icon,
   sound_key as soundKey, schedule_json as scheduleJson,
   sort_order as sortOrder, pending_lead_time_hours as pendingLeadTimeHours,
-  created_at as createdAt, updated_at as updatedAt
+  web_pos_x as webPosX, web_pos_y as webPosY,
+  created_at as createdAt, updated_at as updatedAt, image_data as imageData
 `;
 
 function mapRow(row: RawRow, goalIds: number[]): Responsibility {
@@ -51,10 +55,28 @@ function mapRow(row: RawRow, goalIds: number[]): Responsibility {
     schedule,
     sortOrder: row.sortOrder,
     pendingLeadTimeHours: row.pendingLeadTimeHours ?? 0,
+    webPosX: row.webPosX,
+    webPosY: row.webPosY,
     goalIds,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
+    imageData: row.imageData ?? undefined,
   };
+}
+
+export async function updateResponsibilityImage(id: number, imageData: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE responsibilities SET image_data = $1 WHERE id = $2", [imageData, id]);
+}
+
+// A responsibility card's dragged offset from its automatic grid slot
+// on a goal's web (see webGraph/goalCluster.ts) — shared across every
+// goal it's linked to, same "one offset, wherever it renders"
+// simplification project cards use. null/unset = sits exactly at the
+// grid slot.
+export async function updateResponsibilityWebPosition(id: number, x: number, y: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE responsibilities SET web_pos_x = $1, web_pos_y = $2 WHERE id = $3", [x, y, id]);
 }
 
 // Every (goal_id, responsibility_id) link in one query — cheaper than
