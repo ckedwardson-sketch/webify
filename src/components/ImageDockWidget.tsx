@@ -29,9 +29,45 @@ type DragState =
 // Table). Every image is stored as percent-of-box x/y/width/height, so
 // the same layout holds up whether it's shown small (inline preview) or
 // large (the overlay).
-export function ImageDockWidget({ widgetId }: { widgetId: number }) {
+//
+// `embedded` is for when this widget is already inside someone else's
+// modal (see NodeWidgetOverlay.tsx) — in that case it must not spawn its
+// own nested backdrop/overlay on click (that produced two independently-
+// closable modals stacked on each other, which visibly flashed), so it
+// renders the editor content directly in place instead.
+//
+// `onPreviewClick`, similarly, is for when this widget is rendered
+// directly inside a React Flow node's content (a Web card's widget bay —
+// see NodeCardFields.tsx) rather than at the page's own top level. A
+// React Flow node's wrapper has a CSS `transform` on it (that's how
+// React Flow positions nodes), which makes it the containing block for
+// any `position: fixed` descendant — so this component's own
+// ImageDockEditor overlay (fixed, sized off the *viewport*) would render
+// clipped to that small transformed node instead of the screen, looking
+// squashed and flickering as the canvas re-renders. Passing
+// onPreviewClick routes the click out to the caller instead (which opens
+// NodeWidgetOverlay — rendered at the page's own top level, outside the
+// node tree, so its fixed positioning is unaffected) rather than opening
+// this component's own internal overlay.
+//
+// `fitAspectRatio` sizes the preview to the aspect ratio of its one
+// photo (when there's exactly one — the common case for a "big display"
+// card) instead of a fixed CSS shape, so a wide/short or tall/narrow
+// photo isn't stretched or cropped into a shape it was never meant for.
+export function ImageDockWidget({
+  widgetId,
+  embedded = false,
+  onPreviewClick,
+  fitAspectRatio = false,
+}: {
+  widgetId: number;
+  embedded?: boolean;
+  onPreviewClick?: () => void;
+  fitAspectRatio?: boolean;
+}) {
   const [images, setImages] = useState<DockImage[]>([]);
   const [editing, setEditing] = useState(false);
+  const [naturalRatio, setNaturalRatio] = useState<number | null>(null);
 
   const load = () => {
     fetchDockImages(widgetId).then(setImages);
@@ -39,9 +75,34 @@ export function ImageDockWidget({ widgetId }: { widgetId: number }) {
 
   useEffect(load, [widgetId]);
 
+  useEffect(() => {
+    if (!fitAspectRatio || images.length !== 1) {
+      setNaturalRatio(null);
+      return;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled && img.naturalHeight > 0) setNaturalRatio(img.naturalWidth / img.naturalHeight);
+    };
+    img.src = images[0].imageData;
+    return () => {
+      cancelled = true;
+    };
+  }, [fitAspectRatio, images]);
+
+  if (embedded) {
+    return <ImageDockEditorContent widgetId={widgetId} images={images} onChange={load} />;
+  }
+
   return (
     <>
-      <button className="image-dock-preview" onClick={() => setEditing(true)} title="Click to edit">
+      <button
+        className="image-dock-preview"
+        style={naturalRatio ? { aspectRatio: String(naturalRatio), height: "auto" } : undefined}
+        onClick={() => (onPreviewClick ? onPreviewClick() : setEditing(true))}
+        title="Click to edit"
+      >
         {images.length === 0 ? (
           <span className="image-dock-empty">Image Dock — click to add photos</span>
         ) : (
@@ -67,12 +128,19 @@ export function ImageDockWidget({ widgetId }: { widgetId: number }) {
         )}
       </button>
 
-      {editing && <ImageDockEditor widgetId={widgetId} images={images} onChange={load} onClose={() => setEditing(false)} />}
+      {!onPreviewClick && editing && (
+        <ImageDockEditor widgetId={widgetId} images={images} onChange={load} onClose={() => setEditing(false)} />
+      )}
     </>
   );
 }
 
-function ImageDockEditor({
+// Shared drag/resize/add/delete logic and markup for the editor — used
+// both standalone (wrapped in its own backdrop+overlay by
+// ImageDockEditor below) and embedded directly inside a parent overlay
+// (see ImageDockWidget's `embedded` prop) with no extra chrome of its
+// own beyond the toolbar and the photo box.
+function ImageDockEditorContent({
   widgetId,
   images,
   onChange,
@@ -81,7 +149,10 @@ function ImageDockEditor({
   widgetId: number;
   images: DockImage[];
   onChange: () => void;
-  onClose: () => void;
+  // Only standalone mode passes this — shows a "Save" button that closes
+  // the editor. Embedded mode omits it: the parent overlay's own close
+  // button (see NodeWidgetOverlay.tsx) is the only way to close there.
+  onClose?: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -186,50 +257,73 @@ function ImageDockEditor({
   };
 
   return (
-    <>
-      <div className="image-dock-backdrop" onClick={onClose} />
-      <div className="image-dock-overlay">
-        <div className="image-dock-toolbar">
-          <button className="add-button secondary" onClick={() => fileInputRef.current?.click()}>
-            + Add image
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAddImage} />
-          <div
-            id={`image-dock-trash-${widgetId}`}
-            className={`image-dock-trash${overTrash ? " image-dock-trash-active" : ""}`}
-            title="Drag an image here to remove it"
-          >
-            🗑
-          </div>
+    <div className="image-dock-editor-content">
+      <div className="image-dock-toolbar">
+        <button className="add-button secondary" onClick={() => fileInputRef.current?.click()}>
+          + Add image
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAddImage} />
+        <div
+          id={`image-dock-trash-${widgetId}`}
+          className={`image-dock-trash${overTrash ? " image-dock-trash-active" : ""}`}
+          title="Drag an image here to remove it"
+        >
+          🗑
+        </div>
+        {onClose && (
           <button className="add-button" onClick={onClose}>
             Save
           </button>
-        </div>
+        )}
+      </div>
 
-        <div className="image-dock-box" ref={boxRef}>
-          {images.length === 0 && <span className="image-dock-empty">No photos yet — add one above.</span>}
-          {images.map((img) => {
-            const v = valueFor(img);
-            return (
-              <div
-                key={img.id}
-                className="image-dock-item"
-                style={{
-                  left: `${v.x}%`,
-                  top: `${v.y}%`,
-                  width: `${v.width}%`,
-                  height: `${v.height}%`,
-                  zIndex: img.zIndex,
-                  opacity: drag?.id === img.id && drag.kind === "move" && overTrash ? 0.35 : 1,
-                }}
-                onMouseDown={(e) => startMove(img, e)}
-              >
-                <img src={img.imageData} alt="" draggable={false} />
-                <div className="image-dock-resize-handle" onMouseDown={(e) => startResize(img, e)} />
-              </div>
-            );
-          })}
-        </div>
+      <div className="image-dock-box" ref={boxRef}>
+        {images.length === 0 && <span className="image-dock-empty">No photos yet — add one above.</span>}
+        {images.map((img) => {
+          const v = valueFor(img);
+          return (
+            <div
+              key={img.id}
+              className="image-dock-item"
+              style={{
+                left: `${v.x}%`,
+                top: `${v.y}%`,
+                width: `${v.width}%`,
+                height: `${v.height}%`,
+                zIndex: img.zIndex,
+                opacity: drag?.id === img.id && drag.kind === "move" && overTrash ? 0.35 : 1,
+              }}
+              onMouseDown={(e) => startMove(img, e)}
+            >
+              <img src={img.imageData} alt="" draggable={false} />
+              <div className="image-dock-resize-handle" onMouseDown={(e) => startResize(img, e)} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Standalone (non-embedded) wrapper — adds the backdrop + full-screen
+// overlay chrome and a Save/close button around ImageDockEditorContent.
+// Only used when ImageDockWidget is NOT already inside another modal.
+function ImageDockEditor({
+  widgetId,
+  images,
+  onChange,
+  onClose,
+}: {
+  widgetId: number;
+  images: DockImage[];
+  onChange: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="image-dock-backdrop" onClick={onClose} />
+      <div className="image-dock-overlay">
+        <ImageDockEditorContent widgetId={widgetId} images={images} onChange={onChange} onClose={onClose} />
       </div>
     </>
   );

@@ -49,6 +49,7 @@
 }
 
 .skill-card-item {
+  position: relative;
   touch-action: none;
 }
 
@@ -101,6 +102,6 @@
   transition: opacity var(--motion-speed) var(--motion-easing);
 }
 
-.skill-card:hover .skill-card-delete {
+.skill-card-item:hover .skill-card-delete {
   opacity: 1;
 }

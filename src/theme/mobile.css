@@ -19,8 +19,11 @@ html.mobile-layout .app-content {
   padding-bottom: var(--keyboard-inset);
 }
 
+/* !important: a recipe page can carry a per-recipe inline max-width from
+   its desktop resize handle (see RecipeResize.css) — mobile must always
+   win over that regardless. */
 html.mobile-layout .page {
-  max-width: 100%;
+  max-width: 100% !important;
   box-sizing: border-box;
 }
 

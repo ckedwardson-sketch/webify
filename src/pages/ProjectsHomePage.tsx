@@ -17,7 +17,16 @@ import "./ProjectsHomePage.css";
 
 const NO_DREAM = "none";
 
-export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function ProjectsHomePage({
+  onNavigate,
+  onEnterGoalWeb,
+}: {
+  onNavigate: (view: View) => void;
+  // While Dual-Pane Web Mode is active, "Enter Web" targets the right
+  // pane only and leaves this list in place — see App.tsx. Undefined in
+  // single-pane / Notes-mode, where it falls back to plain onNavigate.
+  onEnterGoalWeb?: (goalId: number) => void;
+}) {
   const { theme } = useTheme();
   const { overrides: pageBgOverrides, scopeKey: pageBgScopeKey } = usePageBackground();
   const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
@@ -271,12 +280,14 @@ export function ProjectsHomePage({ onNavigate }: { onNavigate: (view: View) => v
                 <button
                   className="icon-button"
                   title="Enter Web"
-                  onClick={() => onNavigate({ type: "goal-web", goalId: g.id })}
+                  onClick={() => (onEnterGoalWeb ? onEnterGoalWeb(g.id) : onNavigate({ type: "goal-web", goalId: g.id }))}
                 >
                   <Icon iconKey="web-view" size={16} />
                 </button>
               </div>
-              {passionDockWidgets[g.id] !== undefined && <ImageDockWidget widgetId={passionDockWidgets[g.id]} />}
+              {passionDockWidgets[g.id] !== undefined && (
+                <ImageDockWidget widgetId={passionDockWidgets[g.id]} fitAspectRatio />
+              )}
             </div>
           ))}
         </div>

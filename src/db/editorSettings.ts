@@ -10,6 +10,7 @@ export interface EditorToolSettings {
   contextMenuEnabled: boolean;
   bubbleMenuEnabled: boolean;
   slashCommandEnabled: boolean;
+  spellcheckEnabled: boolean;
   inputMode: "auto" | "mouse" | "touch";
 }
 
@@ -18,6 +19,7 @@ export const EDITOR_SETTINGS_DEFAULTS: EditorToolSettings = {
   contextMenuEnabled: true,
   bubbleMenuEnabled: true,
   slashCommandEnabled: true,
+  spellcheckEnabled: true,
   inputMode: "auto",
 };
 
@@ -26,6 +28,7 @@ const BOOLEAN_KEYS: (keyof EditorToolSettings)[] = [
   "contextMenuEnabled",
   "bubbleMenuEnabled",
   "slashCommandEnabled",
+  "spellcheckEnabled",
 ];
 
 export async function fetchEditorSettings(): Promise<EditorToolSettings> {

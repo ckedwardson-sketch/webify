@@ -165,6 +165,19 @@ export interface LayoutThemeSettings {
   // meaningful in the two list modes (pane/icon-grid modes already wrap
   // via their own grid).
   recipeColumnCount: string; // "1" | "2" | "3"
+  // Future Slot recipe links (see pages/RecipeDetailPage.tsx /
+  // pages/FutureSlot.css) — clicking a link fetches its page's
+  // schema.org Recipe data and does something with it in the second
+  // column. "permanent" always shows two columns; "smart" starts
+  // single-column and only opens the second column once a link is
+  // clicked in that session; "none" never splits (mobile always
+  // behaves like "none", stacked instead of side-by-side).
+  recipeDualPaneMode: string; // "permanent" | "smart" | "none"
+  // What clicking a recipe link's center does with the extracted
+  // recipe text: "copy" puts it on the OS clipboard only, "replace"
+  // overwrites the second column's saved content, "instant-place"
+  // appends it to the end of the second column (divider + blank lines).
+  recipeLinkClickMode: string; // "copy" | "replace" | "instant-place"
   // Skills home page (see pages/SkillsHomePage.tsx). "grid" is today's
   // skill-card grid; "list" switches to a plain row list like Projects.
   skillHomeViewMode: string; // "grid" | "list"
@@ -409,6 +422,8 @@ export const THEME_SETTING_KEYS: (keyof ThemeSettings)[] = [
   "recipeViewMode",
   "responsibilityViewMode",
   "recipeColumnCount",
+  "recipeDualPaneMode",
+  "recipeLinkClickMode",
   "skillHomeViewMode",
   "skillAddControlPosition",
   "skillCreateMode",
@@ -674,6 +689,8 @@ export const LAYOUT_DEFAULTS: LayoutThemeSettings = {
   recipeViewMode: "list",
   responsibilityViewMode: "list",
   recipeColumnCount: "1",
+  recipeDualPaneMode: "smart",
+  recipeLinkClickMode: "instant-place",
   skillHomeViewMode: "grid",
   skillAddControlPosition: "top-left",
   skillCreateMode: "form",

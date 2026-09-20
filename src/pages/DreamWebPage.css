@@ -224,3 +224,11 @@ html.mobile-landscape .dream-canvas-area {
   filter: drop-shadow(0 0 2px var(--dream-edge-glow-color)) drop-shadow(0 0 6px var(--dream-edge-glow-color));
 }
 
+/* The invisible wide hit-path along a cuttable link — see AngleEdge in
+   DreamGraphNodes.tsx, shared by Dream Web and Goal Web. Double-clicking
+   anywhere on it deletes the link; the pointer cursor is the only
+   discoverability hint since there's no button to see. */
+.angle-edge-cut-target {
+  cursor: pointer;
+}
+

@@ -60,6 +60,65 @@
   min-height: 0;
   overflow: auto;
   padding: 6px;
+  display: flex;
+}
+
+/* The widget content components (Quick Photo, Image Dock, Calculator,
+   Cost Log, Master Cost Log, Table preview) each carry their own
+   fixed/max height and width:100% for their normal home in a project's
+   widget grid, where the grid cell — not the widget — controls size.
+   On the Goal/Dream Web canvas each one is instead the sole occupant of
+   a freely resizable NodeResizer box (see WebWidgetNode above), so here
+   they need to stretch or shrink to fill whatever size that box is
+   dragged to, rather than clamping to their grid-context height. */
+.web-widget-node-body > * {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+}
+
+/* Calculator text/buttons scale with the box within a sane floor/
+   ceiling (clamp) instead of overflowing or shrinking to nothing when
+   the box gets very small or very large. `--ww-scale` is computed once
+   in WebWidgetNode.tsx from the widget's actual width/height (state
+   that only changes on an explicit resize) and set as a CSS variable on
+   the node root — deliberately NOT a CSS container query/`container-
+   type: size`, which forces the browser to maintain a live layout-
+   containment boundary on every affected element. That was tried first
+   and measurably made the canvas (especially with a content-heavy
+   Master Cost Log widget) laggy even at rest, since containment
+   recalculation cost scales with descendant count, not with how often
+   the box is actually resized.
+*/
+.web-widget-node-body .calculator-widget {
+  display: flex;
+  flex-direction: column;
+}
+
+.web-widget-node-body .calculator-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.web-widget-node-body .calculator-display {
+  font-size: clamp(0.85rem, calc(var(--ww-scale, 1) * 1.3rem), 1.6rem);
+  flex: 0 0 auto;
+}
+
+.web-widget-node-body .calculator-button {
+  font-size: clamp(0.6rem, calc(var(--ww-scale, 1) * 0.85rem), 0.95rem);
+}
+
+.web-widget-node-body .cost-log-total {
+  font-size: clamp(1rem, calc(var(--ww-scale, 1) * 1.4rem), 1.6rem);
+}
+
+.web-widget-node-body .master-cost-log-grouping-name,
+.web-widget-node-body .master-cost-log-grouping-name-static {
+  font-size: clamp(0.7rem, calc(var(--ww-scale, 1) * 0.8rem), 0.85rem);
 }
 
 .web-widget-node-open {

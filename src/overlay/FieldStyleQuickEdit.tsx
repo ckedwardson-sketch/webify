@@ -24,6 +24,8 @@ export function FieldStyleQuickEdit({ fieldId }: { fieldId: number }) {
       field={field}
       onSave={(patch) => target.onSave(field.id, patch)}
       onRename={(label) => target.onRename(field.id, label)}
+      dockWidgets={target.widgets?.filter((w) => w.widgetType === "dock")}
+      onSetDockBigDisplay={target.onSetDockBigDisplay}
     />
   );
 }

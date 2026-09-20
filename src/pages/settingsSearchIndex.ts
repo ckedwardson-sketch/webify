@@ -60,6 +60,7 @@ export function buildSettingsSearchIndex(): SettingsSearchItem[] {
     { key: "editor-context-menu", label: "Right-click / long-press menu" },
     { key: "editor-bubble-menu", label: "Selection toolbar" },
     { key: "editor-slash-command", label: "Slash commands" },
+    { key: "editor-spellcheck", label: "Spellcheck" },
     { key: "editor-input-mode", label: "Input mode" },
   ];
   for (const field of EDITOR_SETTINGS_FIELDS) {
@@ -109,6 +110,7 @@ export function buildSettingsSearchIndex(): SettingsSearchItem[] {
     { key: "rememberSidebarOpen", label: "Remember sidebar open/closed" },
     { key: "dualPaneDefault", label: "Always open Notes in dual-pane" },
     { key: "notesTreeRemember", label: "Remember expanded notes folders" },
+    { key: "dualPaneWebShortcut", label: "Dual-pane web mode shortcut" },
   ];
   for (const field of PANEL_MEMORY_FIELDS) {
     items.push({
@@ -152,6 +154,15 @@ export function buildSettingsSearchIndex(): SettingsSearchItem[] {
     label: "Reported Issues",
     key: "reported-issues",
     view: { type: "settings-issues" },
+  });
+
+  // Same placeholder pattern as Reported Issues above — Capture Context
+  // is a checklist + generate action, not per-field preferences.
+  items.push({
+    section: "Capture Context",
+    label: "Capture Context",
+    key: "capture-context",
+    view: { type: "settings-context-capture" },
   });
 
   items.push({

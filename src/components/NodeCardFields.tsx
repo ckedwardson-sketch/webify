@@ -6,6 +6,7 @@
 // also fires the node's own onClick/drag.
 import { ProjectWidget, ProjectWidgetType } from "../types/project";
 import { NodeCardTextItem } from "../theme/nodeCardFields";
+import { ImageDockWidget } from "./ImageDockWidget";
 import "./NodeCardFields.css";
 
 const WIDGET_EMOJI: Record<ProjectWidgetType, string> = {
@@ -16,18 +17,24 @@ const WIDGET_EMOJI: Record<ProjectWidgetType, string> = {
   dock: "🖼️",
   costlog: "💰",
   calculator: "🧮",
+  mastercostlog: "🧾",
 };
 
 export function NodeCardFields({
   items,
   widgets,
   onOpenWidget,
+  onResizeWidget,
   fullText,
   capHeightPx,
 }: {
   items: NodeCardTextItem[];
   widgets?: ProjectWidget[];
   onOpenWidget?: (widget: ProjectWidget) => void;
+  // Persists a big-display Image Dock's drag-resized height (see the
+  // resize handle on .node-card-widget-dock-big below) — omitted by
+  // callers with no widget bay at all (e.g. DreamNode).
+  onResizeWidget?: (widget: ProjectWidget, width: number, height: number) => void;
   // Grow-to-fit cards (see DreamGraphNodes.tsx's growToFit) render the
   // whole point of growing downward — the un-clamped text — instead of
   // the usual 2-line clip a fixed-size card needs.
@@ -58,20 +65,32 @@ export function NodeCardFields({
       )}
       {showWidgets && (
         <div className="node-card-widget-bay">
-          {widgets!.map((w) => (
-            <button
-              key={w.id}
-              type="button"
-              className="node-card-widget-btn"
-              title={w.title}
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenWidget?.(w);
-              }}
-            >
-              {WIDGET_EMOJI[w.widgetType]}
-            </button>
-          ))}
+          {widgets!.map((w) =>
+            w.widgetType === "dock" && w.dockBigDisplay ? (
+              <div
+                key={w.id}
+                className="node-card-widget-dock-big"
+                title={w.title}
+                style={{ width: w.width ?? undefined, height: w.height ?? undefined }}
+                onMouseUp={(e) => onResizeWidget?.(w, e.currentTarget.offsetWidth, e.currentTarget.offsetHeight)}
+              >
+                <ImageDockWidget widgetId={w.id} onPreviewClick={() => onOpenWidget?.(w)} fitAspectRatio />
+              </div>
+            ) : (
+              <button
+                key={w.id}
+                type="button"
+                className="node-card-widget-btn"
+                title={w.title}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenWidget?.(w);
+                }}
+              >
+                {WIDGET_EMOJI[w.widgetType]}
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

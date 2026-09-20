@@ -1,0 +1,41 @@
+/* The drag handle that lets a recipe page's width be pulled outward on
+   desktop (see RecipeDetailPage's handleResizeStart) — straddles the
+   page's right edge so half sits over the content border, half over the
+   blank space beyond it, since that border isn't always obviously
+   grabbable on its own (e.g. a normal recipe with no colored panel). */
+
+.recipe-width-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -7px;
+  width: 14px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.recipe-width-handle::before {
+  content: "";
+  width: 4px;
+  height: 64px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  opacity: 0.3;
+  transition: opacity var(--motion-speed) var(--motion-easing),
+    background-color var(--motion-speed) var(--motion-easing);
+}
+
+.recipe-width-handle:hover::before {
+  opacity: 0.9;
+  background: var(--color-accent);
+}
+
+/* No concept of "drag the page wider" on a phone-width screen — the
+   mobile.css override on .page already forces max-width:100% !important,
+   this just hides the now-meaningless handle to match. */
+html.mobile-layout .recipe-width-handle {
+  display: none;
+}

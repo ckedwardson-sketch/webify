@@ -12,6 +12,7 @@ import { fetchTable, saveTable } from "./tables";
 import { fetchPhotoSettings, savePhotoSettings, fetchPhotos, addPhoto } from "./photos";
 import { fetchDockImages, addDockImage } from "./dockImages";
 import { fetchCostEntries, addCostEntry } from "./costLog";
+import { FieldCategory, FieldLayoutSnapshot, snapshotFieldLayout, applySavedFieldLayout } from "./fieldLayout";
 
 // A "layout" is a saved snapshot of one page's widget list — see
 // components/RearrangeToolbar.tsx. `category` is where it was saved
@@ -35,6 +36,11 @@ export interface SavedLayout {
   category: string;
   includeContent: boolean;
   widgets: SavedLayoutWidget[];
+  // The page's field list at save time (which fields were present, their
+  // order, custom labels, and per-field styling) — null for layouts
+  // saved before this existed, or if the snapshot somehow failed to
+  // capture. See db/fieldLayout.ts's FieldLayoutSnapshot.
+  fieldLayout: FieldLayoutSnapshot | null;
   createdAt: string;
 }
 
@@ -44,6 +50,7 @@ type RawLayoutRow = {
   category: string;
   includeContent: number;
   dataJson: string;
+  fieldLayoutJson: string | null;
   createdAt: string;
 };
 
@@ -54,12 +61,21 @@ function mapRow(row: RawLayoutRow): SavedLayout {
   } catch {
     console.warn(`Saved layout ${row.id} has unparseable data_json.`);
   }
+  let fieldLayout: FieldLayoutSnapshot | null = null;
+  if (row.fieldLayoutJson) {
+    try {
+      fieldLayout = JSON.parse(row.fieldLayoutJson);
+    } catch {
+      console.warn(`Saved layout ${row.id} has unparseable field_layout_json.`);
+    }
+  }
   return {
     id: row.id,
     name: row.name,
     category: row.category,
     includeContent: !!row.includeContent,
     widgets,
+    fieldLayout,
     createdAt: row.createdAt,
   };
 }
@@ -67,7 +83,8 @@ function mapRow(row: RawLayoutRow): SavedLayout {
 export async function fetchLayouts(): Promise<SavedLayout[]> {
   const db = await getDb();
   const rows = await db.select<RawLayoutRow[]>(
-    `SELECT id, name, category, include_content as includeContent, data_json as dataJson, created_at as createdAt
+    `SELECT id, name, category, include_content as includeContent, data_json as dataJson,
+            field_layout_json as fieldLayoutJson, created_at as createdAt
      FROM saved_layouts ORDER BY created_at DESC`
   );
   return rows.map(mapRow);
@@ -91,6 +108,13 @@ export async function captureWidgetContent(w: ProjectWidget): Promise<unknown> {
       return await fetchCostEntries(w.id);
     case "calculator":
       return undefined;
+    case "mastercostlog":
+      // Its groupings/sources reference other widgets by id (see
+      // db/costLog.ts's master_cost_log_sources) — those ids wouldn't
+      // resolve to anything meaningful on a copied/loaded layout, so a
+      // Master Cost Log always starts empty rather than carrying over
+      // dangling references.
+      return undefined;
   }
 }
 
@@ -98,7 +122,13 @@ export async function saveLayout(
   name: string,
   category: string,
   includeContent: boolean,
-  widgets: ProjectWidget[]
+  widgets: ProjectWidget[],
+  // The owner whose field list (which fields are present, order, custom
+  // labels, styling) should be captured alongside the widgets — omitted
+  // by any caller that has no field-layout owner to snapshot (there are
+  // none left, but keeps this additive/optional rather than a breaking
+  // signature change for any caller found later).
+  fieldOwner?: { category: FieldCategory; ownerId: number }
 ): Promise<number> {
   const db = await getDb();
   const data: SavedLayoutWidget[] = await Promise.all(
@@ -108,11 +138,27 @@ export async function saveLayout(
       content: includeContent ? await captureWidgetContent(w) : undefined,
     }))
   );
+  const fieldLayout = fieldOwner ? await snapshotFieldLayout(fieldOwner.category, fieldOwner.ownerId) : null;
   const result = await db.execute(
-    "INSERT INTO saved_layouts (name, category, include_content, data_json) VALUES ($1, $2, $3, $4)",
-    [name, category, includeContent ? 1 : 0, JSON.stringify(data)]
+    "INSERT INTO saved_layouts (name, category, include_content, data_json, field_layout_json) VALUES ($1, $2, $3, $4, $5)",
+    [name, category, includeContent ? 1 : 0, JSON.stringify(data), fieldLayout ? JSON.stringify(fieldLayout) : null]
   );
   return result.lastInsertId as number;
+}
+
+// Applies a saved layout's field snapshot (if it has one — older
+// layouts saved before this existed don't) onto `ownerId`, replacing its
+// current field list. No-op if the layout was saved without one. Widgets
+// are applied separately by each page's own handleApplyLayout (see
+// ProjectDetailPage.tsx/GoalDetailPage.tsx) since widget ownership
+// (project_id vs goal_id) already varies per page.
+export async function applyLayoutFieldLayout(
+  layout: SavedLayout,
+  category: FieldCategory,
+  ownerId: number
+): Promise<void> {
+  if (!layout.fieldLayout) return;
+  await applySavedFieldLayout(category, ownerId, layout.fieldLayout);
 }
 
 export async function deleteLayout(id: number): Promise<void> {
@@ -156,6 +202,8 @@ export async function applyWidgetContent(
       for (const e of content as CostEntry[]) await addCostEntry(newWidgetId, e.amount, e.description);
       break;
     case "calculator":
+      break;
+    case "mastercostlog":
       break;
   }
 }

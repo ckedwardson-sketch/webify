@@ -24,11 +24,19 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-fs = "2"
+tauri-plugin-log = "2"
+log = "0.4"
 
 # Sync (see src/sync.rs) talks plain HTTP LAN-to-LAN and streams the db
 # file straight to/from disk on both ends — no TLS backend needed, which
 # keeps this dependency-light to cross-compile for Android.
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+
+# Recipe link extraction (see src/recipe_extract.rs) — pulling the
+# schema.org Recipe JSON-LD block out of a fetched page's HTML without
+# pulling in a full HTML parser (html5ever/scraper are much heavier;
+# see the opt-level note above about this machine's limited RAM).
+regex = "1"
 
 # Standalone sqlite connection for VACUUM INTO snapshotting/restoring the
 # db file directly, independent of whatever the frontend's own plugin-sql

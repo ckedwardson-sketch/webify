@@ -29,7 +29,24 @@ export interface Recipe {
   isFutureSlot?: boolean;
   futureSlotOrigin?: boolean;
   inspiration?: string;
-  futureSlotRecipeLinks?: number[]; // ids of recipes linked from the future slot planning area
+  // Links to OUTSIDE recipe pages (a blog post, a recipe site) — not
+  // links to other recipes in this app. Clicking one fetches the
+  // page's schema.org Recipe data (see src-tauri/src/recipe_extract.rs)
+  // and hands the result to the second column per recipeLinkClickMode.
+  futureSlotLinks?: FutureSlotLink[];
+  // The Future Slot's persistent "second column" — whatever was placed
+  // there by a link's replace/instant-place action. Saved like
+  // inspiration/instructions; a fresh visit doesn't reset it.
+  referenceContent?: string;
+  // User-draggable width (px) of this recipe's editor column on desktop —
+  // a per-recipe layout preference (see RecipeDetailPage's resize handle).
+  editorWidth?: number;
+}
+
+export interface FutureSlotLink {
+  id: string;
+  url: string;
+  title?: string; // the fetched page's <title>, falls back to the raw URL
 }
 
 export interface FilterState {
@@ -105,13 +122,20 @@ export type ProgressDifficulty = "quick" | "moderate" | "involved" | "major";
 
 export interface ProgressNode {
   id: number;
-  // A task belongs to exactly one of projectId/goalId — never both,
-  // never neither (mirrors ProjectWidget's dual ownership). A task
+  // A project/goal task belongs to exactly one of projectId/goalId —
+  // never both (mirrors ProjectWidget's dual ownership); a task
   // attached directly to a goal (no project layer) is the "some goals
-  // only need tasks, not a whole project" case.
+  // only need tasks, not a whole project" case. The one exception is a
+  // standalone Tasks-page task (taskIsStandalone true) — neither, since
+  // it has no project/goal home at all.
   projectId: number | null;
   goalId: number | null;
-  category: ProgressCategory;
+  // A checklist, not a single choice — a task can be multiple labor
+  // types at once (e.g. both "conceive" and "labor") rather than
+  // forcing it to split into separate tasks. Always at least one
+  // entry; stored as a comma-separated string in the DB (see
+  // db/progress.ts), never empty.
+  categories: ProgressCategory[];
   shortDescription: string; // shown on the node itself
   description: string; // full description, shown on the detail page
   difficulty: ProgressDifficulty;
@@ -126,4 +150,57 @@ export interface ProgressNode {
   completedAt: string | null; // set when isComplete flips true, cleared when flipped back
   createdAt?: string;
   updatedAt?: string;
+  // "Looks" section of NodeFieldVisibilityPopover on Goal Web — a
+  // percentage-scale override for the task's dot size on top of
+  // whatever difficulty already gives it (see progressNodeSize). Null
+  // means 100% (no extra scaling).
+  webScale: number | null;
+  // Favorite toggle — when true, shows a glowing circular outline
+  // around the node (amount/color below), independent of difficulty
+  // or category coloring.
+  favorite: boolean;
+  glowAmount: number | null; // null = default amount
+  glowColor: string | null; // null = theme default (accent)
+  // Tasks page (src/pages/TasksPage.tsx) fields — see db/database.ts's
+  // migration comment. null taskBoardStatus = not part of the Tasks
+  // system at all.
+  taskBoardStatus: "bank" | "board" | "archive" | null;
+  taskIsStandalone: boolean;
+  taskAddedAt: string | null;
+  taskGoalDays: number | null;
+  taskDueAt: string | null;
+  taskCompletionImage: string | null;
+  // Why the task was archived — asked every time a task is sent to the
+  // Task Archive (from the bank, board, or Uncompleted column). Cleared
+  // when restored back to the bank/board.
+  taskArchiveReason: string | null;
+  // How many times this task has been on the board past its due_at
+  // without being completed — one per distinct due date, not per day
+  // overdue. Shown as a small red badge next to the task's title.
+  taskMissedCount: number;
+  // Linking to a skill (see db/database.ts's migration comment) — when
+  // set, hold-to-complete logs time/notes onto this skill_tasks row
+  // instead of the usual completion-image step, and the task itself
+  // stays on the board (see taskLastCompletedAt) rather than
+  // disappearing.
+  linkedSkillTaskId: number | null;
+  // Stamped by each skill-linked completion — drives the cooldown/
+  // gray-out check (src/tasks/taskCooldown.ts) against the linked
+  // skill's settings. Unrelated to completedAt/isComplete, which never
+  // change for a skill-linked task.
+  taskLastCompletedAt: string | null;
+}
+
+// One entry in the Tasks page's Completed section for a skill-linked
+// task (src/db/database.ts's progress_node_completions table) — a
+// lightweight record of one hold-to-complete, kept separate from the
+// task itself since that stays on the board, cooling down, not
+// actually completed/removed.
+export interface ProgressNodeCompletion {
+  id: number;
+  progressNodeId: number;
+  header: string;
+  completedAt: string;
+  durationMinutes: number | null;
+  note: string | null;
 }

@@ -27,6 +27,12 @@ export interface Project {
   // image-left mode — same convention as recipes.imageData. undefined/""
   // = no cover, falls back to the initial-letter placeholder.
   imageData?: string;
+  // "Looks" section of the Goal Web's ctrl-click NodeFieldVisibilityPopover
+  // — null = 100% (the card's normal 180px width).
+  webCardScale: number | null;
+  // Same popover's accent color override for this project's Goal Web
+  // card — null = use the theme's goalProjectNodeBackground.
+  webCardColor: string | null;
 }
 
 // One layer above projects — same shape, same optional dream link.
@@ -66,7 +72,34 @@ export interface Goal {
   imageData?: string;
 }
 
-export type ProjectWidgetType = "journal" | "linkboard" | "table" | "photo" | "dock" | "costlog" | "calculator";
+export type ProjectWidgetType = "journal" | "linkboard" | "table" | "photo" | "dock" | "costlog" | "calculator" | "mastercostlog";
+
+// A collection of other Cost Log widgets (from anywhere in the app)
+// aggregated together, with the option to group some of them under a
+// named label — e.g. "Materials" grouping a handful of per-purchase
+// cost logs so their total shows as one line rather than several. Owned
+// by exactly one Master Cost Log widget. See db/costLog.ts's
+// fetchCostGroupings/createCostGrouping and components/
+// MasterCostLogWidget.tsx.
+export interface CostGrouping {
+  id: number;
+  masterWidgetId: number;
+  name: string;
+  sortOrder: number;
+}
+
+// One Cost Log widget included in a Master Cost Log's totals — ungrouped
+// (groupingId null) counts toward the master's overall total only;
+// grouped ones also count toward their grouping's subtotal. A given
+// source widget can only be added once per master (enforced by a unique
+// index — see database.ts's create_cost_grouping_tables migration).
+export interface MasterCostLogSource {
+  id: number;
+  masterWidgetId: number;
+  costLogWidgetId: number;
+  // Null = ungrouped (counts only toward the master's overall total).
+  groupingId: number | null;
+}
 
 // Belongs to exactly one of a project or a goal — never both, never
 // neither. Whichever owner fetched it already knows which one it is, so
@@ -90,6 +123,35 @@ export interface ProjectWidget {
   posY?: number | null;
   width?: number | null;
   height?: number | null;
+  // Only meaningful for widgetType "dock" — true (the default) shows the
+  // dock's actual photos inline on a Web card instead of a small emoji
+  // button that opens an overlay. See db/projects.ts's mapWidgetRow.
+  dockBigDisplay: boolean;
+}
+
+// A purely visual grouping rectangle on a Goal Web or Dream Web canvas
+// — see components/PaneNode.tsx. Same "goal"/"dream" + owner id
+// convention as ProjectWidget's web columns, but panes are never grid
+// widgets, so webType/webOwnerId are always set (not optional).
+export interface Pane {
+  id: number;
+  webType: "goal" | "dream";
+  webOwnerId: number;
+  title: string;
+  color: string;
+  opacity: number;
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+  isFront: boolean;
+  // Header label styling — headerColor null = the theme's default text color.
+  headerFontSize: number;
+  headerColor: string | null;
+  // Pins this one pane against mouse dragging regardless of the
+  // canvas-wide node lock (see context/WebNodeLockContext.tsx).
+  locked: boolean;
+  createdAt?: string;
 }
 
 export interface ProjectJournalEntry {

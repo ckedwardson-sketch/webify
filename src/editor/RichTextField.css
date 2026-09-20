@@ -1,0 +1,38 @@
+/* Layered on top of whatever box-look class the caller passes in
+   (.instructions-textarea, .resp-textarea, …) — this just adds what a
+   contentEditable div needs that a real <textarea> got for free. */
+.rich-text-field {
+  overflow: auto;
+  cursor: text;
+  /* Matches the ~3-4 row height the <textarea>s this replaces defaulted
+     to — a field with a persisted height (contentStyle's height, once
+     the user's dragged the resize handle) overrides this via its own
+     inline style, same as height always overrode a textarea's rows. */
+  min-height: 90px;
+}
+
+.rich-text-field-content,
+.rich-text-field-content .ProseMirror {
+  height: 100%;
+}
+
+.rich-text-field-content .ProseMirror {
+  outline: none;
+  min-height: 1.5em;
+}
+
+.rich-text-field-content .ProseMirror p {
+  margin: 0 0 0.4em;
+}
+
+.rich-text-field-content .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+.rich-text-field-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}

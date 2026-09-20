@@ -1,6 +1,6 @@
 import { getDb } from "./database";
 import { Goal, ProjectWidget, ProjectWidgetType } from "../types/project";
-import { WIDGET_COLUMNS } from "./projects";
+import { WIDGET_COLUMNS, RawWidgetRow, mapWidgetRow } from "./projects";
 import { recordEntityHistory, deleteEntityHistoryFor } from "./entityHistory";
 
 const GOAL_COLUMNS = `
@@ -223,10 +223,11 @@ export async function deleteGoal(id: number): Promise<void> {
 
 export async function fetchWidgetsForGoal(goalId: number): Promise<ProjectWidget[]> {
   const db = await getDb();
-  return db.select<ProjectWidget[]>(
-    `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE goal_id = $1 ORDER BY sort_order`,
+  const rows = await db.select<RawWidgetRow[]>(
+    `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE goal_id = $1 AND is_solo_field = 0 ORDER BY sort_order`,
     [goalId]
   );
+  return rows.map(mapWidgetRow);
 }
 
 export async function addGoalWidget(

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useTheme } from "../theme/ThemeContext";
+import { useWebNodeLock } from "../context/WebNodeLockContext";
 import "./WebControls.css";
 
 // Replaces React Flow's default <Controls/> (a hardcoded white panel,
@@ -14,6 +15,7 @@ import "./WebControls.css";
 export function WebControls({ fitViewMinZoom }: { fitViewMinZoom?: number } = {}) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const { theme } = useTheme();
+  const { locked, setLocked } = useWebNodeLock();
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
@@ -53,6 +55,13 @@ export function WebControls({ fitViewMinZoom }: { fitViewMinZoom?: number } = {}
         title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
       >
         {isFullscreen ? "⤡" : "⤢"}
+      </button>
+      <button
+        className="web-controls-button"
+        onClick={() => setLocked(!locked)}
+        title={locked ? "Nodes locked — tap to allow dragging them" : "Nodes unlocked — tap to lock them in place"}
+      >
+        {locked ? "🔒" : "🔓"}
       </button>
     </div>
   );

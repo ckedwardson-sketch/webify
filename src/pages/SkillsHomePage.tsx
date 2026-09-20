@@ -194,10 +194,10 @@ export function SkillsHomePage({ onNavigate }: { onNavigate: (view: View) => voi
                 >
                   <div className="skill-card-name pane-shape-label">{skill.name}</div>
                   {skill.currentLevelName && <div className="skill-card-level">"{skill.currentLevelName}"</div>}
-                  <button className="icon-button danger skill-card-delete" onClick={(e) => handleDelete(skill.id, e)} title="Delete skill">
-                    🗑
-                  </button>
                   <DecalLayer decals={decals} target="pane" surface="skill" />
+                </button>
+                <button className="icon-button danger skill-card-delete" onClick={(e) => handleDelete(skill.id, e)} title="Delete skill">
+                  🗑
                 </button>
               </div>
             ))}

@@ -103,6 +103,22 @@
   background: var(--color-bg-elevated);
 }
 
+.future-slot-link-chip-open {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--future-slot-accent);
+  padding: 5px 8px;
+  line-height: 1;
+  color: var(--future-slot-accent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.future-slot-link-chip-open:hover {
+  background: var(--future-slot-tint);
+}
+
 .future-slot-link-chip-label {
   background: none;
   border: none;
@@ -111,10 +127,19 @@
   color: var(--color-text);
   cursor: pointer;
   font: inherit;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.future-slot-link-chip-label:hover {
+.future-slot-link-chip-label:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.future-slot-link-chip-label:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .future-slot-link-chip-remove {
@@ -132,10 +157,6 @@
   color: var(--color-danger);
 }
 
-.future-slot-add-link-wrapper {
-  position: relative;
-}
-
 .future-slot-add-link-button {
   background: none;
   border: 1px dashed var(--future-slot-accent);
@@ -151,32 +172,27 @@
   background: var(--future-slot-tint);
 }
 
-.future-slot-link-picker {
-  min-width: 240px;
-  max-height: 280px;
-  overflow-y: auto;
-  padding-top: 4px;
-}
-
-.future-slot-link-search {
-  width: 100%;
+.future-slot-link-url-input {
+  min-width: 220px;
   box-sizing: border-box;
-  padding: 8px 12px;
-  border: none;
-  border-bottom: 1px solid var(--color-border);
+  padding: 5px 10px;
+  border: 1px solid var(--future-slot-accent);
+  border-radius: 999px;
   background: var(--color-input-bg);
   color: var(--color-input-text);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
-.future-slot-link-search:focus {
+.future-slot-link-url-input:focus {
   outline: none;
+  box-shadow: 0 0 0 2px var(--future-slot-glow);
 }
 
-.future-slot-link-category {
-  color: var(--color-text-secondary);
+.future-slot-link-error {
+  margin-top: 8px;
   font-size: 0.8rem;
+  color: var(--color-danger);
 }
 
 .future-slot-inspiration-toggle {
@@ -222,6 +238,65 @@
   border: 1px solid var(--future-slot-accent);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+/* ---- Dual-pane: main instructions (left) + pulled recipe reference
+   (right). Single column by default; --split switches to two columns
+   once a link's been activated (see recipeDualPaneMode in Settings).
+   The left column is capped rather than an equal 1fr so that widening
+   the sidebar shrinks the RIGHT column first, not the editor itself. */
+
+.future-slot-editor-grid {
+  display: block;
+}
+
+.future-slot-editor-grid--split {
+  display: grid;
+  grid-template-columns: min(560px, 55%) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.future-slot-editor-grid:not(.future-slot-editor-grid--split) .future-slot-editor-reference {
+  display: none;
+}
+
+.future-slot-editor-reference {
+  border: 1px solid var(--future-slot-accent);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: var(--color-bg-elevated);
+}
+
+.future-slot-reference-box {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 260px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.88rem;
+  white-space: pre-wrap;
+}
+
+.future-slot-reference-box:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--future-slot-glow);
+}
+
+/* Mobile: always stacked, and the reference box always shows (no
+   "smart"/"none" concept on a phone-width screen — just scroll). */
+html.mobile-layout .future-slot-editor-grid {
+  display: block !important;
+}
+
+html.mobile-layout .future-slot-editor-grid .future-slot-editor-reference {
+  display: block !important;
+  margin-top: 16px;
 }
 
 .future-slot-convert-row {

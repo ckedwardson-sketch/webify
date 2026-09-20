@@ -1,0 +1,10 @@
+.solo-image-dock-field {
+  resize: vertical;
+  overflow: auto;
+  min-height: 140px;
+  box-sizing: border-box;
+}
+
+.solo-image-dock-field .image-dock-preview {
+  height: 100%;
+}

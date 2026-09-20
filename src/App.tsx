@@ -1,7 +1,7 @@
 // src/App.tsx
 import { useEffect, useRef, useState } from "react";
 import { View } from "./types/nav";
-import { PathEntry, resolveLabel, staticLabel, viewKey } from "./nav/navHistory";
+import { PathEntry, resolveLabel, staticLabel, viewKey, sidebarSectionForView } from "./nav/navHistory";
 import { NavHistoryBar } from "./components/NavHistoryBar";
 import { getDb } from "./db/database";
 import { listenForIncomingSync } from "./db/sync";
@@ -29,6 +29,7 @@ import { SettingsPageSettingsPage } from "./pages/SettingsPageSettingsPage";
 import { ResponsibilitiesHomePage } from "./pages/ResponsibilitiesHomePage";
 import { ResponsibilitiesManagePage } from "./pages/ResponsibilitiesManagePage";
 import { ResponsibilityDetailPage } from "./pages/ResponsibilityDetailPage";
+import { TasksPage } from "./pages/TasksPage";
 import { DreamWebPage } from "./pages/DreamWebPage";
 import { DreamDetailPage } from "./pages/DreamDetailPage";
 import { GoalsHomePage } from "./pages/GoalsHomePage";
@@ -54,13 +55,19 @@ import { HeaderStyleProvider } from "./icons/HeaderStyleContext";
 import { ButtonStyleProvider } from "./icons/ButtonStyleContext";
 import { ThemeProvider, useTheme } from "./theme/ThemeContext";
 import { useMobileLayout } from "./theme/useMobileLayout";
-import { computeMobileLayout, MobileMode } from "./theme/mobileLayout";
+import { computeMobileLayout, isMobileLayoutActive, MobileMode } from "./theme/mobileLayout";
+import { WebPaneContent, WebPaneMemory, EMPTY_WEB_PANE_MEMORY, sameWebPaneContent, webPaneContentToView } from "./types/dualPaneWeb";
+import { fetchProject } from "./db/projects";
+import { useUiPreferences } from "./context/UiPreferencesContext";
+import { DEFAULT_DUAL_PANE_WEB_SHORTCUT, serializeKeyEvent } from "./utils/keyboardShortcut";
 import { SectionThemeScope, ThemeSection } from "./theme/SectionThemeScope";
 import { ScreenCaptureWidget } from "./capture/ScreenCaptureWidget";
+import { SettingsContextCapturePage } from "./pages/SettingsContextCapturePage";
 import { RearrangeModeProvider, useRearrangeMode } from "./rearrange/RearrangeModeContext";
 import { RearrangeToolbar } from "./rearrange/RearrangeToolbar";
 import { EditorSettingsProvider } from "./editor/EditorSettingsContext";
 import { UiPreferencesProvider } from "./context/UiPreferencesContext";
+import { WebNodeLockProvider } from "./context/WebNodeLockContext";
 import { fetchUiPreferences, setUiPreference } from "./db/uiPreferences";
 import { DynamicOverlayProvider, useDynamicOverlay } from "./overlay/DynamicOverlayContext";
 import { DynamicOverlayPanel } from "./overlay/DynamicOverlayPanel";
@@ -92,16 +99,27 @@ export default function App() {
     );
   };
 
-  // Multi-pane mode (triggered from Notes) — the left column is a
+  // Two independent dual-pane mechanisms share one discriminator so
+  // they can never both be active at once. "notes" is the original
+  // multi-pane mode (triggered from Notes): the left column is a
   // self-contained Notes app (its own tree + editor, own open-note
-  // state) for reading/editing notes; the right column shows a second,
-  // independent "view" that Sidebar/NavHistoryBar drive, for freely
-  // browsing the rest of the app. The two are intentionally decoupled —
-  // see navigate()/navigateDualLeft()/enterDualPane()/exitDualPane().
-  const [dualPane, setDualPane] = useState(false);
+  // state); the right column shows a second, independent "view" that
+  // Sidebar/NavHistoryBar drive. "web" is Dual-Pane Web Mode (see
+  // below): the LEFT pane is the arbitrary/normal-navigation pane and
+  // the RIGHT pane always shows one of a closed set of "web" views
+  // (Goal Web / Recipes Graph) — the inverse of Notes' shape. See
+  // navigate()/navigateDualLeft()/enterDualPane()/exitDualPane() for
+  // Notes, and enterWebDualPane()/exitWebDualPane() for web mode.
+  const [dualPaneMode, setDualPaneMode] = useState<"notes" | "web" | null>(null);
   const [dualPaneRightView, setDualPaneRightView] = useState<View>({ type: "home" });
   const [dualPaneNotesPageId, setDualPaneNotesPageId] = useState<number | undefined>(undefined);
   const [dualPaneLeftCollapsed, setDualPaneLeftCollapsed] = useState(false);
+
+  // Dual-Pane Web Mode state — independent of the Notes fields above.
+  // Session-only (no DB persistence): resets every relaunch by design.
+  const [webPaneContent, setWebPaneContent] = useState<WebPaneContent>({ kind: "empty" });
+  const [webPaneMemory, setWebPaneMemory] = useState<WebPaneMemory>(EMPTY_WEB_PANE_MEMORY);
+  const [webDualPaneBlockedMessage, setWebDualPaneBlockedMessage] = useState(false);
 
   // The "user path" trail (NavHistoryBar) — separate from `view` itself.
   // navigate() below keeps this in sync: it compacts when the user
@@ -112,11 +130,24 @@ export default function App() {
   ]);
   const labelCache = useRef(new Map<string, string>());
 
+  // The last view actually visited within each sidebar section (Dreams,
+  // Goals, Projects, ...) — lets the sidebar send you back to wherever
+  // you were several layers deep in a section instead of always
+  // resetting to that section's home view on every click. Session-only
+  // (not persisted): this is about not losing your place while you
+  // bounce between sections in one sitting, not about restoring it after
+  // relaunching the app. See Sidebar.tsx's handleClick and
+  // nav/navHistory.ts's sidebarSectionForView, which both this and
+  // Sidebar's own active-item highlighting key off of.
+  const [lastViewBySection, setLastViewBySection] = useState<Record<string, View>>({});
+
   // The "real" navigation — always used outside multi-pane mode, and
   // also used by exitDualPane() to land the app on whatever the right
   // pane was showing once multi-pane mode ends.
   const applyRealNavigation = (next: View, opts?: { reset?: boolean }) => {
     setViewState(next);
+    const section = sidebarSectionForView(next);
+    if (section) setLastViewBySection((prev) => ({ ...prev, [section]: next }));
     const key = viewKey(next);
     setPath((prev) => {
       if (opts?.reset) {
@@ -139,19 +170,31 @@ export default function App() {
     });
   };
 
-  // While multi-pane mode is active, every navigation call from the
-  // right side — the right pane's own page, the global Sidebar,
+  // While Notes' multi-pane mode is active, every navigation call from
+  // the right side — the right pane's own page, the global Sidebar,
   // NavHistoryBar's breadcrumbs — flows through this same function, so
   // all of them drive the right pane instead of leaving multi-pane mode
   // or touching the real `view`. The left pane's Notes tree does NOT use
   // this — see navigateDualLeft — so selecting a note on the left can
   // never clobber whatever the right pane is showing.
+  //
+  // While Dual-Pane Web Mode is active, navigation stays REAL — the
+  // left pane behaves exactly like normal single-pane navigation. This
+  // function is still the one choke point that additionally decides
+  // whether the web-mode right pane needs to react to that navigation
+  // (see maybeSwitchOnLeftClick/maybeSwitchOnSidebarJump below) — no
+  // page component needs to know it might be affecting a right pane.
   const navigate = (next: View, opts?: { reset?: boolean }) => {
-    if (dualPane) {
+    if (dualPaneMode === "notes") {
       setDualPaneRightView(next);
       return;
     }
+    const prevView = view; // captured before applyRealNavigation updates state
     applyRealNavigation(next, opts);
+    if (dualPaneMode === "web") {
+      if (opts?.reset) maybeSwitchOnSidebarJump(prevView, next);
+      else maybeSwitchOnLeftClick(next);
+    }
   };
 
   const resetNavigate = (next: View) => navigate(next, { reset: true });
@@ -167,13 +210,131 @@ export default function App() {
     setDualPaneNotesPageId(view.type === "notes" ? view.pageId : undefined);
     setDualPaneLeftCollapsed(false);
     setSidebarOpen(false);
-    setDualPane(true);
+    setDualPaneMode("notes");
   };
 
   const exitDualPane = () => {
-    setDualPane(false);
+    setDualPaneMode(null);
     applyRealNavigation(dualPaneRightView);
   };
+
+  // --- Dual-Pane Web Mode ---------------------------------------------
+
+  // Clicking a project/goal on the LEFT pane that isn't the one
+  // currently shown as the right pane's web switches the right pane to
+  // match. A project with no linked goal has no web (Dreams is out of
+  // scope entirely) — clicking it is a silent no-op, right pane
+  // unchanged. Recipes category clicks are deliberately NOT handled
+  // here — the right pane's Recipes scope only ever re-evaluates on
+  // dual-pane re-entry (see enterWebDualPane).
+  const maybeSwitchOnLeftClick = (next: View) => {
+    if (next.type === "project-detail") {
+      fetchProject(next.projectId).then((p) => {
+        if (!p || p.goalId == null) return;
+        const target: WebPaneContent = { kind: "goal-web", goalId: p.goalId };
+        setWebPaneContent((current) => {
+          if (sameWebPaneContent(target, current)) return current;
+          return target;
+        });
+        setWebPaneMemory((m) => ({ ...m, Projects: target }));
+      });
+      return;
+    }
+    if (next.type === "goal-detail") {
+      const target: WebPaneContent = { kind: "goal-web", goalId: next.goalId };
+      setWebPaneContent((current) => {
+        if (sameWebPaneContent(target, current)) return current;
+        return target;
+      });
+      setWebPaneMemory((m) => ({ ...m, Goals: target }));
+    }
+  };
+
+  // The ONE sidebar-jump case that forces a right-pane change: jumping
+  // INTO Recipes from a Goal or Project DETAIL page (not a list page).
+  // Every other sidebar jump — Projects<->Goals, into any
+  // non-integrated page, or from a list page into Recipes — leaves the
+  // right pane exactly as it was. Sidebar.tsx's clicks are the only
+  // caller that ever passes {reset:true}, so that's an exact, existing
+  // proxy for "this came from the sidebar."
+  const maybeSwitchOnSidebarJump = (prevView: View, next: View) => {
+    const prevSection = sidebarSectionForView(prevView);
+    const nextSection = sidebarSectionForView(next);
+    if (nextSection !== "Recipes") return;
+    if (prevSection !== "Goals" && prevSection !== "Projects") return;
+    const wasDetail = prevView.type === "goal-detail" || prevView.type === "project-detail";
+    if (!wasDetail) return;
+
+    const target: WebPaneContent = webPaneMemory.Recipes ?? { kind: "recipes-graph" };
+    setWebPaneContent(target);
+    setWebPaneMemory((m) => ({ ...m, Recipes: target }));
+  };
+
+  const enterWebDualPane = () => {
+    if (isMobileLayoutActive()) {
+      setWebDualPaneBlockedMessage(true);
+      return;
+    }
+    setSidebarOpen(false);
+    const section = sidebarSectionForView(view);
+
+    if (section === "Recipes" && (view.type === "recipes-graph" || view.type === "recipes-category")) {
+      // Re-entry rescoping: derive scope from wherever the left pane
+      // currently sits, not from memory.
+      setWebPaneContent({ kind: "recipes-graph", categoryId: view.categoryId, categoryName: view.categoryName });
+    } else if (section === "Recipes") {
+      setWebPaneContent(webPaneMemory.Recipes ?? { kind: "recipes-graph" });
+    } else if (section === "Projects" && view.type === "projects-home") {
+      setWebPaneContent(webPaneMemory.Projects ?? { kind: "empty" });
+    } else if (section === "Goals" && view.type === "goals-home") {
+      setWebPaneContent(webPaneMemory.Goals ?? { kind: "empty" });
+    }
+    // else: any detail page, Dreams, or any non-integrated page — leave
+    // webPaneContent exactly as it was this session, no forced change.
+
+    setDualPaneMode("web");
+  };
+
+  const exitWebDualPane = () => {
+    setDualPaneMode(null);
+    // webPaneContent/webPaneMemory deliberately untouched — session
+    // memory persists across toggle-off/on; only re-entry (above)
+    // re-evaluates it.
+  };
+
+  // Right-pane node clicks (GoalWebPage/RecipesGraphPage's
+  // isDualPaneWebRight branch) open their target on the LEFT pane
+  // instead of navigating the right pane's own web in place. This is
+  // deliberately just applyRealNavigation — it does NOT call
+  // maybeSwitchOnLeftClick, so the right pane never moves as a side
+  // effect of something clicked inside itself (confirmed behavior). It
+  // already appends to `path`, which NavHistoryBar renders on the left
+  // pane in web-mode — so "back" works for free, no second stack needed.
+  const onOpenOnLeftPane = (v: View) => applyRealNavigation(v);
+
+  // The explicit "Enter Web" buttons (GoalDetailPage, GoalsHomePage,
+  // ProjectsHomePage, ProjectDetailPage) — while dual-pane-web is
+  // active, these target the RIGHT pane only and leave the left pane
+  // exactly where it is, so the next goal/project can be opened
+  // straight away without backing up first. Distinct from
+  // maybeSwitchOnLeftClick, which reacts to normal left-pane navigation
+  // (project-detail/goal-detail) — this is a dedicated "go look at this
+  // web" action, not a click that also needs to open a detail page on
+  // the left. Only wired up while dualPaneMode === "web" (see
+  // onEnterGoalWeb below) — the pages themselves fall back to plain
+  // onNavigate when it's undefined, so single-pane/Notes-mode behavior
+  // is untouched.
+  const enterGoalWebOnRightPane = (goalId: number) => {
+    const target: WebPaneContent = { kind: "goal-web", goalId };
+    setWebPaneContent((current) => (sameWebPaneContent(target, current) ? current : target));
+    const section = sidebarSectionForView(view);
+    setWebPaneMemory((m) => {
+      if (section === "Projects") return { ...m, Projects: target };
+      if (section === "Goals") return { ...m, Goals: target };
+      return m;
+    });
+  };
+  const onEnterGoalWeb = dualPaneMode === "web" ? enterGoalWebOnRightPane : undefined;
 
   useEffect(() => {
   getDb()
@@ -188,7 +349,7 @@ export default function App() {
       );
       // Apply stored ui_preferences overrides once, at startup — after
       // the matchMedia-derived sidebarOpen default and the plain
-      // useState(false) dualPane default have already been computed
+      // useState(null) dualPaneMode default have already been computed
       // above, so a user who's never touched either setting sees
       // exactly today's behavior.
       try {
@@ -197,7 +358,7 @@ export default function App() {
           setSidebarOpenState(prefs.sidebarOpen === "1");
         }
         if (prefs.dualPaneDefault === "1") {
-          setDualPane(true);
+          setDualPaneMode("notes");
         }
       } catch (err) {
         console.warn("Failed to load ui_preferences on startup:", err);
@@ -226,7 +387,11 @@ export default function App() {
     };
   }, [view]);
 
-  const renderPage = (v: View = view) => {
+  // `forRightPane` is true only for App's own web-mode right-pane render
+  // path (see renderWebPaneContent below) — every other call site
+  // (single-pane, and Notes' dual-pane right pane) omits it, so
+  // GoalWebPage/RecipesGraphPage's isDualPaneWebRight prop defaults off.
+  const renderPage = (v: View = view, forRightPane = false) => {
     switch (v.type) {
       case "home":
         return <HomePage />;
@@ -240,6 +405,8 @@ export default function App() {
             categoryId={v.categoryId}
             categoryName={v.categoryName}
             onNavigate={navigate}
+            isDualPaneWebRight={forRightPane}
+            onOpenOnLeftPane={forRightPane ? onOpenOnLeftPane : undefined}
           />
         );
       case "recipes-category":
@@ -277,6 +444,8 @@ export default function App() {
         return <SettingsHeadersPage onNavigate={navigate} focusKey={v.focusKey} />;
       case "settings-issues":
         return <SettingsIssuesPage onNavigate={navigate} />;
+      case "settings-context-capture":
+        return <SettingsContextCapturePage onNavigate={navigate} />;
       case "settings-sync":
         return <SettingsSyncPage onNavigate={navigate} />;
       case "settings-widget-visibility":
@@ -298,20 +467,29 @@ export default function App() {
             onNavigate={navigate}
           />
         );
+      case "tasks-home":
+        return <TasksPage onNavigate={navigate} />;
       case "dreams-web":
         return <DreamWebPage onNavigate={navigate} />;
       case "dream-detail":
         return <DreamDetailPage dreamId={v.dreamId} onNavigate={navigate} />;
       case "goals-home":
-        return <GoalsHomePage onNavigate={navigate} />;
+        return <GoalsHomePage onNavigate={navigate} onEnterGoalWeb={onEnterGoalWeb} />;
       case "goal-detail":
-        return <GoalDetailPage goalId={v.goalId} onNavigate={navigate} />;
+        return <GoalDetailPage goalId={v.goalId} onNavigate={navigate} onEnterGoalWeb={onEnterGoalWeb} />;
       case "goal-web":
-        return <GoalWebPage goalId={v.goalId} onNavigate={navigate} />;
+        return (
+          <GoalWebPage
+            goalId={v.goalId}
+            onNavigate={navigate}
+            isDualPaneWebRight={forRightPane}
+            onOpenOnLeftPane={forRightPane ? onOpenOnLeftPane : undefined}
+          />
+        );
       case "projects-home":
-        return <ProjectsHomePage onNavigate={navigate} />;
+        return <ProjectsHomePage onNavigate={navigate} onEnterGoalWeb={onEnterGoalWeb} />;
       case "project-detail":
-        return <ProjectDetailPage projectId={v.projectId} onNavigate={navigate} />;
+        return <ProjectDetailPage projectId={v.projectId} onNavigate={navigate} onEnterGoalWeb={onEnterGoalWeb} />;
       case "project-journal":
         return (
           <ProjectJournalPage
@@ -354,7 +532,7 @@ export default function App() {
             pageId={v.pageId}
             onNavigate={navigate}
             onEnterDualPane={enterDualPane}
-            dualPaneActive={dualPane}
+            dualPaneActive={dualPaneMode === "notes"}
           />
         );
       case "vault":
@@ -416,7 +594,7 @@ export default function App() {
     renderPage()
   );
 
-  const dualPaneRightPage = dualPane
+  const dualPaneRightPage = dualPaneMode === "notes"
     ? sectionFor(dualPaneRightView.type)
       ? (
           <SectionThemeScope section={sectionFor(dualPaneRightView.type)!}>
@@ -426,6 +604,29 @@ export default function App() {
       : renderPage(dualPaneRightView)
     : null;
 
+  // Parallel to renderPage/dualPaneRightPage above, but keyed on
+  // WebPaneContent (a closed set of just the "web" views this feature
+  // knows about) instead of the full View union — see
+  // src/types/dualPaneWeb.ts for why.
+  const renderWebPaneContent = (content: WebPaneContent): React.ReactNode => {
+    if (content.kind === "empty") {
+      return (
+        <div className="dual-pane-web-empty">Open a project or goal to see its web here.</div>
+      );
+    }
+    const asView = webPaneContentToView(content);
+    if (!asView) return null;
+    return sectionFor(asView.type) ? (
+      <SectionThemeScope section={sectionFor(asView.type)!}>
+        {renderPage(asView, true)}
+      </SectionThemeScope>
+    ) : (
+      renderPage(asView, true)
+    );
+  };
+
+  const dualPaneWebRightPage = dualPaneMode === "web" ? renderWebPaneContent(webPaneContent) : null;
+
   return (
     <ThemeProvider>
       <IconProvider>
@@ -434,6 +635,7 @@ export default function App() {
             <ButtonStyleProvider>
               <EditorSettingsProvider>
               <UiPreferencesProvider>
+                <WebNodeLockProvider>
                 <VaultSessionProvider>
                 <PageBackgroundProvider view={view}>
                   <DynamicOverlayProvider>
@@ -442,18 +644,24 @@ export default function App() {
                         <AppShell
                           view={view}
                           onSidebarNavigate={resetNavigate}
+                          lastViewBySection={lastViewBySection}
                           path={path}
                           onJump={navigate}
                           sidebarOpen={sidebarOpen}
                           setSidebarOpen={setSidebarOpen}
                           page={page}
-                          dualPane={dualPane}
+                          dualPaneMode={dualPaneMode}
                           dualPaneNotesPageId={dualPaneNotesPageId}
                           dualPaneRightPage={dualPaneRightPage}
                           dualPaneLeftCollapsed={dualPaneLeftCollapsed}
                           onToggleDualPaneLeft={() => setDualPaneLeftCollapsed((v) => !v)}
                           onExitDualPane={exitDualPane}
                           navigateDualLeft={navigateDualLeft}
+                          dualPaneWebRightPage={dualPaneWebRightPage}
+                          webDualPaneBlockedMessage={webDualPaneBlockedMessage}
+                          setWebDualPaneBlockedMessage={setWebDualPaneBlockedMessage}
+                          onEnterWebDualPane={enterWebDualPane}
+                          onExitWebDualPane={exitWebDualPane}
                         />
                       </RearrangeModeProvider>
                       <ScreenCaptureButtonGate view={view} onNavigate={navigate} />
@@ -466,6 +674,7 @@ export default function App() {
                   </DynamicOverlayProvider>
                 </PageBackgroundProvider>
                 </VaultSessionProvider>
+                </WebNodeLockProvider>
               </UiPreferencesProvider>
               </EditorSettingsProvider>
             </ButtonStyleProvider>
@@ -482,52 +691,100 @@ export default function App() {
 function AppShell({
   view,
   onSidebarNavigate,
+  lastViewBySection,
   path,
   onJump,
   sidebarOpen,
   setSidebarOpen,
   page,
-  dualPane,
+  dualPaneMode,
   dualPaneNotesPageId,
   dualPaneRightPage,
   dualPaneLeftCollapsed,
   onToggleDualPaneLeft,
   onExitDualPane,
   navigateDualLeft,
+  dualPaneWebRightPage,
+  webDualPaneBlockedMessage,
+  setWebDualPaneBlockedMessage,
+  onEnterWebDualPane,
+  onExitWebDualPane,
 }: {
   view: View;
   onSidebarNavigate: (view: View) => void;
+  lastViewBySection: Record<string, View>;
   path: PathEntry[];
   onJump: (view: View) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   page: React.ReactNode;
-  dualPane: boolean;
+  dualPaneMode: "notes" | "web" | null;
   dualPaneNotesPageId: number | undefined;
   dualPaneRightPage: React.ReactNode;
   dualPaneLeftCollapsed: boolean;
   onToggleDualPaneLeft: () => void;
   onExitDualPane: () => void;
   navigateDualLeft: (view: View) => void;
+  dualPaneWebRightPage: React.ReactNode;
+  webDualPaneBlockedMessage: boolean;
+  setWebDualPaneBlockedMessage: (v: boolean) => void;
+  onEnterWebDualPane: () => void;
+  onExitWebDualPane: () => void;
 }) {
   const { active: rearranging } = useRearrangeMode();
   const mobile = useMobileLayout();
   const { theme } = useTheme();
+  const { preferences } = useUiPreferences();
 
-  // Multi-pane mode force-narrows both columns to a "phone-width" look
-  // (see NotesPage.css / the app's existing html.mobile-layout rules)
-  // regardless of the real viewport, by toggling the same class the
-  // Settings > Theme > Mobile layout setting drives. Restores whatever
-  // that setting would compute for the real viewport on exit.
+  // Notes' multi-pane mode force-narrows both columns to a "phone-width"
+  // look (see NotesPage.css / the app's existing html.mobile-layout
+  // rules) regardless of the real viewport, by toggling the same class
+  // the Settings > Theme > Mobile layout setting drives. Restores
+  // whatever that setting would compute for the real viewport on exit.
+  // Dual-Pane WEB mode must NOT do this — it's desktop/wide-screen only
+  // by design, so forcing mobile CSS on it would be exactly backwards.
   useEffect(() => {
-    if (!dualPane) return;
+    if (dualPaneMode !== "notes") return;
     document.documentElement.classList.add("mobile-layout");
     return () => {
       const mode = (theme.mobileMode as MobileMode) || "auto";
       document.documentElement.classList.toggle("mobile-layout", computeMobileLayout(mode));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dualPane]);
+  }, [dualPaneMode]);
+
+  // The "Dual pane not available here" message (shown when the toggle
+  // is pressed on a mobile-width viewport, see App()'s enterWebDualPane)
+  // auto-clears itself — it's not something the user has to dismiss.
+  useEffect(() => {
+    if (!webDualPaneBlockedMessage) return;
+    const t = setTimeout(() => setWebDualPaneBlockedMessage(false), 2500);
+    return () => clearTimeout(t);
+  }, [webDualPaneBlockedMessage, setWebDualPaneBlockedMessage]);
+
+  // Global keyboard shortcut for Dual-Pane Web Mode (configurable in
+  // Settings > Panel & Layout Memory) — lives here rather than in App()
+  // itself because reading `preferences` needs a UiPreferencesProvider
+  // ancestor, same reason AppShell is split out of App() in the first
+  // place (see the comment above this function).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)) {
+        return;
+      }
+      const combo = serializeKeyEvent(e);
+      if (!combo) return;
+      const configured = preferences.dualPaneWebShortcut ?? DEFAULT_DUAL_PANE_WEB_SHORTCUT;
+      if (combo !== configured) return;
+      e.preventDefault();
+      if (dualPaneMode === "web") onExitWebDualPane();
+      else if (dualPaneMode === null) onEnterWebDualPane();
+      // dualPaneMode === "notes": shortcut is a no-op, Notes keeps its own trigger.
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [dualPaneMode, preferences.dualPaneWebShortcut, onEnterWebDualPane, onExitWebDualPane]);
 
   return (
     <div
@@ -537,7 +794,12 @@ function AppShell({
         <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
       )}
       {sidebarOpen && (
-        <Sidebar view={view} onNavigate={onSidebarNavigate} onToggle={() => setSidebarOpen(false)} />
+        <Sidebar
+          view={view}
+          onNavigate={onSidebarNavigate}
+          onToggle={() => setSidebarOpen(false)}
+          lastViewBySection={lastViewBySection}
+        />
       )}
       {!sidebarOpen && (
         <button
@@ -551,8 +813,23 @@ function AppShell({
       )}
       <RearrangeToolbar />
       <div className="app-main-column">
-        {!dualPane && <NavHistoryBar path={path} onJump={onJump} />}
-        {dualPane ? (
+        {dualPaneMode !== "notes" && (
+          <div className="dual-pane-web-toggle-row">
+            <NavHistoryBar path={path} onJump={onJump} />
+            <button
+              className="dual-pane-web-toggle"
+              type="button"
+              onClick={dualPaneMode === "web" ? onExitWebDualPane : onEnterWebDualPane}
+              title={dualPaneMode === "web" ? "Exit Dual-Pane Web Mode" : "Enter Dual-Pane Web Mode"}
+            >
+              {dualPaneMode === "web" ? "✕ Web" : "⛶ Web"}
+            </button>
+            {webDualPaneBlockedMessage && (
+              <span className="dual-pane-web-blocked-msg">Dual pane not available here</span>
+            )}
+          </div>
+        )}
+        {dualPaneMode === "notes" ? (
           <div className="dual-pane-shell">
             {!dualPaneLeftCollapsed && (
               <div className="dual-pane-left">
@@ -577,6 +854,15 @@ function AppShell({
             <button className="dual-pane-exit" type="button" onClick={onExitDualPane}>
               ✕ Exit dual-pane
             </button>
+          </div>
+        ) : dualPaneMode === "web" ? (
+          <div className="dual-pane-shell">
+            <div className="dual-pane-web-left">
+              <main className="app-content" data-color-surface="page">{page}</main>
+            </div>
+            <main className="app-content dual-pane-web-right" data-color-surface="page">
+              {dualPaneWebRightPage}
+            </main>
           </div>
         ) : (
           <main className="app-content" data-color-surface="page">{page}</main>

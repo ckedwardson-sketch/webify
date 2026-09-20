@@ -1,0 +1,109 @@
+.task-board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Rectangular, not square — distinct from the Web canvas's task-node
+     shape, per the user's request that board cards read as rectangles. */
+  aspect-ratio: 3 / 2;
+  min-width: 140px;
+  padding: 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  box-sizing: border-box;
+}
+
+.task-board-card-overdue {
+  border-color: var(--color-danger);
+}
+
+.task-board-card-cooling-down {
+  filter: grayscale(0.6);
+  opacity: 0.75;
+}
+
+.task-board-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.task-board-card-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  /* Floor so the menu-trigger button next to it (flex-shrink: 0) can't
+     squeeze this down to a per-letter-wrapped sliver — same fix as
+     .tasks-bank-row-name in TasksPage.css. */
+  flex: 1 1 auto;
+  min-width: 60px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.task-board-card-name:hover {
+  text-decoration: underline;
+}
+
+.task-missed-badge {
+  flex-shrink: 0;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  align-self: center;
+}
+
+.task-board-card-menu-trigger {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.task-board-card-menu-trigger:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
+.task-board-card-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-board-card-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+
+.task-board-card-progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.task-board-card-overdue .task-board-card-progress-fill {
+  background: var(--color-danger);
+}
+
+.task-board-card-progress-label {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}

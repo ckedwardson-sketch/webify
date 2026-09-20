@@ -17,6 +17,7 @@ import { QuickPhotoWidget } from "./QuickPhotoWidget";
 import { CostLogWidget } from "./CostLogWidget";
 import { CalculatorWidget } from "./CalculatorWidget";
 import { TableWidgetPreview } from "./TableWidgetPreview";
+import { MasterCostLogWidget } from "./MasterCostLogWidget";
 import "./WebWidgetNode.css";
 
 export const WEB_WIDGET_DEFAULT_WIDTH = 280;
@@ -30,6 +31,7 @@ const WIDGET_ICON_KEY: Record<ProjectWidget["widgetType"], string> = {
   dock: "widget-dock",
   costlog: "widget-costlog",
   calculator: "widget-calculator",
+  mastercostlog: "widget-mastercostlog",
 };
 
 export interface WebWidgetNodeData {
@@ -40,15 +42,28 @@ export interface WebWidgetNodeData {
   // GoalDetailPage.tsx's grid) — clicking their "Open" button navigates
   // to their existing page instead, same as the grid does.
   onOpen: () => void;
+  // Routes an Image Dock's edit click to NodeWidgetOverlay instead of
+  // its own internal overlay — see ImageDockWidget's onPreviewClick
+  // comment: this node's own wrapper has a CSS transform on it (how
+  // React Flow positions nodes), which breaks a nested `position: fixed`
+  // overlay's viewport-relative sizing.
+  onEditDock: () => void;
 }
 
 export function WebWidgetNode({ data, selected }: { data: WebWidgetNodeData; selected?: boolean }) {
-  const { widget, onDelete, onResize, onOpen } = data;
+  const { widget, onDelete, onResize, onOpen, onEditDock } = data;
   const width = widget.width ?? WEB_WIDGET_DEFAULT_WIDTH;
   const height = widget.height ?? WEB_WIDGET_DEFAULT_HEIGHT;
+  // Drives the auto-fit text scaling in WebWidgetNode.css (calculator
+  // digits, cost totals, etc.) — computed from the box's actual height
+  // (only changes when the user resizes it) rather than a CSS container
+  // query, which is far more expensive to keep live on a canvas. Clamped
+  // so a tiny or huge box doesn't produce illegibly small/comically
+  // large text ("within reason").
+  const scale = Math.max(0.6, Math.min(1.8, height / WEB_WIDGET_DEFAULT_HEIGHT));
 
   return (
-    <div className="web-widget-node" style={{ width, height }}>
+    <div className="web-widget-node" style={{ width, height, ["--ww-scale" as string]: scale }}>
       <NodeResizer
         isVisible={selected}
         minWidth={180}
@@ -74,13 +89,15 @@ export function WebWidgetNode({ data, selected }: { data: WebWidgetNodeData; sel
       </div>
       <div className="web-widget-node-body nodrag nowheel">
         {widget.widgetType === "dock" ? (
-          <ImageDockWidget widgetId={widget.id} />
+          <ImageDockWidget widgetId={widget.id} onPreviewClick={onEditDock} />
         ) : widget.widgetType === "photo" ? (
           <QuickPhotoWidget widgetId={widget.id} />
         ) : widget.widgetType === "costlog" ? (
           <CostLogWidget widgetId={widget.id} />
         ) : widget.widgetType === "calculator" ? (
           <CalculatorWidget widgetId={widget.id} />
+        ) : widget.widgetType === "mastercostlog" ? (
+          <MasterCostLogWidget widgetId={widget.id} />
         ) : widget.widgetType === "table" ? (
           <TableWidgetPreview widgetId={widget.id} onOpen={onOpen} />
         ) : (

@@ -17,7 +17,16 @@ const NO_DREAM = "none";
 // Formatted the same way as ProjectsHomePage — a goal is one layer
 // above a project (a bigger aim a handful of projects might serve),
 // same optional dream link, same "just add it" flow.
-export function GoalsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function GoalsHomePage({
+  onNavigate,
+  onEnterGoalWeb,
+}: {
+  onNavigate: (view: View) => void;
+  // While Dual-Pane Web Mode is active, "Enter Web" targets the right
+  // pane only and leaves this list in place — see App.tsx. Undefined in
+  // single-pane / Notes-mode, where it falls back to plain onNavigate.
+  onEnterGoalWeb?: (goalId: number) => void;
+}) {
   const { theme } = useTheme();
   const { overrides: pageBgOverrides, scopeKey: pageBgScopeKey } = usePageBackground();
   const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
@@ -177,7 +186,7 @@ export function GoalsHomePage({ onNavigate }: { onNavigate: (view: View) => void
                 </button>
                 <button
                   className="add-button secondary projects-list-enter-web"
-                  onClick={() => onNavigate({ type: "goal-web", goalId: g.id })}
+                  onClick={() => (onEnterGoalWeb ? onEnterGoalWeb(g.id) : onNavigate({ type: "goal-web", goalId: g.id }))}
                 >
                   Enter Web
                 </button>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FieldLayoutRow, FieldStylePatch, FIELD_TYPE_LABELS, isWebDisplayable, webFieldKind } from "../db/fieldLayout";
+import { ProjectWidget } from "../types/project";
 import "./FieldStyleFields.css";
 
 // The actual "style this field" controls (font/color/background/border/
@@ -17,10 +18,17 @@ export function FieldStyleFields({
   field,
   onSave,
   onRename,
+  dockWidgets,
+  onSetDockBigDisplay,
 }: {
   field: FieldLayoutRow;
   onSave: (patch: FieldStylePatch) => void;
   onRename: (label: string | null) => void;
+  // Only relevant when field.fieldType === "widgets" — every Image Dock
+  // widget currently in this page's widget bay, so each can get its own
+  // "show as big image on web" toggle right here (see NodeCardFields.tsx).
+  dockWidgets?: ProjectWidget[];
+  onSetDockBigDisplay?: (widgetId: number, bigDisplay: boolean) => void;
 }) {
   const defaultLabel = FIELD_TYPE_LABELS[field.fieldType];
   const [labelDraft, setLabelDraft] = useState(field.customLabel ?? "");
@@ -214,7 +222,7 @@ export function FieldStyleFields({
             />
             Show on Dream/Goal/Project Web
           </label>
-          {webFieldKind(field.fieldType) !== "widgets" && (
+          {webFieldKind(field.fieldType) !== "widgets" && webFieldKind(field.fieldType) !== "solo_image" && (
             <label className="field-style-checkbox-row">
               <input
                 type="checkbox"
@@ -225,6 +233,22 @@ export function FieldStyleFields({
               Show header too
             </label>
           )}
+        </div>
+      )}
+
+      {field.fieldType === "widgets" && dockWidgets && dockWidgets.length > 0 && (
+        <div className="field-style-section field-style-section-full">
+          <div className="field-style-section-title">Image Docks</div>
+          {dockWidgets.map((w) => (
+            <label key={w.id} className="field-style-checkbox-row">
+              <input
+                type="checkbox"
+                checked={w.dockBigDisplay}
+                onChange={(e) => onSetDockBigDisplay?.(w.id, e.target.checked)}
+              />
+              {w.title || "Image Dock"} — show as big image on web
+            </label>
+          ))}
         </div>
       )}
     </div>

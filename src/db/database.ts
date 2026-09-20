@@ -101,7 +101,17 @@ async function runMigrations(db: Database): Promise<void> {
   await ensureColumn(db, "add_recipes_is_future_slot", "recipes", "is_future_slot", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "add_recipes_future_slot_origin", "recipes", "future_slot_origin", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "add_recipes_inspiration", "recipes", "inspiration", "TEXT");
+  // future_slot_links stores an array of {id, url, title} external
+  // recipe links (JSON), not the internal recipe-id links this column
+  // briefly held before the feature's first real use — safe to repurpose.
   await ensureColumn(db, "add_recipes_future_slot_links", "recipes", "future_slot_links", "TEXT");
+  // The Future Slot's persistent "second column" — see Recipe.referenceContent.
+  await ensureColumn(db, "add_recipes_reference_content", "recipes", "reference_content", "TEXT");
+
+  // User-draggable width (px) of this recipe's editor column — a layout
+  // preference, not content, so (like sort_order) it's deliberately left
+  // out of the updated_at trigger below.
+  await ensureColumn(db, "add_recipes_editor_width", "recipes", "editor_width", "INTEGER");
 
   // Timestamps. SQLite's ALTER TABLE ADD COLUMN refuses a non-constant
   // default like CURRENT_TIMESTAMP (only CREATE TABLE allows that) —
@@ -168,6 +178,22 @@ async function runMigrations(db: Database): Promise<void> {
       END;
     `);
     await markMigrationApplied(db, "update_recipes_updated_at_trigger_future_slot");
+  }
+
+  // Same again for reference_content (the Future Slot's persistent
+  // "second column"), added after the trigger above.
+  if (!(await isMigrationApplied(db, "update_recipes_updated_at_trigger_reference_content"))) {
+    await db.execute("DROP TRIGGER IF EXISTS trg_recipes_updated_at");
+    await db.execute(`
+      CREATE TRIGGER trg_recipes_updated_at
+      AFTER UPDATE OF name, instructions, image_data, is_frozen, is_homegrown, is_favorite, is_proven, iteration_difference, category_id, is_future_slot, inspiration, future_slot_links, reference_content
+      ON recipes
+      FOR EACH ROW
+      BEGIN
+        UPDATE recipes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+      END;
+    `);
+    await markMigrationApplied(db, "update_recipes_updated_at_trigger_reference_content");
   }
 
   // Icon overrides — key/image pairs set from Settings > Icons.
@@ -270,6 +296,20 @@ async function runMigrations(db: Database): Promise<void> {
       )
     `);
     await markMigrationApplied(db, "create_capture_targets_table");
+  }
+
+  // Capture Context — a separate checklist selection from the screen
+  // capture widget's, for Settings > Capture Context's "save a whole
+  // PDF report of these pages" feature. Kept as its own table (rather
+  // than reusing capture_targets) since the two features serve
+  // different purposes and a user may want different pages in each.
+  if (!(await isMigrationApplied(db, "create_context_capture_targets_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS context_capture_targets (
+        target_key TEXT PRIMARY KEY
+      )
+    `);
+    await markMigrationApplied(db, "create_context_capture_targets_table");
   }
 
   // Saved theme presets — an in-app library alongside file export/
@@ -528,30 +568,48 @@ async function runMigrations(db: Database): Promise<void> {
   // new shape, copy every row over unchanged, swap it in. ON DELETE
   // CASCADE becomes SET NULL — deleting a dream should detach its
   // projects, not take them down with it.
+  // Resumable rather than a straight-line script: on mobile the process
+  // can be killed mid-rebuild (backgrounded during an app update/reinstall),
+  // which used to leave a stray "projects_new" table behind and then throw
+  // "table already exists" forever after, since isMigrationApplied was
+  // never reached to mark it done. Each step now checks real table state
+  // first, so re-running after a crash at any point in the rebuild picks
+  // up where it left off instead of re-issuing a CREATE/DROP that no
+  // longer matches reality.
   if (!(await isMigrationApplied(db, "make_projects_dream_id_optional"))) {
-    await db.execute(`
-      CREATE TABLE projects_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        dream_id INTEGER REFERENCES dreams(id) ON DELETE SET NULL,
-        name TEXT NOT NULL,
-        goals TEXT NOT NULL DEFAULT '',
-        reasoning TEXT NOT NULL DEFAULT '',
-        needs_doing TEXT NOT NULL DEFAULT '',
-        expected_date_start TEXT,
-        expected_date_end TEXT,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT,
-        updated_at TEXT
-      )
-    `);
-    await db.execute(`
-      INSERT INTO projects_new
-        (id, dream_id, name, goals, reasoning, needs_doing, expected_date_start, expected_date_end, sort_order, created_at, updated_at)
-      SELECT id, dream_id, name, goals, reasoning, needs_doing, expected_date_start, expected_date_end, sort_order, created_at, updated_at
-      FROM projects
-    `);
-    await db.execute(`DROP TABLE projects`);
-    await db.execute(`ALTER TABLE projects_new RENAME TO projects`);
+    const oldExists = await tableExists(db, "projects");
+    const newExists = await tableExists(db, "projects_new");
+    if (oldExists) {
+      if (newExists) {
+        await db.execute(`DROP TABLE projects_new`);
+      }
+      await db.execute(`
+        CREATE TABLE projects_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          dream_id INTEGER REFERENCES dreams(id) ON DELETE SET NULL,
+          name TEXT NOT NULL,
+          goals TEXT NOT NULL DEFAULT '',
+          reasoning TEXT NOT NULL DEFAULT '',
+          needs_doing TEXT NOT NULL DEFAULT '',
+          expected_date_start TEXT,
+          expected_date_end TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT,
+          updated_at TEXT
+        )
+      `);
+      await db.execute(`
+        INSERT INTO projects_new
+          (id, dream_id, name, goals, reasoning, needs_doing, expected_date_start, expected_date_end, sort_order, created_at, updated_at)
+        SELECT id, dream_id, name, goals, reasoning, needs_doing, expected_date_start, expected_date_end, sort_order, created_at, updated_at
+        FROM projects
+      `);
+      await db.execute(`DROP TABLE projects`);
+      await db.execute(`ALTER TABLE projects_new RENAME TO projects`);
+    } else if (newExists) {
+      // Crashed after dropping the old table but before the rename.
+      await db.execute(`ALTER TABLE projects_new RENAME TO projects`);
+    }
     await markMigrationApplied(db, "make_projects_dream_id_optional");
   }
 
@@ -634,23 +692,33 @@ async function runMigrations(db: Database): Promise<void> {
   // project_id/goal_id is set per row (enforced at the app level, not a
   // CHECK constraint, to keep this a plain rebuild).
   if (!(await isMigrationApplied(db, "add_project_widgets_goal_id"))) {
-    await db.execute(`
-      CREATE TABLE project_widgets_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
-        goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
-        widget_type TEXT NOT NULL,
-        title TEXT NOT NULL DEFAULT '',
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await db.execute(`
-      INSERT INTO project_widgets_new (id, project_id, widget_type, title, sort_order, created_at)
-      SELECT id, project_id, widget_type, title, sort_order, created_at FROM project_widgets
-    `);
-    await db.execute(`DROP TABLE project_widgets`);
-    await db.execute(`ALTER TABLE project_widgets_new RENAME TO project_widgets`);
+    const oldExists = await tableExists(db, "project_widgets");
+    const newExists = await tableExists(db, "project_widgets_new");
+    if (oldExists) {
+      if (newExists) {
+        await db.execute(`DROP TABLE project_widgets_new`);
+      }
+      await db.execute(`
+        CREATE TABLE project_widgets_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+          goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
+          widget_type TEXT NOT NULL,
+          title TEXT NOT NULL DEFAULT '',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await db.execute(`
+        INSERT INTO project_widgets_new (id, project_id, widget_type, title, sort_order, created_at)
+        SELECT id, project_id, widget_type, title, sort_order, created_at FROM project_widgets
+      `);
+      await db.execute(`DROP TABLE project_widgets`);
+      await db.execute(`ALTER TABLE project_widgets_new RENAME TO project_widgets`);
+    } else if (newExists) {
+      // Crashed after dropping the old table but before the rename.
+      await db.execute(`ALTER TABLE project_widgets_new RENAME TO project_widgets`);
+    }
     await markMigrationApplied(db, "add_project_widgets_goal_id");
   }
 
@@ -1407,6 +1475,42 @@ async function runMigrations(db: Database): Promise<void> {
   await ensureColumn(db, "add_project_widgets_width", "project_widgets", "width", "REAL");
   await ensureColumn(db, "add_project_widgets_height", "project_widgets", "height", "REAL");
 
+  // A Pane: a purely visual, freely resizable rounded rectangle on a
+  // Goal Web or Dream Web canvas, used to group nearby nodes into a
+  // labeled, colored area (see components/PaneNode.tsx) — no linked
+  // record of its own, just position/size/color/title. Always rendered
+  // behind every other node (PaneNode.tsx gives it a negative zIndex)
+  // unless the user toggles is_front on, which briefly brings it above
+  // everything else to visually cover (and block interaction with) the
+  // nodes underneath. web_type/web_owner_id follow the same "goal"/
+  // "dream" + owner id convention project_widgets' web columns use.
+  if (!(await isMigrationApplied(db, "create_web_panes_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS web_panes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        web_type TEXT NOT NULL,
+        web_owner_id INTEGER NOT NULL,
+        title TEXT NOT NULL DEFAULT 'Pane',
+        color TEXT NOT NULL DEFAULT '#38bdf8',
+        opacity REAL NOT NULL DEFAULT 0.18,
+        pos_x REAL NOT NULL DEFAULT 0,
+        pos_y REAL NOT NULL DEFAULT 0,
+        width REAL NOT NULL DEFAULT 420,
+        height REAL NOT NULL DEFAULT 320,
+        is_front INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await markMigrationApplied(db, "create_web_panes_table");
+  }
+  await ensureColumn(db, "add_web_panes_header_font_size", "web_panes", "header_font_size", "REAL NOT NULL DEFAULT 12");
+  await ensureColumn(db, "add_web_panes_header_color", "web_panes", "header_color", "TEXT");
+  // Per-pane drag lock (independent of the mobile/manual "lock all node
+  // dragging" switch — see WebNodeLockContext) — set via PaneNode.tsx's
+  // own lock button so one particular pane can be pinned in place while
+  // everything else on the canvas stays freely draggable.
+  await ensureColumn(db, "add_web_panes_locked", "web_panes", "locked", "INTEGER NOT NULL DEFAULT 0");
+
   // An Output: a record of something actually produced by a Task —
   // conceptually an artifact, not another task. Unlimited per task.
   // Shares its rich-content shape with notes_pages (same TipTap HTML
@@ -1649,6 +1753,142 @@ async function runMigrations(db: Database): Promise<void> {
     await markMigrationApplied(db, "create_vault_tables");
   }
 
+  // Saved layouts originally only snapshotted the widget grid (see
+  // create_saved_layouts_table above) — Save/Load Layout now also
+  // captures the page's field list (which fields are present, their
+  // order, custom labels, and styling — see db/fieldLayout.ts's
+  // FieldLayoutSnapshot) so Load Layout can fully replace a page's
+  // layout, not just its widgets. Nullable: older saved rows simply have
+  // no field snapshot to apply.
+  await ensureColumn(db, "add_saved_layouts_field_layout_json", "saved_layouts", "field_layout_json", "TEXT");
+
+  // A Master Cost Log widget (project_widgets.widget_type = "mastercostlog")
+  // aggregates other Cost Log widgets from anywhere in the app. cost_groupings
+  // holds its named subtotal groups; master_cost_log_sources holds which Cost
+  // Log widgets it's pulling in and (optionally) which grouping each belongs
+  // to. A source row's cost_log_widget_id is NOT foreign-keyed to
+  // project_widgets with ON DELETE CASCADE here since SQLite can't express
+  // "cascade only when widget_type=costlog" — deleting a Cost Log widget
+  // instead explicitly cleans up its source rows (see db/costLog.ts).
+  if (!(await isMigrationApplied(db, "create_cost_grouping_tables"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS cost_groupings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        master_widget_id INTEGER NOT NULL REFERENCES project_widgets(id) ON DELETE CASCADE,
+        name TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS master_cost_log_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        master_widget_id INTEGER NOT NULL REFERENCES project_widgets(id) ON DELETE CASCADE,
+        cost_log_widget_id INTEGER NOT NULL,
+        grouping_id INTEGER REFERENCES cost_groupings(id) ON DELETE SET NULL,
+        UNIQUE(master_widget_id, cost_log_widget_id)
+      )
+    `);
+    await markMigrationApplied(db, "create_cost_grouping_tables");
+  }
+
+  // An Image Dock widget defaults to showing its actual photos inline on
+  // the Dream/Goal/Project Web card's widget bay instead of a small
+  // emoji button that opens an overlay — this column lets a widget opt
+  // back into the old small-button behavior. Meaningless for every
+  // widget_type other than "dock".
+  await ensureColumn(db, "add_project_widgets_dock_big_display", "project_widgets", "dock_big_display", "INTEGER NOT NULL DEFAULT 1");
+
+  // A "solo image dock" field (field_layout's new "solo_dock" type) is a
+  // project_widgets row too (reuses the exact same dock_images-backed
+  // storage and ImageDockWidget component as a widget-bay dock) but
+  // rendered inline as its own field row instead of living in the
+  // widget bay — this flag is how fetchWidgetsForProject/fetchWidgetsForGoal
+  // (the bay's own fetch) know to exclude it, so it doesn't show up twice.
+  await ensureColumn(db, "add_project_widgets_is_solo_field", "project_widgets", "is_solo_field", "INTEGER NOT NULL DEFAULT 0");
+
+  // "Looks" section of NodeFieldVisibilityPopover — a per-project
+  // override for how its card renders on the Goal Web. Null scale means
+  // 100% (the normal 180px card width); null color means the theme's
+  // default goalProjectNodeBackground.
+  await ensureColumn(db, "add_projects_web_card_scale", "projects", "web_card_scale", "REAL");
+  await ensureColumn(db, "add_projects_web_card_color", "projects", "web_card_color", "TEXT");
+
+  // "Looks" section of NodeFieldVisibilityPopover, task variant — a
+  // per-task percentage scale on top of the size difficulty already
+  // gives it (see progressNodeSize), plus a "favorite" toggle that
+  // shows a glowing outline around the node with its own amount/color.
+  // Null glow amount/color mean the built-in defaults; favorite off
+  // means no glow regardless of the other two.
+  await ensureColumn(db, "add_progress_nodes_web_scale", "progress_nodes", "web_scale", "REAL");
+  await ensureColumn(db, "add_progress_nodes_favorite", "progress_nodes", "favorite", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_progress_nodes_glow_amount", "progress_nodes", "glow_amount", "REAL");
+  await ensureColumn(db, "add_progress_nodes_glow_color", "progress_nodes", "glow_color", "TEXT");
+
+  // Tasks page (src/pages/TasksPage.tsx) — reuses progress_nodes rather
+  // than a separate task table so favorite/glow/scale/completion stay
+  // the same row the owning Project/Goal Web already renders. NULL
+  // task_board_status means "not part of the Tasks system" (an
+  // ordinary project/goal task nobody has linked in yet). A standalone
+  // task (task_is_standalone = 1) has project_id AND goal_id both NULL
+  // — a "free time" errand with no project/goal home, created directly
+  // on this page. task_due_at = task_added_at + task_goal_days,
+  // recomputed by db/tasksBoard.ts whenever either changes; "uncompleted"
+  // (missed its deadline) is computed from this at read time, not stored.
+  await ensureColumn(db, "add_progress_nodes_task_board_status", "progress_nodes", "task_board_status", "TEXT");
+  await ensureColumn(db, "add_progress_nodes_task_is_standalone", "progress_nodes", "task_is_standalone", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_progress_nodes_task_added_at", "progress_nodes", "task_added_at", "TEXT");
+  await ensureColumn(db, "add_progress_nodes_task_goal_days", "progress_nodes", "task_goal_days", "REAL");
+  await ensureColumn(db, "add_progress_nodes_task_due_at", "progress_nodes", "task_due_at", "TEXT");
+  await ensureColumn(db, "add_progress_nodes_task_completion_image", "progress_nodes", "task_completion_image", "TEXT");
+
+  // Task Archive (bottom of Tasks page) — task_board_status also takes
+  // 'archive' now, alongside 'bank'/'board'/NULL. task_archive_reason is
+  // the "why are you archiving this" answer, asked whenever a task is
+  // sent to the archive from anywhere (bank/board/uncompleted); cleared
+  // when the task is restored back out. task_missed_count/
+  // task_missed_last_counted_due_at track the "missed a deadline"
+  // tally shown on the task — see db/tasksBoard.ts's bumpMissedCounts,
+  // which increments the count (once per distinct task_due_at, not per
+  // day overdue) lazily whenever board tasks are fetched.
+  await ensureColumn(db, "add_progress_nodes_task_archive_reason", "progress_nodes", "task_archive_reason", "TEXT");
+  await ensureColumn(db, "add_progress_nodes_task_missed_count", "progress_nodes", "task_missed_count", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(db, "add_progress_nodes_task_missed_last_counted_due_at", "progress_nodes", "task_missed_last_counted_due_at", "TEXT");
+
+  // Linking a board task to a skill (src/db/tasksBoard.ts) — holding to
+  // complete it logs time/notes onto this skill_tasks row (see
+  // db/skills.ts's logWork) instead of the usual completion-image step,
+  // and the board task stays put (never marked is_complete) rather than
+  // disappearing, since skill practice repeats. task_last_completed_at
+  // drives the cooldown/gray-out check against the linked skill's
+  // task_cooldown_type/task_cooldown_hours (below) — see
+  // src/tasks/taskCooldown.ts.
+  await ensureColumn(db, "add_progress_nodes_linked_skill_task_id", "progress_nodes", "linked_skill_task_id", "INTEGER REFERENCES skill_tasks(id) ON DELETE SET NULL");
+  await ensureColumn(db, "add_progress_nodes_task_last_completed_at", "progress_nodes", "task_last_completed_at", "TEXT");
+
+  // Per-skill cooldown (Skill Tree's ⚙ Settings panel) for any board
+  // task linked to one of its skill tasks — 'daily'/'weekly' reset at
+  // the local calendar boundary (see taskCooldownStatus), 'hours' is a
+  // flat duration using task_cooldown_hours.
+  await ensureColumn(db, "add_skill_settings_task_cooldown_type", "skill_settings", "task_cooldown_type", "TEXT NOT NULL DEFAULT 'daily'");
+  await ensureColumn(db, "add_skill_settings_task_cooldown_hours", "skill_settings", "task_cooldown_hours", "REAL NOT NULL DEFAULT 24");
+
+  // The Tasks page's Completed section entry for a skill-linked task —
+  // a lightweight "copy" of one completion, since the task itself stays
+  // on the board (see linked_skill_task_id above) rather than actually
+  // becoming is_complete. Dismissing one just deletes this row.
+  if (!(await isMigrationApplied(db, "create_progress_node_completions_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS progress_node_completions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        progress_node_id INTEGER NOT NULL REFERENCES progress_nodes(id) ON DELETE CASCADE,
+        completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        duration_minutes INTEGER,
+        note TEXT
+      )
+    `);
+    await markMigrationApplied(db, "create_progress_node_completions_table");
+  }
+
   // Re-run every launch (not gated behind the migration log) so a table
   // added by a later migration automatically gets its triggers too,
   // rather than silently never counting toward the revision.
@@ -1752,7 +1992,9 @@ async function initDb(): Promise<Database> {
       is_future_slot INTEGER NOT NULL DEFAULT 0,
       future_slot_origin INTEGER NOT NULL DEFAULT 0,
       inspiration TEXT,
-      future_slot_links TEXT
+      future_slot_links TEXT,
+      reference_content TEXT,
+      editor_width INTEGER
     )
   `);
 

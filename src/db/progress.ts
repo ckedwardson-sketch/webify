@@ -1,14 +1,20 @@
 import { getDb } from "./database";
 import { ProgressCategory, ProgressDifficulty, ProgressNode } from "../types/models";
 
-const PROGRESS_COLUMNS = `
+export const PROGRESS_COLUMNS = `
   id, project_id as projectId, goal_id as goalId, category, short_description as shortDescription, description,
   difficulty, reason, instructions, image_data as imageData,
   is_complete as isComplete, is_read as isRead,
-  pos_x as posX, pos_y as posY, cost, completed_at as completedAt, created_at as createdAt, updated_at as updatedAt
+  pos_x as posX, pos_y as posY, cost, completed_at as completedAt, created_at as createdAt, updated_at as updatedAt,
+  web_scale as webScale, favorite, glow_amount as glowAmount, glow_color as glowColor,
+  task_board_status as taskBoardStatus, task_is_standalone as taskIsStandalone,
+  task_added_at as taskAddedAt, task_goal_days as taskGoalDays, task_due_at as taskDueAt,
+  task_completion_image as taskCompletionImage,
+  task_archive_reason as taskArchiveReason, task_missed_count as taskMissedCount,
+  linked_skill_task_id as linkedSkillTaskId, task_last_completed_at as taskLastCompletedAt
 `;
 
-type RawProgressRow = {
+export type RawProgressRow = {
   id: number;
   projectId: number | null;
   goalId: number | null;
@@ -27,16 +33,45 @@ type RawProgressRow = {
   completedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  webScale: number | null;
+  favorite: number;
+  glowAmount: number | null;
+  glowColor: string | null;
+  taskBoardStatus: "bank" | "board" | "archive" | null;
+  taskIsStandalone: number;
+  taskAddedAt: string | null;
+  taskGoalDays: number | null;
+  taskDueAt: string | null;
+  taskCompletionImage: string | null;
+  taskArchiveReason: string | null;
+  taskMissedCount: number;
+  linkedSkillTaskId: number | null;
+  taskLastCompletedAt: string | null;
 };
 
-function mapRow(row: RawProgressRow): ProgressNode {
+// The `category` column stores a comma-separated list now (a task can be
+// multiple labor types at once) — legacy single-value rows parse the
+// same way. Always yields at least one entry.
+function parseCategories(raw: string): ProgressCategory[] {
+  const list = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) as ProgressCategory[];
+  return list.length > 0 ? list : ["task"];
+}
+
+export function mapProgressRow(row: RawProgressRow): ProgressNode {
+  const { category, ...rest } = row;
   return {
-    ...row,
+    ...rest,
+    categories: parseCategories(category),
     imageData: row.imageData ?? undefined,
     isComplete: !!row.isComplete,
     isRead: !!row.isRead,
     createdAt: row.createdAt ?? undefined,
     updatedAt: row.updatedAt ?? undefined,
+    favorite: !!row.favorite,
+    taskIsStandalone: !!row.taskIsStandalone,
   };
 }
 
@@ -46,7 +81,7 @@ export async function fetchProgressNodes(projectId: number): Promise<ProgressNod
     `SELECT ${PROGRESS_COLUMNS} FROM progress_nodes WHERE project_id = $1 ORDER BY id`,
     [projectId]
   );
-  return rows.map(mapRow);
+  return rows.map(mapProgressRow);
 }
 
 // Tasks attached directly to a goal (no project layer) — see
@@ -57,7 +92,7 @@ export async function fetchProgressNodesForGoal(goalId: number): Promise<Progres
     `SELECT ${PROGRESS_COLUMNS} FROM progress_nodes WHERE goal_id = $1 ORDER BY id`,
     [goalId]
   );
-  return rows.map(mapRow);
+  return rows.map(mapProgressRow);
 }
 
 // Every task belonging to any project linked to this goal, in one
@@ -70,7 +105,7 @@ export async function fetchProgressNodesForProjectsOfGoal(goalId: number): Promi
      WHERE project_id IN (SELECT id FROM projects WHERE goal_id = $1) ORDER BY id`,
     [goalId]
   );
-  return rows.map(mapRow);
+  return rows.map(mapProgressRow);
 }
 
 export async function fetchProgressNode(id: number): Promise<ProgressNode | null> {
@@ -79,7 +114,7 @@ export async function fetchProgressNode(id: number): Promise<ProgressNode | null
     `SELECT ${PROGRESS_COLUMNS} FROM progress_nodes WHERE id = $1`,
     [id]
   );
-  return rows[0] ? mapRow(rows[0]) : null;
+  return rows[0] ? mapProgressRow(rows[0]) : null;
 }
 
 // New nodes start unread and incomplete, placed wherever the caller
@@ -113,7 +148,6 @@ export async function updateProgressPosition(id: number, x: number, y: number): 
 }
 
 const FIELD_COLUMNS = {
-  category: "category",
   shortDescription: "short_description",
   description: "description",
   difficulty: "difficulty",
@@ -134,6 +168,18 @@ export async function updateProgressField(
   const column = FIELD_COLUMNS[field];
   await db.execute(
     `UPDATE progress_nodes SET ${column} = $1, is_read = 0, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+    [value, id]
+  );
+}
+
+// A checklist toggle, not a single-select — always leaves at least one
+// category checked (the UI itself refuses to uncheck the last one, see
+// ProgressNodeDetailPage's handleToggleCategory).
+export async function setProgressCategories(id: number, categories: ProgressCategory[]): Promise<void> {
+  const db = await getDb();
+  const value = categories.length > 0 ? categories.join(",") : "task";
+  await db.execute(
+    "UPDATE progress_nodes SET category = $1, is_read = 0, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
     [value, id]
   );
 }
@@ -172,4 +218,27 @@ export async function setProgressComplete(id: number, isComplete: boolean): Prom
 export async function markProgressRead(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE progress_nodes SET is_read = 1 WHERE id = $1", [id]);
+}
+
+// "Looks" section of the Goal Web's NodeFieldVisibilityPopover, task
+// variant — same convention as updateProjectWebCardScale, on top of
+// whatever size difficulty already gives the node.
+export async function updateProgressWebScale(id: number, scale: number | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE progress_nodes SET web_scale = $1 WHERE id = $2", [scale, id]);
+}
+
+export async function updateProgressFavorite(id: number, favorite: boolean): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE progress_nodes SET favorite = $1 WHERE id = $2", [favorite ? 1 : 0, id]);
+}
+
+export async function updateProgressGlowAmount(id: number, amount: number | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE progress_nodes SET glow_amount = $1 WHERE id = $2", [amount, id]);
+}
+
+export async function updateProgressGlowColor(id: number, color: string | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE progress_nodes SET glow_color = $1 WHERE id = $2", [color, id]);
 }

@@ -1,6 +1,6 @@
 // src/pages/RecipesGraphPage.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { ReactFlow, Node, Edge, Background, Panel, ViewportPortal } from "@xyflow/react";
+import { ReactFlow, Node, Edge, Background, ViewportPortal } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { fetchAllGraphData, GraphRecipeNode } from "../db/recipes";
 import { CategoryNode, RecipeCardNode, IterationNode } from "../components/GraphNodes";
@@ -13,6 +13,7 @@ import { parseDecals } from "../theme/decals";
 import { DecalLayer } from "../theme/DecalLayer";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import { useNodeScaleSettings } from "../webGraph/useNodeScaleSettings";
+import { useWebNodeLock } from "../context/WebNodeLockContext";
 import { computeNodeScales } from "../webGraph/nodeScale";
 import "./Page.css";
 
@@ -32,11 +33,22 @@ export function RecipesGraphPage({
   categoryId,
   categoryName,
   onNavigate,
+  isDualPaneWebRight,
+  onOpenOnLeftPane,
 }: {
   categoryId?: number;
   categoryName?: string;
   onNavigate: (view: View) => void;
+  isDualPaneWebRight?: boolean;
+  onOpenOnLeftPane?: (view: View) => void;
 }) {
+  // See GoalWebPage.tsx's identical helper: when this IS the dual-pane-web
+  // right pane, navigating in place would silently change what the right
+  // pane shows — instead the target opens on the LEFT pane instead.
+  const openOrNavigate = (target: View) => {
+    if (isDualPaneWebRight && onOpenOnLeftPane) onOpenOnLeftPane(target);
+    else onNavigate(target);
+  };
   const { overrides: pageBgOverrides } = usePageBackground();
   const [rawData, setRawData] = useState<{
     categories: Array<{ id: number; name: string }>;
@@ -47,6 +59,7 @@ export function RecipesGraphPage({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [expandedIterations, setExpandedIterations] = useState<Record<number, boolean>>({});
   const { theme } = useTheme();
+  const { locked: nodesLocked } = useWebNodeLock();
   const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
   const { settings: nodeScaleSettings, loaded: nodeScaleLoaded } = useNodeScaleSettings(RECIPE_WEB_SCOPE_KEY);
 
@@ -249,7 +262,7 @@ export function RecipesGraphPage({
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     if (node.type === "recipeCardNode" || node.type === "iterationNode") {
-      onNavigate({
+      openOrNavigate({
         type: "recipe-detail",
         categoryId: node.data.categoryId as number,
         categoryName: node.data.categoryName as string,
@@ -395,19 +408,11 @@ export function RecipesGraphPage({
           fitViewOptions={{ minZoom: RECIPE_WEB_FIT_MIN_ZOOM, padding: 0.15 }}
           minZoom={0.05}
           maxZoom={4}
+          nodesDraggable={!nodesLocked}
           panOnDrag
           zoomOnPinch
           proOptions={{ hideAttribution: true }}
         >
-          {/* Zoom Out & Reset Controls embedded inside Canvas Top-Left */}
-          <Panel position="top-left">
-            <StyledButton
-              buttonKey="web-zoom-back"
-              iconKey="back"
-              onClick={() => onNavigate({ type: "recipes-home" })}
-            />
-          </Panel>
-
           <Background
             color={theme.webGridColor}
             bgColor={theme.webBackgroundImage ? "transparent" : theme.webBackground}

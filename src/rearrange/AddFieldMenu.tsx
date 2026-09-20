@@ -10,6 +10,7 @@ export const WIDGET_TYPE_LABELS: Record<ProjectWidgetType, string> = {
   dock: "Image Dock",
   costlog: "Cost Log",
   calculator: "Calculator",
+  mastercostlog: "Master Cost Log",
 };
 
 // The categorized "what can I add here" list — shared by the toolbar's

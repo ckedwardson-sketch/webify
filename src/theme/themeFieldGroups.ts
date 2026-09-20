@@ -118,6 +118,18 @@ const WIDGET_GRID_STYLE_OPTIONS = [
   { value: "tiles", label: "Tiles — icon + live preview (both pages)" },
 ];
 
+const RECIPE_DUAL_PANE_MODE_OPTIONS = [
+  { value: "permanent", label: "Permanent — always two columns" },
+  { value: "smart", label: "Smart — opens once a link is clicked (default)" },
+  { value: "none", label: "None — never split (stacked, like mobile)" },
+];
+
+const RECIPE_LINK_CLICK_MODE_OPTIONS = [
+  { value: "copy", label: "Copy — puts it on the clipboard only" },
+  { value: "replace", label: "Replace — overwrites the second column" },
+  { value: "instant-place", label: "Instant place — appends with a divider (default)" },
+];
+
 const SORT_ORDER_OPTIONS = [
   { value: "manual", label: "Manual (drag to reorder, default)" },
   { value: "name", label: "Name" },
@@ -475,6 +487,13 @@ export const THEME_COLOR_GROUPS: ThemeColorGroup[] = [
       { key: "detailColumnCount", label: "Project/Goal/Dream/Task Detail columns", kind: "select", options: DETAIL_COLUMN_COUNT_OPTIONS },
       { key: "detailHeaderPosition", label: "Detail page header position", kind: "select", options: DETAIL_HEADER_POSITION_OPTIONS },
       { key: "widgetGridStyle", label: "Widget grid style (Goal/Project Detail)", kind: "select", options: WIDGET_GRID_STYLE_OPTIONS },
+    ],
+  },
+  {
+    title: "Recipe links (Future Slot)",
+    fields: [
+      { key: "recipeDualPaneMode", label: "Dual-pane mode (desktop)", kind: "select", options: RECIPE_DUAL_PANE_MODE_OPTIONS },
+      { key: "recipeLinkClickMode", label: "Clicking a recipe link", kind: "select", options: RECIPE_LINK_CLICK_MODE_OPTIONS },
     ],
   },
   {

@@ -1,0 +1,5 @@
+.spell-error {
+  text-decoration: underline wavy var(--color-danger, #e53e3e);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+}

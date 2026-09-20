@@ -17,7 +17,8 @@ const PROJECT_COLUMNS = `
   estimated_start_date as estimatedStartDate,
   expected_date_start as expectedDateStart, expected_date_end as expectedDateEnd,
   web_pos_x as webPosX, web_pos_y as webPosY,
-  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt, image_data as imageData
+  sort_order as sortOrder, created_at as createdAt, updated_at as updatedAt, image_data as imageData,
+  web_card_scale as webCardScale, web_card_color as webCardColor
 `;
 
 type RawProjectRow = {
@@ -37,6 +38,8 @@ type RawProjectRow = {
   createdAt: string | null;
   updatedAt: string | null;
   imageData: string | null;
+  webCardScale: number | null;
+  webCardColor: string | null;
 };
 
 function mapProjectRow(row: RawProjectRow): Project {
@@ -49,6 +52,17 @@ function mapProjectRow(row: RawProjectRow): Project {
     updatedAt: row.updatedAt ?? undefined,
     imageData: row.imageData ?? undefined,
   };
+}
+
+// "Looks" section of the Goal Web's NodeFieldVisibilityPopover.
+export async function updateProjectWebCardScale(id: number, scale: number | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE projects SET web_card_scale = $1 WHERE id = $2", [scale, id]);
+}
+
+export async function updateProjectWebCardColor(id: number, color: string | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE projects SET web_card_color = $1 WHERE id = $2", [color, id]);
 }
 
 export async function updateProjectImage(id: number, imageData: string): Promise<void> {
@@ -224,24 +238,51 @@ export const WIDGET_COLUMNS = `
   id, project_id as projectId, goal_id as goalId, widget_type as widgetType, title,
   sort_order as sortOrder, created_at as createdAt,
   web_type as webType, web_owner_id as webOwnerId,
-  pos_x as posX, pos_y as posY, width, height
+  pos_x as posX, pos_y as posY, width, height,
+  dock_big_display as dockBigDisplay
 `;
+
+// SQLite hands INTEGER columns back as JS numbers — this is the one
+// boolean-shaped column on project_widgets, so every SELECT using
+// WIDGET_COLUMNS runs its rows through this rather than exposing the
+// raw 0/1 as ProjectWidget.dockBigDisplay.
+export type RawWidgetRow = Omit<ProjectWidget, "dockBigDisplay"> & { dockBigDisplay: number };
+export function mapWidgetRow(row: RawWidgetRow): ProjectWidget {
+  return { ...row, dockBigDisplay: !!row.dockBigDisplay };
+}
 
 export async function fetchWidgetsForProject(projectId: number): Promise<ProjectWidget[]> {
   const db = await getDb();
-  return db.select<ProjectWidget[]>(
-    `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE project_id = $1 ORDER BY sort_order`,
+  const rows = await db.select<RawWidgetRow[]>(
+    `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE project_id = $1 AND is_solo_field = 0 ORDER BY sort_order`,
     [projectId]
   );
+  return rows.map(mapWidgetRow);
 }
 
 export async function fetchWidget(id: number): Promise<ProjectWidget | null> {
   const db = await getDb();
-  const rows = await db.select<ProjectWidget[]>(
+  const rows = await db.select<RawWidgetRow[]>(
     `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE id = $1`,
     [id]
   );
-  return rows[0] ?? null;
+  return rows[0] ? mapWidgetRow(rows[0]) : null;
+}
+
+// Batch fetch by id — used to pull in solo_dock fields' widget rows for
+// Web-card display (see fieldLayout.ts's soloDockRefIdsToShowOnWeb),
+// since those are otherwise excluded from fetchWidgetsForProject/Goal.
+export async function fetchWidgetsByIds(ids: number[]): Promise<ProjectWidget[]> {
+  if (ids.length === 0) return [];
+  const db = await getDb();
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+  const rows = await db.select<RawWidgetRow[]>(`SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE id IN (${placeholders})`, ids);
+  return rows.map(mapWidgetRow);
+}
+
+export async function updateWidgetDockBigDisplay(id: number, bigDisplay: boolean): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE project_widgets SET dock_big_display = $1 WHERE id = $2", [bigDisplay ? 1 : 0, id]);
 }
 
 export async function addWidget(
@@ -264,6 +305,10 @@ export async function addWidget(
 
 export async function deleteWidget(id: number): Promise<void> {
   const db = await getDb();
+  // A Master Cost Log source row isn't foreign-keyed to project_widgets
+  // (see database.ts's create_cost_grouping_tables comment), so clean up
+  // any master's reference to this widget before it's gone.
+  await db.execute("DELETE FROM master_cost_log_sources WHERE cost_log_widget_id = $1", [id]);
   await db.execute("DELETE FROM project_widgets WHERE id = $1", [id]);
 }
 
@@ -276,10 +321,11 @@ export async function deleteWidget(id: number): Promise<void> {
 
 export async function fetchWidgetsForWeb(webType: "goal" | "dream", ownerId: number): Promise<ProjectWidget[]> {
   const db = await getDb();
-  return db.select<ProjectWidget[]>(
+  const rows = await db.select<RawWidgetRow[]>(
     `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE web_type = $1 AND web_owner_id = $2 ORDER BY sort_order`,
     [webType, ownerId]
   );
+  return rows.map(mapWidgetRow);
 }
 
 // Batch variant for Dream Web, which renders every dream at once — same
@@ -288,10 +334,11 @@ export async function fetchWidgetsForWebOwners(webType: "goal" | "dream", ownerI
   if (ownerIds.length === 0) return [];
   const db = await getDb();
   const placeholders = ownerIds.map((_, i) => `$${i + 2}`).join(", ");
-  return db.select<ProjectWidget[]>(
+  const rows = await db.select<RawWidgetRow[]>(
     `SELECT ${WIDGET_COLUMNS} FROM project_widgets WHERE web_type = $1 AND web_owner_id IN (${placeholders})`,
     [webType, ...ownerIds]
   );
+  return rows.map(mapWidgetRow);
 }
 
 export async function addWebWidget(

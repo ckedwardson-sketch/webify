@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import { FieldLayoutRow, FieldStylePatch } from "../db/fieldLayout";
+import { ProjectWidget } from "../types/project";
 
 // Same "the currently-mounted page registers what the global UI needs"
 // pattern as RearrangeModeContext's registerTarget — the ctrl+click
@@ -12,6 +13,12 @@ export interface FieldStyleRegistryTarget {
   fields: FieldLayoutRow[];
   onSave: (fieldId: number, patch: FieldStylePatch) => void;
   onRename: (fieldId: number, label: string | null) => void;
+  // Only present on pages with a widget bay (Project/Goal) — lets the
+  // "widgets" field's style panel list each Image Dock widget with its
+  // own big-display toggle (see FieldStyleFields.tsx). Omitted on pages
+  // with no widgets field (Dream, Progress Node).
+  widgets?: ProjectWidget[];
+  onSetDockBigDisplay?: (widgetId: number, bigDisplay: boolean) => void;
 }
 
 interface FieldStyleRegistryContextValue {

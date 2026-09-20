@@ -20,6 +20,7 @@ export type View =
   | { type: "settings-editor"; focusKey?: string }
   | { type: "settings-headers"; focusKey?: string }
   | { type: "settings-issues" }
+  | { type: "settings-context-capture" }
   | { type: "settings-sync" }
   | { type: "settings-widget-visibility"; focusKey?: string }
   | { type: "settings-panel-memory"; focusKey?: string }
@@ -28,6 +29,7 @@ export type View =
   | { type: "responsibilities-home" }
   | { type: "responsibilities-manage" }
   | { type: "responsibility-detail"; responsibilityId: number }
+  | { type: "tasks-home" }
   | { type: "dreams-web" }
   | { type: "dream-detail"; dreamId: number }
   | { type: "goals-home" }

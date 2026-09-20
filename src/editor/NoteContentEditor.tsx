@@ -13,6 +13,8 @@ import { ResizableImage } from "./extensions/ResizableImage";
 import { toggleExtensions } from "./extensions/Toggle";
 import { calloutExtensions } from "./extensions/Callout";
 import { SlashCommand } from "./extensions/SlashCommand";
+import { SpellCheck } from "./extensions/SpellCheck";
+import "./extensions/SpellCheck.css";
 import { fetchAllNotePagesFlat } from "../db/notes";
 import { fetchAllRecipesFlat } from "../db/recipes";
 import { toEditorContent } from "./htmlContent";
@@ -70,6 +72,7 @@ export function NoteContentEditor({
         ...toggleExtensions,
         ...calloutExtensions,
         ...(settings.slashCommandEnabled ? [SlashCommand] : []),
+        ...(settings.spellcheckEnabled ? [SpellCheck] : []),
       ],
       content: toEditorContent(content),
       onBlur: ({ editor }) => onChange(editor.getHTML()),
@@ -95,7 +98,7 @@ export function NoteContentEditor({
         },
       },
     },
-    [settings.slashCommandEnabled]
+    [settings.slashCommandEnabled, settings.spellcheckEnabled]
   );
 
   const { menuPos, sections: baseSections, close, handlers } = useEditorContextMenu(editor);

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   fetchProgressNode,
   updateProgressField,
+  setProgressCategories,
   setProgressImage,
   setProgressComplete,
   setProgressCost,
@@ -30,12 +31,14 @@ import {
 import { ProgressNode, ProgressCategory, ProgressDifficulty } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
-import { CATEGORY_LABELS, DIFFICULTY_LABELS, categoryColorFor } from "../components/ProgressGraphNodes";
+import { CATEGORY_LABELS, DIFFICULTY_LABELS, categoryBackgroundFor } from "../components/ProgressGraphNodes";
 import { useTheme } from "../theme/ThemeContext";
 import { useRearrangeMode, FieldClipboard } from "../rearrange/RearrangeModeContext";
 import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
-import { contentStyle, headerStyle, mergeFieldStylePatch, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { RichTextField } from "../editor/RichTextField";
+import { FieldHeader } from "../components/FieldHeader";
 import { withFieldUndo } from "../rearrange/fieldUndo";
 import "./Page.css";
 import "./ProgressNodeDetailPage.css";
@@ -188,10 +191,17 @@ export function ProgressNodeDetailPage({
     setNode((prev) => (prev ? { ...prev, instructions: instructionsDraft, isRead: true } : prev));
   };
 
-  const handleCategoryChange = async (category: ProgressCategory) => {
+  const handleToggleCategory = async (category: ProgressCategory) => {
     if (!node) return;
-    await updateProgressField(node.id, "category", category);
-    setNode((prev) => (prev ? { ...prev, category, isRead: true } : prev));
+    const isChecked = node.categories.includes(category);
+    // Always leave at least one category checked — an empty checklist
+    // has no sensible color/legend meaning.
+    if (isChecked && node.categories.length === 1) return;
+    const next = isChecked
+      ? node.categories.filter((c) => c !== category)
+      : [...node.categories, category];
+    await setProgressCategories(node.id, next);
+    setNode((prev) => (prev ? { ...prev, categories: next, isRead: true } : prev));
   };
 
   const handleDifficultyChange = async (difficulty: ProgressDifficulty) => {
@@ -371,33 +381,32 @@ export function ProgressNodeDetailPage({
     );
   }
 
-  const color = categoryColorFor(theme, node.category);
+  const background = categoryBackgroundFor(theme, node.categories);
 
   const renderField = (f: FieldLayoutRow) => {
     switch (f.fieldType) {
       case "task_labor_type":
         return (
-          <label className="progress-field">
-            <span className="progress-field-label" style={headerStyle(f)}>Labor type</span>
-            <select
-              className="inline-add-input"
-              value={node.category}
-              onChange={(e) => handleCategoryChange(e.target.value as ProgressCategory)}
-            >
+          <div className="progress-field">
+            <FieldHeader as="span" defaultLabel="Labor type — check all that apply" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
+            <div className="progress-labor-type-checklist">
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
+                <label key={c} className="progress-labor-type-option">
+                  <input
+                    type="checkbox"
+                    checked={node.categories.includes(c)}
+                    onChange={() => handleToggleCategory(c)}
+                  />
                   {CATEGORY_LABELS[c]}
-                </option>
+                </label>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
         );
       case "task_difficulty":
         return (
           <label className="progress-field">
-            <span className="progress-field-label" style={headerStyle(f)}>
-              Difficulty — also sets its size on the web
-            </span>
+            <FieldHeader as="span" defaultLabel="Difficulty — also sets its size on the web" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
             <select
               className="inline-add-input"
               value={node.difficulty}
@@ -415,16 +424,16 @@ export function ProgressNodeDetailPage({
         return (
           <div className="progress-field">
             <div className="field-slot-header-row">
-              <label className="progress-field-label" style={headerStyle(f)}>Description</label>
+              <FieldHeader defaultLabel="Description" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={4}
               style={contentStyle(f)}
               value={descriptionDraft}
-              onChange={(e) => setDescriptionDraft(e.target.value)}
+              onChange={setDescriptionDraft}
               onBlur={saveDescription}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="What actually needs to happen here?"
             />
           </div>
@@ -433,16 +442,16 @@ export function ProgressNodeDetailPage({
         return (
           <div className="progress-field">
             <div className="field-slot-header-row">
-              <label className="progress-field-label" style={headerStyle(f)}>Reason</label>
+              <FieldHeader defaultLabel="Reason" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={3}
               style={contentStyle(f)}
               value={reasonDraft}
-              onChange={(e) => setReasonDraft(e.target.value)}
+              onChange={setReasonDraft}
               onBlur={saveReason}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="Why does this need doing?"
             />
           </div>
@@ -451,16 +460,16 @@ export function ProgressNodeDetailPage({
         return (
           <div className="progress-field">
             <div className="field-slot-header-row">
-              <label className="progress-field-label" style={headerStyle(f)}>Instructions</label>
+              <FieldHeader defaultLabel="Instructions" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={4}
               style={contentStyle(f)}
               value={instructionsDraft}
-              onChange={(e) => setInstructionsDraft(e.target.value)}
+              onChange={setInstructionsDraft}
               onBlur={saveInstructions}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="How to actually do it — steps, references, gotchas…"
             />
           </div>
@@ -468,7 +477,7 @@ export function ProgressNodeDetailPage({
       case "task_cost":
         return (
           <label className="progress-field">
-            <span className="progress-field-label" style={headerStyle(f)}>Cost</span>
+            <FieldHeader as="span" defaultLabel="Cost" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
             <input
               className="inline-add-input"
               type="number"
@@ -484,7 +493,7 @@ export function ProgressNodeDetailPage({
         return (
           <div className="progress-field">
             <div className="field-slot-header-row">
-              <label className="progress-field-label" style={headerStyle(f)}>Completion image</label>
+              <FieldHeader defaultLabel="Completion image" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="progress-field-label" style={headerStyle(f)} />
             </div>
             <input
               ref={fileInputRef}
@@ -569,7 +578,7 @@ export function ProgressNodeDetailPage({
 
       <div className="page-header">
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span className="progress-detail-swatch" style={{ background: color }} />
+          <span className="progress-detail-swatch" style={{ background }} />
           <input
             className="title-rename-input"
             value={shortDescDraft}

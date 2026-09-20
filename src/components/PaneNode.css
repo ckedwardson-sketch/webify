@@ -1,0 +1,63 @@
+.pane-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-radius: var(--radius-lg, 14px);
+  transition: background-color 0.15s ease;
+}
+
+/* Brought to front: opaque enough to visibly tint/cover whatever was
+   grouped inside it, plus a stronger shadow so it clearly lifts off the
+   canvas instead of just changing color in place. */
+.pane-node-front {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.pane-node-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: calc(100% - 16px);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom-right-radius: var(--radius-md, 10px);
+  border-top-left-radius: var(--radius-lg, 14px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.pane-node-controls {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.pane-node-control-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--color-text);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pane-node-control-button:hover {
+  background: rgba(0, 0, 0, 0.38);
+}

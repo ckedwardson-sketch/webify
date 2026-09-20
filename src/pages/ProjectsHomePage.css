@@ -80,7 +80,22 @@
   padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+}
+
+/* The image dock's own preview box normally has a fixed short height and
+   its own border/background (see ImageDockWidget.css's .image-dock-
+   preview) — inside a passion project card that reads as a second boxed
+   element squashed under the header instead of one cohesive card, so it
+   blends into the card's own border/background instead of drawing its
+   own. Height/ratio is left alone here — ImageDockWidget's own
+   fitAspectRatio prop (see ProjectsHomePage.tsx) sizes it to the actual
+   photo's shape instead of forcing every photo into a fixed square. */
+.passion-project-card .image-dock-preview {
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: none;
+  background: transparent;
 }
 
 .passion-project-card-header {

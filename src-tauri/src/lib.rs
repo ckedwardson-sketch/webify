@@ -4,11 +4,17 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+mod recipe_extract;
 mod sync;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -16,7 +22,8 @@ pub fn run() {
             greet,
             sync::sync_status,
             sync::sync_download,
-            sync::sync_upload
+            sync::sync_upload,
+            recipe_extract::fetch_recipe_from_url
         ]);
 
     #[cfg(desktop)]

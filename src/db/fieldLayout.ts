@@ -1,4 +1,5 @@
 import { getDb } from "./database";
+import { fetchDockImages, addDockImage } from "./dockImages";
 
 // The set of vertically-arrangeable "areas" a Project/Goal/Dream Detail
 // page can show. "widgets" is the whole widget grid — one slot, still
@@ -18,6 +19,7 @@ export type FieldType =
   | "expected_range"
   | "widgets"
   | "freetext"
+  | "solo_dock"
   | "dream_expected_date"
   | "dream_priority"
   | "dream_reasoning_text"
@@ -49,6 +51,7 @@ export const REMOVABLE_FIELD_TYPES: FieldType[] = [
   "expected_range",
   "widgets",
   "freetext",
+  "solo_dock",
   "dream_expected_date",
   "dream_priority",
   "dream_reasoning_text",
@@ -77,6 +80,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   expected_range: "When it should be done",
   widgets: "Widgets",
   freetext: "Text field",
+  solo_dock: "Image Dock",
   dream_expected_date: "Expected date",
   dream_priority: "Priority",
   dream_reasoning_text: "Reasoning",
@@ -260,6 +264,10 @@ export function availableFieldsToAdd(category: FieldCategory, present: FieldLayo
   const presentTypes = new Set(present.map((f) => f.fieldType));
   const types = allFieldTypesFor(category).filter((t) => !presentTypes.has(t));
   if (!types.includes("freetext")) types.push("freetext");
+  // Unlimited, like freetext — reuses project_widgets' existing
+  // project_id/goal_id ownership columns (see addSoloDockField), which
+  // only Project and Goal have, so it's not offered on Dream or Task.
+  if ((category === "project" || category === "goal") && !types.includes("solo_dock")) types.push("solo_dock");
   return types.map((type) => ({ type, label: FIELD_TYPE_LABELS[type], group: fieldTypeGroup(type) }));
 }
 
@@ -366,18 +374,48 @@ export async function addFreetextField(category: FieldCategory, ownerId: number,
   return flResult.lastInsertId as number;
 }
 
+// Solo Image Dock fields (field_layout's "solo_dock") reuse the exact
+// same project_widgets/dock_images storage a widget-bay Image Dock uses
+// (see ImageDockWidget.tsx) — just marked is_solo_field so the bay's own
+// fetch (fetchWidgetsForProject/fetchWidgetsForGoal) skips it, since this
+// field renders it inline instead. Project-only/Goal-only because
+// project_widgets only has project_id/goal_id owner columns.
+export async function addSoloDockField(
+  category: "project" | "goal",
+  ownerId: number,
+  sortOrder: number
+): Promise<number> {
+  const db = await getDb();
+  const ownerColumn = category === "goal" ? "goal_id" : "project_id";
+  const result = await db.execute(
+    `INSERT INTO project_widgets (${ownerColumn}, widget_type, title, is_solo_field) VALUES ($1, 'dock', '', 1)`,
+    [ownerId]
+  );
+  const refId = result.lastInsertId as number;
+  const flResult = await db.execute(
+    "INSERT INTO field_layout (category, owner_id, field_type, ref_id, sort_order) VALUES ($1, $2, 'solo_dock', $3, $4)",
+    [category, ownerId, refId, sortOrder]
+  );
+  return flResult.lastInsertId as number;
+}
+
 // Removes the field-layout row; for a freetext field this also deletes
-// its content row (nothing else references freetext_fields). Also frees
-// any field paired to its right — a pair's secondary references the
-// primary by id (see FieldLayoutRow.pairedWithId), so deleting either
-// half always leaves the other, if any, as a normal full-width field
-// rather than pointing at nothing.
+// its content row (nothing else references freetext_fields), and for a
+// solo_dock field its project_widgets row (dock_images cascade-deletes
+// with it). Also frees any field paired to its right — a pair's
+// secondary references the primary by id (see
+// FieldLayoutRow.pairedWithId), so deleting either half always leaves
+// the other, if any, as a normal full-width field rather than pointing
+// at nothing.
 export async function removeField(id: number, fieldType: FieldType, refId: number | null): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE field_layout SET paired_with_id = NULL, pair_mode = NULL WHERE paired_with_id = $1", [id]);
   await db.execute("DELETE FROM field_layout WHERE id = $1", [id]);
   if (fieldType === "freetext" && refId !== null) {
     await db.execute("DELETE FROM freetext_fields WHERE id = $1", [refId]);
+  }
+  if (fieldType === "solo_dock" && refId !== null) {
+    await db.execute("DELETE FROM project_widgets WHERE id = $1", [refId]);
   }
 }
 
@@ -468,7 +506,7 @@ const STYLE_BOOLEAN_COLUMNS = new Set<keyof FieldStylePatch>([
 // show as a static formatted date/range (never editable from the web —
 // there's no input for it there); "widgets" is the whole widget bay,
 // rendered as up to a few emoji buttons that open the widget.
-export type WebFieldKind = "text" | "date" | "widgets";
+export type WebFieldKind = "text" | "date" | "widgets" | "solo_image";
 
 export function webFieldKind(type: FieldType): WebFieldKind | null {
   switch (type) {
@@ -485,9 +523,20 @@ export function webFieldKind(type: FieldType): WebFieldKind | null {
       return "date";
     case "widgets":
       return "widgets";
+    case "solo_dock":
+      return "solo_image";
     default:
       return null;
   }
+}
+
+// Which solo_dock fields (see FieldType) in this list are switched on for
+// the web — the ProjectWidget rows they point at still need fetching by
+// id separately (see db/projects.ts's fetchWidgetsByIds), since a solo
+// field is deliberately excluded from fetchWidgetsForProject/Goal's own
+// bay query.
+export function soloDockRefIdsToShowOnWeb(fields: FieldLayoutRow[]): number[] {
+  return fields.filter((f) => f.fieldType === "solo_dock" && f.showOnWeb && f.refId !== null).map((f) => f.refId!);
 }
 
 export function isWebDisplayable(type: FieldType): boolean {
@@ -538,16 +587,28 @@ export async function fetchFreetextFields(ids: number[]): Promise<Map<number, Fr
 // paired_with_id (see its own comment) since it's a plain column, not a
 // real FK. See rearrange/fieldUndo.ts.
 
+// One solo_dock field's photos, captured for undo/redo and Load Layout
+// the same way freetext content is — see FieldLayoutSnapshot.
+export interface SoloDockSnapshot {
+  refId: number;
+  images: string[];
+}
+
 export interface FieldLayoutSnapshot {
   fields: FieldLayoutRow[];
   freetext: FreetextField[];
+  soloDocks: SoloDockSnapshot[];
 }
 
 export async function snapshotFieldLayout(category: FieldCategory, ownerId: number): Promise<FieldLayoutSnapshot> {
   const fields = await fetchFieldLayout(category, ownerId);
   const freetextIds = fields.filter((f) => f.fieldType === "freetext" && f.refId !== null).map((f) => f.refId!);
   const freetextMap = await fetchFreetextFields(freetextIds);
-  return { fields, freetext: Array.from(freetextMap.values()) };
+  const soloDockIds = fields.filter((f) => f.fieldType === "solo_dock" && f.refId !== null).map((f) => f.refId!);
+  const soloDocks = await Promise.all(
+    soloDockIds.map(async (refId) => ({ refId, images: (await fetchDockImages(refId)).map((img) => img.imageData) }))
+  );
+  return { fields, freetext: Array.from(freetextMap.values()), soloDocks };
 }
 
 export async function restoreFieldLayoutSnapshot(
@@ -560,9 +621,15 @@ export async function restoreFieldLayoutSnapshot(
   const currentFreetextIds = current
     .filter((f) => f.fieldType === "freetext" && f.refId !== null)
     .map((f) => f.refId!);
+  const currentSoloDockIds = current
+    .filter((f) => f.fieldType === "solo_dock" && f.refId !== null)
+    .map((f) => f.refId!);
   await db.execute("DELETE FROM field_layout WHERE category = $1 AND owner_id = $2", [category, ownerId]);
   for (const id of currentFreetextIds) {
     await db.execute("DELETE FROM freetext_fields WHERE id = $1", [id]);
+  }
+  for (const id of currentSoloDockIds) {
+    await db.execute("DELETE FROM project_widgets WHERE id = $1", [id]); // dock_images cascade with it
   }
   for (const ft of snapshot.freetext) {
     await db.execute("INSERT INTO freetext_fields (id, label, content) VALUES ($1, $2, $3)", [
@@ -570,6 +637,14 @@ export async function restoreFieldLayoutSnapshot(
       ft.label,
       ft.content,
     ]);
+  }
+  for (const sd of snapshot.soloDocks) {
+    const ownerColumn = category === "goal" ? "goal_id" : "project_id";
+    await db.execute(
+      `INSERT INTO project_widgets (id, ${ownerColumn}, widget_type, title, is_solo_field) VALUES ($1, $2, 'dock', '', 1)`,
+      [sd.refId, ownerId]
+    );
+    for (const imageData of sd.images) await addDockImage(sd.refId, imageData);
   }
   for (const f of snapshot.fields) {
     await db.execute(
@@ -604,6 +679,117 @@ export async function restoreFieldLayoutSnapshot(
         f.column,
       ]
     );
+  }
+}
+
+// Applies a field-layout snapshot captured from *any* owner (possibly a
+// different one, possibly captured long ago) onto this owner, replacing
+// whatever it currently has — backs Load Layout (see db/layouts.ts and
+// RearrangeToolbar.tsx's LoadLayoutBrowser). Unlike
+// restoreFieldLayoutSnapshot above (which reuses the snapshot's exact
+// row ids — only safe because undo/redo always re-applies a snapshot to
+// the very same owner, moments after deleting those exact same ids),
+// this always inserts fresh rows and remaps every id-based reference
+// (freetext refId, paired_with_id) to the new ids, since the original
+// ids may already belong to unrelated rows elsewhere by the time a
+// saved layout gets loaded.
+export async function applySavedFieldLayout(
+  category: FieldCategory,
+  ownerId: number,
+  snapshot: FieldLayoutSnapshot
+): Promise<void> {
+  const db = await getDb();
+  const current = await fetchFieldLayout(category, ownerId);
+  const currentFreetextIds = current
+    .filter((f) => f.fieldType === "freetext" && f.refId !== null)
+    .map((f) => f.refId!);
+  const currentSoloDockIds = current
+    .filter((f) => f.fieldType === "solo_dock" && f.refId !== null)
+    .map((f) => f.refId!);
+  await db.execute("DELETE FROM field_layout WHERE category = $1 AND owner_id = $2", [category, ownerId]);
+  for (const id of currentFreetextIds) {
+    await db.execute("DELETE FROM freetext_fields WHERE id = $1", [id]);
+  }
+  for (const id of currentSoloDockIds) {
+    await db.execute("DELETE FROM project_widgets WHERE id = $1", [id]);
+  }
+
+  const freetextIdMap = new Map<number, number>();
+  for (const ft of snapshot.freetext) {
+    const result = await db.execute("INSERT INTO freetext_fields (label, content) VALUES ($1, $2)", [ft.label, ft.content]);
+    freetextIdMap.set(ft.id, result.lastInsertId as number);
+  }
+
+  // Only project/goal owners have a project_widgets owner column — a
+  // solo_dock field from a layout saved elsewhere (e.g. a project) is
+  // silently dropped rather than crashing when loaded onto a Dream or
+  // Task page, same "unsupported field types are just skipped" spirit
+  // as fetchFieldLayout ignoring types it doesn't recognize.
+  const soloDockIdMap = new Map<number, number>();
+  if (category === "project" || category === "goal") {
+    const ownerColumn = category === "goal" ? "goal_id" : "project_id";
+    for (const sd of snapshot.soloDocks) {
+      const result = await db.execute(
+        `INSERT INTO project_widgets (${ownerColumn}, widget_type, title, is_solo_field) VALUES ($1, 'dock', '', 1)`,
+        [ownerId]
+      );
+      const newId = result.lastInsertId as number;
+      soloDockIdMap.set(sd.refId, newId);
+      for (const imageData of sd.images) await addDockImage(newId, imageData);
+    }
+  }
+
+  const fieldIdMap = new Map<number, number>();
+  for (const f of snapshot.fields) {
+    if (f.fieldType === "solo_dock" && !soloDockIdMap.has(f.refId ?? -1)) continue;
+    const refId =
+      f.fieldType === "freetext" && f.refId !== null
+        ? (freetextIdMap.get(f.refId) ?? null)
+        : f.fieldType === "solo_dock" && f.refId !== null
+        ? (soloDockIdMap.get(f.refId) ?? null)
+        : f.refId;
+    const result = await db.execute(
+      `INSERT INTO field_layout (
+         category, owner_id, field_type, ref_id, sort_order, custom_label, height_px, pair_mode,
+         content_font_size, content_color, content_background_color, content_radius, content_border_color, content_border_width,
+         header_font_size, header_color, header_bold, header_underline, show_on_web, web_header, column_index
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+      [
+        category,
+        ownerId,
+        f.fieldType,
+        refId,
+        f.sortOrder,
+        f.customLabel,
+        f.heightPx,
+        f.pairMode,
+        f.contentFontSize,
+        f.contentColor,
+        f.contentBackgroundColor,
+        f.contentRadius,
+        f.contentBorderColor,
+        f.contentBorderWidth,
+        f.headerFontSize,
+        f.headerColor,
+        f.headerBold ? 1 : 0,
+        f.headerUnderline ? 1 : 0,
+        f.showOnWeb ? 1 : 0,
+        f.webHeader ? 1 : 0,
+        f.column,
+      ]
+    );
+    fieldIdMap.set(f.id, result.lastInsertId as number);
+  }
+
+  // Second pass: paired_with_id points at another field within this same
+  // snapshot — can't be resolved until every row above has its new id.
+  for (const f of snapshot.fields) {
+    if (f.pairedWithId == null) continue;
+    const newId = fieldIdMap.get(f.id);
+    const newPairedId = fieldIdMap.get(f.pairedWithId);
+    if (newId != null && newPairedId != null) {
+      await db.execute("UPDATE field_layout SET paired_with_id = $1 WHERE id = $2", [newPairedId, newId]);
+    }
   }
 }
 

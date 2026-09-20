@@ -32,9 +32,11 @@ const STATIC_LABELS: Partial<Record<View["type"], string>> = {
   "settings-theme": "Theme",
   "settings-mobile": "Mobile",
   "settings-issues": "Issues",
+  "settings-context-capture": "Capture Context",
   "settings-sync": "Sync",
   "responsibilities-home": "Responsibilities",
   "responsibilities-manage": "Manage",
+  "tasks-home": "Tasks",
   "dreams-web": "Dream Web",
   "goals-home": "Goals",
   "projects-home": "Projects",
@@ -83,6 +85,29 @@ export function viewKey(view: View): string {
     default:
       return view.type;
   }
+}
+
+// Which sidebar section a view belongs to — the same partition
+// Sidebar.tsx's isActive uses to highlight the current item, pulled out
+// here so App.tsx can use the identical grouping to remember "the last
+// page you were on in this section" (see App.tsx's lastViewBySection)
+// without the two ever drifting apart. Returns null for a view with no
+// sidebar section (there currently isn't one, but kept honest rather
+// than assuming every possible view is covered).
+export function sidebarSectionForView(view: View): string | null {
+  if (view.type === "home") return "Home";
+  if (view.type.startsWith("recipe")) return "Recipes";
+  if (view.type.startsWith("settings")) return "Settings";
+  if (view.type.startsWith("responsibilit")) return "Responsibilities";
+  if (view.type.startsWith("tasks")) return "Tasks";
+  if (view.type === "dreams-web" || view.type === "dream-detail") return "Dreams";
+  if (view.type.startsWith("project") || view.type.startsWith("progress")) return "Projects";
+  if (view.type.startsWith("goal")) return "Goals";
+  if (view.type === "notes") return "Notes";
+  if (view.type.startsWith("skill")) return "Skills";
+  if (view.type.startsWith("quick-apps")) return "Quick Apps";
+  if (view.type === "placeholder") return view.label;
+  return null;
 }
 
 export function staticLabel(view: View): string {

@@ -402,6 +402,7 @@ const EDITOR_TOGGLE_MAP: Record<string, { settingKey: keyof EditorToolSettings; 
   "editor-context-menu": { settingKey: "contextMenuEnabled", label: "Right-click / long-press menu" },
   "editor-bubble-menu": { settingKey: "bubbleMenuEnabled", label: "Selection toolbar" },
   "editor-slash-command": { settingKey: "slashCommandEnabled", label: "Slash commands" },
+  "editor-spellcheck": { settingKey: "spellcheckEnabled", label: "Spellcheck" },
 };
 
 function EditorQuickEdit({ item, onFallback }: QuickEditProps) {

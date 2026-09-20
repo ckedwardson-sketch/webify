@@ -97,7 +97,16 @@ export interface SkillSettings {
   pathBendDistance: number;
   dreamNodeFields: SkillDreamNodeField[];
   dreamNodeActiveGoalId: number | null;
+  // Cooldown for any Tasks-page board task linked to one of this
+  // skill's tasks (src/tasks/taskCooldown.ts) — 'daily'/'weekly' reset
+  // at the local calendar boundary, 'hours' is a flat duration using
+  // taskCooldownHours.
+  taskCooldownType: TaskCooldownType;
+  taskCooldownHours: number;
 }
+
+export const TASK_COOLDOWN_TYPES = ["daily", "weekly", "hours"] as const;
+export type TaskCooldownType = (typeof TASK_COOLDOWN_TYPES)[number];
 
 export const DEFAULT_SKILL_SETTINGS: Omit<SkillSettings, "skillId"> = {
   ringPalette: "classic",
@@ -112,4 +121,6 @@ export const DEFAULT_SKILL_SETTINGS: Omit<SkillSettings, "skillId"> = {
   pathBendDistance: 40,
   dreamNodeFields: ["currentLevel", "nextGoal"],
   dreamNodeActiveGoalId: null,
+  taskCooldownType: "daily",
+  taskCooldownHours: 24,
 };

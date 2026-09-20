@@ -110,6 +110,88 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
+/* Dual-Pane WEB Mode — desktop-only split view, the inverse shape of
+   Notes' dual-pane above: the LEFT pane is normal/arbitrary navigation,
+   the RIGHT pane always shows one closed-set "web" (Goal Web / Recipes
+   Graph). Reuses .dual-pane-shell's flex container; everything else is
+   its own set of rules so Notes' CSS above stays untouched. */
+.dual-pane-web-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dual-pane-web-toggle-row .nav-history-bar {
+  flex: 1;
+}
+
+.dual-pane-web-toggle {
+  /* Always sits at the right end of the row — margin-left: auto pushes
+     it there whether or not NavHistoryBar renders anything beside it
+     (it renders null below 2 path entries, e.g. a fresh Home launch). */
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.dual-pane-web-blocked-msg {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-secondary);
+}
+
+.dual-pane-web-left {
+  flex: 1 1 50%;
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.dual-pane-web-right.app-content {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.dual-pane-web-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-secondary);
+  padding: 24px;
+  text-align: center;
+}
+
+/* Right pane only — long titles wrap to 2 lines instead of the ellipsis
+   treatment .page-title may otherwise get elsewhere. */
+.dual-pane-web-right .page-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+/* Right pane only — minimal side padding so the (collapsed) header
+   controls don't crowd the title at the narrower pane width. */
+.dual-pane-web-right .web-page-header {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
 .app-content {
   flex: 1;
   min-height: 0;

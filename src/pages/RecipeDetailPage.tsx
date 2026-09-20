@@ -1,5 +1,7 @@
 // src/pages/RecipeDetailPage.tsx
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   fetchRecipe,
   updateRecipeInstructions,
@@ -9,21 +11,23 @@ import {
   fetchIterations,
   updateIterationDifference,
   renameRecipe,
-  fetchAllRecipesFlat,
   updateRecipeInspiration,
-  updateFutureSlotRecipeLinks,
+  updateFutureSlotLinks,
+  updateReferenceContent,
   convertFutureSlotToRecipe,
-  RecipeLinkTarget,
+  updateRecipeEditorWidth,
 } from "../db/recipes";
 import { fetchCategories } from "../db/categories";
 import { RecipeEditor } from "../editor/RecipeEditor";
 import { Icon } from "../icons/Icon";
-import { Recipe } from "../types/models";
+import { Recipe, FutureSlotLink } from "../types/models";
 import { View } from "../types/nav";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
+import { useTheme } from "../theme/ThemeContext";
 import "./Page.css";
 import "./FutureSlot.css";
+import "./RecipeResize.css";
 import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .dropdown-item / .menu-backdrop
 
 // SQLite's CURRENT_TIMESTAMP is UTC with no offset marker — append Z so
@@ -32,6 +36,19 @@ function formatTimestamp(iso: string): string {
   const d = new Date(iso.replace(" ", "T") + "Z");
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString();
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+interface ExtractedRecipe {
+  title: string;
+  text: string;
 }
 
 type FlagField = "isProven" | "isFrozen" | "isHomegrown" | "isFavorite";
@@ -48,6 +65,7 @@ export function RecipeDetailPage({
   onNavigate: (view: View) => void;
 }) {
   const { overrides: pageBgOverrides } = usePageBackground();
+  const { theme } = useTheme();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [parentRecipe, setParentRecipe] = useState<Recipe | null>(null);
   const [iterations, setIterations] = useState<Recipe[]>([]);
@@ -61,13 +79,29 @@ export function RecipeDetailPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Future Slot state
-  const [allRecipes, setAllRecipes] = useState<RecipeLinkTarget[]>([]);
   const [inspiration, setInspiration] = useState("");
   const [inspirationExpanded, setInspirationExpanded] = useState(false);
-  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
-  const [linkSearch, setLinkSearch] = useState("");
   const [converting, setConverting] = useState(false);
   const [originExpanded, setOriginExpanded] = useState(false);
+
+  // Recipe links (external URLs) + the dual-pane reference editor
+  const [addingLink, setAddingLink] = useState(false);
+  const [linkUrlDraft, setLinkUrlDraft] = useState("");
+  const [activatingLinkId, setActivatingLinkId] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [referenceContent, setReferenceContent] = useState("");
+  // "smart" dual-pane mode starts closed and only opens for this
+  // session once a link is actually clicked — see themeDefaults.ts's
+  // recipeDualPaneMode. "permanent"/"none" ignore this and just always
+  // render split/single below.
+  const [smartPaneOpen, setSmartPaneOpen] = useState(false);
+
+  // User-draggable width (px) of this recipe's page/editor column on
+  // desktop — null means "use the theme's default max-width". Persisted
+  // per recipe (see updateRecipeEditorWidth) so each recipe remembers
+  // its own preferred width.
+  const [editorWidth, setEditorWidth] = useState<number | null>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function load() {
@@ -79,14 +113,48 @@ export function RecipeDetailPage({
         setIterationDiff(data.iterationDifference || "");
         setInspiration(data.inspiration || "");
         setInspirationExpanded(!!data.inspiration);
+        setReferenceContent(data.referenceContent || "");
+        setEditorWidth(data.editorWidth ?? null);
         setParentRecipe(data.parentRecipeId ? await fetchRecipe(data.parentRecipeId) : null);
       }
       setIterations(await fetchIterations(recipeId));
-      setAllRecipes(await fetchAllRecipesFlat());
+      setSmartPaneOpen(false);
       setLoading(false);
     }
     load();
   }, [recipeId]);
+
+  // Drag-to-resize: grabbing the handle on the page's right edge widens
+  // or narrows the whole page (title, flags, editor — everything), up to
+  // however much blank space .app-content actually has, then saves the
+  // result once the drag ends.
+  const handleResizeStart = (e: React.MouseEvent) => {
+    if (!pageRef.current || !recipe) return;
+    e.preventDefault();
+    const recipeId = recipe.id;
+    const startX = e.clientX;
+    const startWidth = pageRef.current.getBoundingClientRect().width;
+    const parent = pageRef.current.parentElement;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    let finalWidth = startWidth;
+    const onMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const maxWidth = parent ? parent.clientWidth : startWidth + delta;
+      finalWidth = Math.round(Math.max(420, Math.min(maxWidth, startWidth + delta)));
+      setEditorWidth(finalWidth);
+    };
+    const onUp = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      updateRecipeEditorWidth(recipeId, finalWidth);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   const handleOpenRecipeLink = async (targetRecipeId: number) => {
     const target = await fetchRecipe(targetRecipeId);
@@ -114,20 +182,81 @@ export function RecipeDetailPage({
     }
   };
 
-  const handleAddLink = async (targetId: number) => {
-    if (!recipe) return;
-    const next = [...(recipe.futureSlotRecipeLinks ?? []), targetId];
-    await updateFutureSlotRecipeLinks(recipe.id, next);
-    setRecipe((prev) => (prev ? { ...prev, futureSlotRecipeLinks: next } : prev));
-    setLinkPickerOpen(false);
-    setLinkSearch("");
+  const handleAddLink = async () => {
+    const raw = linkUrlDraft.trim();
+    if (!recipe || !raw) {
+      setAddingLink(false);
+      return;
+    }
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const newLink: FutureSlotLink = { id: crypto.randomUUID(), url };
+    const next = [...(recipe.futureSlotLinks ?? []), newLink];
+    await updateFutureSlotLinks(recipe.id, next);
+    setRecipe((prev) => (prev ? { ...prev, futureSlotLinks: next } : prev));
+    setLinkUrlDraft("");
+    setAddingLink(false);
   };
 
-  const handleRemoveLink = async (targetId: number) => {
+  const handleRemoveLink = async (linkId: string) => {
     if (!recipe) return;
-    const next = (recipe.futureSlotRecipeLinks ?? []).filter((id) => id !== targetId);
-    await updateFutureSlotRecipeLinks(recipe.id, next);
-    setRecipe((prev) => (prev ? { ...prev, futureSlotRecipeLinks: next } : prev));
+    const next = (recipe.futureSlotLinks ?? []).filter((l) => l.id !== linkId);
+    await updateFutureSlotLinks(recipe.id, next);
+    setRecipe((prev) => (prev ? { ...prev, futureSlotLinks: next } : prev));
+  };
+
+  const handleOpenLinkInBrowser = (url: string) => {
+    openUrl(url).catch(() => {});
+  };
+
+  // Fetches the link's page, pulls out its schema.org Recipe data (see
+  // src-tauri/src/recipe_extract.rs), and hands the result to the
+  // second column per theme.recipeLinkClickMode.
+  const handleActivateLink = async (link: FutureSlotLink) => {
+    if (!recipe) return;
+    setLinkError(null);
+    setActivatingLinkId(link.id);
+    try {
+      const extracted = await invoke<ExtractedRecipe>("fetch_recipe_from_url", { url: link.url });
+
+      if (extracted.title && extracted.title !== link.title) {
+        const nextLinks = (recipe.futureSlotLinks ?? []).map((l) =>
+          l.id === link.id ? { ...l, title: extracted.title } : l
+        );
+        await updateFutureSlotLinks(recipe.id, nextLinks);
+        setRecipe((prev) => (prev ? { ...prev, futureSlotLinks: nextLinks } : prev));
+      }
+
+      if (theme.recipeLinkClickMode === "copy") {
+        try {
+          await navigator.clipboard.writeText(extracted.text);
+        } catch {
+          // Clipboard access can be denied by the webview — extraction still succeeded either way.
+        }
+      } else if (theme.recipeLinkClickMode === "replace") {
+        setReferenceContent(extracted.text);
+        await updateReferenceContent(recipe.id, extracted.text);
+        setRecipe((prev) => (prev ? { ...prev, referenceContent: extracted.text } : prev));
+      } else {
+        setReferenceContent((prev) => {
+          const next = prev.trim() ? `${prev}\n\n———\n\n${extracted.text}` : extracted.text;
+          updateReferenceContent(recipe.id, next);
+          setRecipe((r) => (r ? { ...r, referenceContent: next } : r));
+          return next;
+        });
+      }
+
+      setSmartPaneOpen(true);
+    } catch (err) {
+      setLinkError(typeof err === "string" ? err : "Couldn't extract a recipe from that link.");
+    } finally {
+      setActivatingLinkId(null);
+    }
+  };
+
+  const handleSaveReferenceContent = async () => {
+    if (!recipe) return;
+    await updateReferenceContent(recipe.id, referenceContent);
+    setRecipe((prev) => (prev ? { ...prev, referenceContent } : prev));
   };
 
   const handleConvertToRecipe = async () => {
@@ -212,22 +341,34 @@ export function RecipeDetailPage({
     );
   }
 
-  const linkedIds = recipe.futureSlotRecipeLinks ?? [];
-  const linkedRecipes = allRecipes.filter((r) => linkedIds.includes(r.id));
-  const linkCandidates = allRecipes
-    .filter((r) => r.id !== recipe.id && !linkedIds.includes(r.id))
-    .filter((r) => r.name.toLowerCase().includes(linkSearch.trim().toLowerCase()))
-    .slice(0, 20);
+  const futureSlotLinks = recipe.futureSlotLinks ?? [];
+  // "permanent"/"none" ignore session state; "smart" only opens once a
+  // link's been clicked this visit (see smartPaneOpen above).
+  const dualPaneOpen =
+    theme.recipeDualPaneMode === "permanent"
+      ? true
+      : theme.recipeDualPaneMode === "none"
+      ? false
+      : smartPaneOpen;
   // Stands out once it was ever a Future Slot, even after conversion —
   // the "still just a normal recipe, but with a glow" look.
   const showFutureSlotGlow = !recipe.isFutureSlot && !!recipe.futureSlotOrigin;
 
   return (
     <div
+      ref={pageRef}
       className={`page${showFutureSlotGlow ? " recipe-future-slot-glow" : ""}`}
       data-color-surface="page-bg"
-      style={pageSurfaceStyle(pageBgOverrides["page-bg"])}
+      style={{
+        ...pageSurfaceStyle(pageBgOverrides["page-bg"]),
+        ...(editorWidth ? { maxWidth: `${editorWidth}px` } : {}),
+      }}
     >
+      <div
+        className="recipe-width-handle"
+        onMouseDown={handleResizeStart}
+        title="Drag to resize this recipe's width"
+      />
       <Breadcrumb
         crumbs={[
           { label: "Recipes", onClick: () => onNavigate({ type: "recipes-home" }) },
@@ -342,60 +483,55 @@ export function RecipeDetailPage({
           <div className="future-slot-section">
             <div className="future-slot-section-label">Recipe Links</div>
             <div className="future-slot-links-row">
-              {linkedRecipes.map((r) => (
-                <span key={r.id} className="future-slot-link-chip">
+              {futureSlotLinks.map((link) => (
+                <span key={link.id} className="future-slot-link-chip">
+                  <button
+                    className="future-slot-link-chip-open"
+                    onClick={() => handleOpenLinkInBrowser(link.url)}
+                    title="Open the original page"
+                  >
+                    <Icon iconKey="open-external" size={11} />
+                  </button>
                   <button
                     className="future-slot-link-chip-label"
-                    onClick={() => handleOpenRecipeLink(r.id)}
+                    onClick={() => handleActivateLink(link)}
+                    disabled={activatingLinkId === link.id}
+                    title={link.url}
                   >
-                    {r.name}
+                    {activatingLinkId === link.id ? "Pulling…" : link.title || hostnameOf(link.url)}
                   </button>
                   <button
                     className="future-slot-link-chip-remove"
-                    onClick={() => handleRemoveLink(r.id)}
+                    onClick={() => handleRemoveLink(link.id)}
                     title="Remove link"
                   >
                     ×
                   </button>
                 </span>
               ))}
-              <div className="future-slot-add-link-wrapper">
-                <button
-                  className="future-slot-add-link-button"
-                  onClick={() => setLinkPickerOpen((v) => !v)}
-                >
+              {addingLink ? (
+                <input
+                  className="future-slot-link-url-input"
+                  autoFocus
+                  placeholder="Paste a recipe URL…"
+                  value={linkUrlDraft}
+                  onChange={(e) => setLinkUrlDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddLink();
+                    if (e.key === "Escape") {
+                      setLinkUrlDraft("");
+                      setAddingLink(false);
+                    }
+                  }}
+                  onBlur={handleAddLink}
+                />
+              ) : (
+                <button className="future-slot-add-link-button" onClick={() => setAddingLink(true)}>
                   + Add link
                 </button>
-                {linkPickerOpen && (
-                  <>
-                    <div className="menu-backdrop" onClick={() => setLinkPickerOpen(false)} />
-                    <div className="managed-row-dropdown future-slot-link-picker">
-                      <input
-                        className="future-slot-link-search"
-                        autoFocus
-                        placeholder="Search recipes…"
-                        value={linkSearch}
-                        onChange={(e) => setLinkSearch(e.target.value)}
-                      />
-                      {linkCandidates.length === 0 ? (
-                        <div className="dropdown-item dropdown-empty">No matches</div>
-                      ) : (
-                        linkCandidates.map((r) => (
-                          <button
-                            key={r.id}
-                            className="dropdown-item"
-                            onClick={() => handleAddLink(r.id)}
-                          >
-                            {r.name}{" "}
-                            <span className="future-slot-link-category">— {r.categoryName}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+              )}
             </div>
+            {linkError && <div className="future-slot-link-error">{linkError}</div>}
           </div>
 
           <div className="future-slot-section">
@@ -417,17 +553,29 @@ export function RecipeDetailPage({
             )}
           </div>
 
-          <div className="future-slot-main-editor">
-            <RecipeEditor
-              key={recipe.id}
-              content={instructions}
-              onChange={(html) => {
-                setInstructions(html);
-                updateRecipeInstructions(recipe.id, html);
-              }}
-              onOpenRecipeLink={handleOpenRecipeLink}
-              onOpenNoteLink={(noteId) => onNavigate({ type: "notes", pageId: noteId })}
-            />
+          <div className={`future-slot-editor-grid${dualPaneOpen ? " future-slot-editor-grid--split" : ""}`}>
+            <div className="future-slot-editor-main future-slot-main-editor">
+              <RecipeEditor
+                key={recipe.id}
+                content={instructions}
+                onChange={(html) => {
+                  setInstructions(html);
+                  updateRecipeInstructions(recipe.id, html);
+                }}
+                onOpenRecipeLink={handleOpenRecipeLink}
+                onOpenNoteLink={(noteId) => onNavigate({ type: "notes", pageId: noteId })}
+              />
+            </div>
+            <div className="future-slot-editor-reference">
+              <div className="future-slot-section-label">Recipe Reference</div>
+              <textarea
+                className="future-slot-reference-box"
+                value={referenceContent}
+                onChange={(e) => setReferenceContent(e.target.value)}
+                onBlur={handleSaveReferenceContent}
+                placeholder="Click a recipe link above to pull its recipe in here…"
+              />
+            </div>
           </div>
 
           <div className="future-slot-convert-row">
@@ -543,21 +691,25 @@ export function RecipeDetailPage({
                       Originally planned {formatTimestamp(recipe.createdAt)}
                     </div>
                   )}
-                  {linkedRecipes.length > 0 && (
+                  {futureSlotLinks.length > 0 && (
                     <div className="future-slot-links-row">
-                      {linkedRecipes.map((r) => (
+                      {futureSlotLinks.map((link) => (
                         <button
-                          key={r.id}
+                          key={link.id}
                           className="future-slot-link-chip-label future-slot-link-chip-readonly"
-                          onClick={() => handleOpenRecipeLink(r.id)}
+                          onClick={() => handleOpenLinkInBrowser(link.url)}
+                          title={link.url}
                         >
-                          {r.name}
+                          {link.title || hostnameOf(link.url)}
                         </button>
                       ))}
                     </div>
                   )}
                   {recipe.inspiration && (
                     <p className="future-slot-inspiration-readonly">{recipe.inspiration}</p>
+                  )}
+                  {recipe.referenceContent && (
+                    <p className="future-slot-inspiration-readonly">{recipe.referenceContent}</p>
                   )}
                 </div>
               )}

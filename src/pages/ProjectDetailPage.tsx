@@ -15,15 +15,17 @@ import {
   duplicateWidget,
   fetchJournalEntries,
   fetchBoardItems,
+  updateWidgetDockBigDisplay,
 } from "../db/projects";
 import { fetchAllGoals } from "../db/goals";
 import { fetchDream } from "../db/dreams";
-import { applyWidgetContent, SavedLayout } from "../db/layouts";
+import { applyWidgetContent, applyLayoutFieldLayout, SavedLayout } from "../db/layouts";
 import {
   fetchFieldLayout,
   reorderFields,
   addBuiltinField,
   addFreetextField,
+  addSoloDockField,
   addFreetextFieldWithContent,
   removeField,
   fetchFreetextFields,
@@ -43,15 +45,19 @@ import { Breadcrumb } from "../components/Breadcrumb";
 import { DreamDateRangeField } from "../components/DreamDateRangeField";
 import { EstimatedStartDateField } from "../components/EstimatedStartDateField";
 import { FreetextFieldEditor } from "../components/FreetextFieldEditor";
+import { SoloImageDockField } from "../components/SoloImageDockField";
 import { ImageDockWidget } from "../components/ImageDockWidget";
 import { QuickPhotoWidget } from "../components/QuickPhotoWidget";
 import { CostLogWidget } from "../components/CostLogWidget";
 import { CalculatorWidget } from "../components/CalculatorWidget";
+import { MasterCostLogWidget } from "../components/MasterCostLogWidget";
 import { TableWidgetPreview } from "../components/TableWidgetPreview";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
 import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
-import { contentStyle, headerStyle, mergeFieldStylePatch, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { RichTextField } from "../editor/RichTextField";
+import { FieldHeader } from "../components/FieldHeader";
 import { withFieldUndo } from "../rearrange/fieldUndo";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import { useTheme } from "../theme/ThemeContext";
@@ -59,7 +65,7 @@ import "../components/ManagedListRow.css"; // reusing .managed-row-dropdown / .d
 import "./Page.css";
 import "./ProjectDetailPage.css";
 
-const ALL_WIDGET_TYPES: ProjectWidgetType[] = ["journal", "linkboard", "table", "photo", "dock", "costlog", "calculator"];
+const ALL_WIDGET_TYPES: ProjectWidgetType[] = ["journal", "linkboard", "table", "photo", "dock", "costlog", "calculator", "mastercostlog"];
 const COPIABLE_FIELD_TYPES: FieldType[] = ["goals_text", "reasoning_text", "needs_doing_text", "freetext"];
 
 function gapOrderBefore(fields: FieldLayoutRow[], index: number): number {
@@ -75,9 +81,14 @@ function gapOrderAfterLast(fields: FieldLayoutRow[]): number {
 export function ProjectDetailPage({
   projectId,
   onNavigate,
+  onEnterGoalWeb,
 }: {
   projectId: number;
   onNavigate: (view: View) => void;
+  // While Dual-Pane Web Mode is active, "Enter Web" targets the right
+  // pane only and leaves this page in place — see App.tsx. Undefined in
+  // single-pane / Notes-mode, where it falls back to plain onNavigate.
+  onEnterGoalWeb?: (goalId: number) => void;
 }) {
   const { overrides: pageBgOverrides } = usePageBackground();
   const [project, setProject] = useState<Project | null>(null);
@@ -233,6 +244,7 @@ export function ProjectDetailPage({
     dock: "Image Dock",
     costlog: "Cost Log",
     calculator: "Calculator",
+    mastercostlog: "Master Cost Log",
   };
 
   const WIDGET_ICON_KEYS: Record<ProjectWidgetType, string> = {
@@ -243,6 +255,7 @@ export function ProjectDetailPage({
     dock: "widget-dock",
     costlog: "widget-costlog",
     calculator: "widget-calculator",
+    mastercostlog: "widget-mastercostlog",
   };
 
   const handleAddWidget = async (type: ProjectWidgetType) => {
@@ -270,13 +283,17 @@ export function ProjectDetailPage({
 
   const handleApplyLayout = async (layout: SavedLayout) => {
     if (!project) return;
-    // A layout replaces the widget grid rather than appending to it —
+    // A layout replaces the whole page (widgets AND the field list, if
+    // the layout has a field snapshot) rather than appending to it —
     // without clearing first, loading a layout onto a page that already
-    // has widgets (including reloading the very one you just saved from)
+    // has content (including reloading the very one you just saved from)
     // just piles a second copy of everything on top of the first.
+    const replacesFields = !!layout.fieldLayout;
     if (
-      widgets.length > 0 &&
-      !confirm(`Loading "${layout.name}" replaces the ${widgets.length} widget(s) already on this page. Continue?`)
+      (widgets.length > 0 || replacesFields) &&
+      !confirm(
+        `Loading "${layout.name}" replaces ${replacesFields ? "all fields and " : ""}the ${widgets.length} widget(s) already on this page. Continue?`
+      )
     ) {
       return;
     }
@@ -285,6 +302,7 @@ export function ProjectDetailPage({
       const newId = await addWidget(project.id, w.widgetType, w.title);
       await applyWidgetContent(newId, w.widgetType, w.content);
     }
+    await applyLayoutFieldLayout(layout, "project", project.id);
     await load();
   };
 
@@ -302,6 +320,8 @@ export function ProjectDetailPage({
       () =>
         type === "freetext"
           ? addFreetextField("project", project.id, order)
+          : type === "solo_dock"
+          ? addSoloDockField("project", project.id, order)
           : addBuiltinField("project", project.id, type, order),
       pushUndo,
       load
@@ -380,6 +400,11 @@ export function ProjectDetailPage({
     updateFieldLayoutHeight(fieldId, heightPx);
   };
 
+  const handleSetDockBigDisplay = (widgetId: number, bigDisplay: boolean) => {
+    setWidgets((prev) => prev.map((w) => (w.id === widgetId ? { ...w, dockBigDisplay: bigDisplay } : w)));
+    updateWidgetDockBigDisplay(widgetId, bigDisplay);
+  };
+
   // Lets ctrl+click on any field (see RearrangeableField.tsx) open its
   // style controls in the Dynamic Settings panel — see
   // FieldStyleRegistryContext.tsx and overlay/FieldStyleQuickEdit.tsx.
@@ -391,10 +416,12 @@ export function ProjectDetailPage({
         if (row) handleFieldStyleSave(row, patch);
       },
       onRename: handleFieldStyleRename,
+      widgets,
+      onSetDockBigDisplay: handleSetDockBigDisplay,
     });
     return () => registerFieldStyleTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields]);
+  }, [fields, widgets]);
 
   const handleFieldDragStart = (e: React.DragEvent, id: number) => {
     e.dataTransfer.effectAllowed = "move";
@@ -561,6 +588,9 @@ export function ProjectDetailPage({
           <button className="add-button secondary" onClick={() => handleAddWidget("calculator")}>
             Calculator
           </button>
+          <button className="add-button secondary" onClick={() => handleAddWidget("mastercostlog")}>
+            Master Cost Log
+          </button>
         </div>
       )}
 
@@ -571,7 +601,7 @@ export function ProjectDetailPage({
           {widgets.map((w) => (
             <div
               key={w.id}
-              className={`project-widget-card${["dock", "photo", "table", "costlog", "calculator"].includes(w.widgetType) ? " project-widget-card-inline" : ""}${rearranging ? " project-widget-card-rearranging" : ""}${dragOverId === w.id ? " project-widget-card-drop-target" : ""}${rearranging && deleteToolActive ? " project-widget-card-delete-armed" : ""}`}
+              className={`project-widget-card${["dock", "photo", "table", "costlog", "calculator", "mastercostlog"].includes(w.widgetType) ? " project-widget-card-inline" : ""}${rearranging ? " project-widget-card-rearranging" : ""}${dragOverId === w.id ? " project-widget-card-drop-target" : ""}${rearranging && deleteToolActive ? " project-widget-card-delete-armed" : ""}`}
               onDragOver={(e) => handleWidgetDragOver(e, w.id)}
               onDragLeave={() => setDragOverId((id) => (id === w.id ? null : id))}
               onDrop={(e) => handleWidgetDrop(e, w.id)}
@@ -601,6 +631,8 @@ export function ProjectDetailPage({
                 <CostLogWidget widgetId={w.id} />
               ) : w.widgetType === "calculator" ? (
                 <CalculatorWidget widgetId={w.id} />
+              ) : w.widgetType === "mastercostlog" ? (
+                <MasterCostLogWidget widgetId={w.id} />
               ) : w.widgetType === "table" ? (
                 <TableWidgetPreview
                   widgetId={w.id}
@@ -643,7 +675,7 @@ export function ProjectDetailPage({
         <div className="project-wii-grid">
           {widgets.map((w) => {
             const isInline =
-              w.widgetType === "dock" || w.widgetType === "photo" || w.widgetType === "table" || w.widgetType === "costlog" || w.widgetType === "calculator";
+              w.widgetType === "dock" || w.widgetType === "photo" || w.widgetType === "table" || w.widgetType === "costlog" || w.widgetType === "calculator" || w.widgetType === "mastercostlog";
             return (
               <div
                 key={w.id}
@@ -684,6 +716,8 @@ export function ProjectDetailPage({
                         <CostLogWidget widgetId={w.id} />
                       ) : w.widgetType === "calculator" ? (
                         <CalculatorWidget widgetId={w.id} />
+                      ) : w.widgetType === "mastercostlog" ? (
+                        <MasterCostLogWidget widgetId={w.id} />
                       ) : (
                         <TableWidgetPreview
                           widgetId={w.id}
@@ -737,7 +771,7 @@ export function ProjectDetailPage({
       case "goal_select":
         return (
           <div className="project-field">
-            <label className="project-field-label">Goal</label>
+            <FieldHeader defaultLabel="Goal" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} style={headerStyle(f)} />
             <select
               className="inline-add-input"
               style={{ marginBottom: 0 }}
@@ -757,16 +791,16 @@ export function ProjectDetailPage({
         return (
           <div className="project-field">
             <div className="field-slot-header-row">
-              <label className="project-field-label" style={headerStyle(f)}>Goals</label>
+              <FieldHeader defaultLabel="Goals" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={3}
               style={contentStyle(f)}
               value={goalsDraft}
-              onChange={(e) => setGoalsDraft(e.target.value)}
+              onChange={setGoalsDraft}
               onBlur={saveGoals}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="What is this project trying to achieve?"
             />
           </div>
@@ -775,16 +809,16 @@ export function ProjectDetailPage({
         return (
           <div className="project-field">
             <div className="field-slot-header-row">
-              <label className="project-field-label" style={headerStyle(f)}>Reasoning</label>
+              <FieldHeader defaultLabel="Reasoning" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={3}
               style={contentStyle(f)}
               value={reasoningDraft}
-              onChange={(e) => setReasoningDraft(e.target.value)}
+              onChange={setReasoningDraft}
               onBlur={saveReasoning}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="Why does this project matter?"
             />
           </div>
@@ -793,16 +827,16 @@ export function ProjectDetailPage({
         return (
           <div className="project-field">
             <div className="field-slot-header-row">
-              <label className="project-field-label" style={headerStyle(f)}>What needs doing</label>
+              <FieldHeader defaultLabel="What needs doing" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={3}
               style={contentStyle(f)}
               value={needsDoingDraft}
-              onChange={(e) => setNeedsDoingDraft(e.target.value)}
+              onChange={setNeedsDoingDraft}
               onBlur={saveNeedsDoing}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="What actually has to happen?"
             />
           </div>
@@ -811,7 +845,7 @@ export function ProjectDetailPage({
         return (
           <div className="project-field">
             <div className="field-slot-header-row">
-              <label className="project-field-label" style={headerStyle(f)}>Estimated start date</label>
+              <FieldHeader defaultLabel="Estimated start date" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} style={headerStyle(f)} />
             </div>
             <EstimatedStartDateField
               value={project.estimatedStartDate}
@@ -824,7 +858,7 @@ export function ProjectDetailPage({
         return (
           <div className="project-field">
             <div className="field-slot-header-row">
-              <label className="project-field-label" style={headerStyle(f)}>When it should be done</label>
+              <FieldHeader defaultLabel="When it should be done" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} style={headerStyle(f)} />
             </div>
             <DreamDateRangeField
               start={project.expectedDateStart}
@@ -850,6 +884,15 @@ export function ProjectDetailPage({
           />
         );
       }
+      case "solo_dock":
+        return (
+          <SoloImageDockField
+            field={f}
+            rearranging={rearranging}
+            onRename={(label) => handleFieldStyleRename(f.id, label)}
+            onResize={handleFieldResize}
+          />
+        );
     }
   };
 
@@ -935,7 +978,9 @@ export function ProjectDetailPage({
           {project.goalId !== null && (
             <button
               className="icon-button"
-              onClick={() => onNavigate({ type: "goal-web", goalId: project.goalId! })}
+              onClick={() =>
+                onEnterGoalWeb ? onEnterGoalWeb(project.goalId!) : onNavigate({ type: "goal-web", goalId: project.goalId! })
+              }
               title="View tasks in Goal Web"
             >
               <Icon iconKey="web-view" size={16} />

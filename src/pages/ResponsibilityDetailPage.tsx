@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "../types/nav";
+import { RichTextField } from "../editor/RichTextField";
 import {
   Responsibility,
   ResponsibilityCompletion,
@@ -163,34 +164,31 @@ export function ResponsibilityDetailPage({
         <>
       <label className="resp-field-label">
         Description
-        <textarea
+        <RichTextField
           className="resp-textarea"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={setDescription}
           onBlur={() => saveDetails({ description })}
-          rows={3}
         />
       </label>
 
       <label className="resp-field-label">
         Consequences of missing this
-        <textarea
+        <RichTextField
           className="resp-textarea"
           value={consequences}
-          onChange={(e) => setConsequences(e.target.value)}
+          onChange={setConsequences}
           onBlur={() => saveDetails({ consequences })}
-          rows={3}
         />
       </label>
 
       <details className="resp-reasoning">
         <summary>Why this responsibility was taken on</summary>
-        <textarea
+        <RichTextField
           className="resp-textarea"
           value={reasoning}
-          onChange={(e) => setReasoning(e.target.value)}
+          onChange={setReasoning}
           onBlur={() => saveDetails({ reasoning })}
-          rows={3}
         />
       </details>
 

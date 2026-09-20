@@ -16,6 +16,8 @@ import {
   SkillDreamNodeField,
   SkillGoal,
   SkillTask,
+  TASK_COOLDOWN_TYPES,
+  TaskCooldownType,
   WORK_TYPES,
   WORK_TYPE_LABELS,
   WorkType,
@@ -977,6 +979,30 @@ function SkillSettingsPanel({ settings, goals, onClose, reload }: any) {
             )
           )}
         </div>
+
+        <label className="skill-field-label">Tasks page cooldown (for board tasks linked to this skill)</label>
+        <select
+          className="inline-add-input"
+          value={draft.taskCooldownType}
+          onChange={(e) => setDraft((d: any) => ({ ...d, taskCooldownType: e.target.value as TaskCooldownType }))}
+        >
+          {TASK_COOLDOWN_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t === "daily" ? "Daily (resets at midnight)" : t === "weekly" ? "Weekly (resets Monday)" : "Custom hours"}
+            </option>
+          ))}
+        </select>
+        {draft.taskCooldownType === "hours" && (
+          <label className="skill-settings-num-field">
+            taskCooldownHours
+            <input
+              type="number"
+              min={1}
+              value={draft.taskCooldownHours}
+              onChange={(e) => setDraft((d: any) => ({ ...d, taskCooldownHours: Number(e.target.value) }))}
+            />
+          </label>
+        )}
 
         <label className="skill-field-label">Dream Web display fields</label>
         {fieldOptions.map((opt) => (

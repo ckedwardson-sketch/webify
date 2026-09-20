@@ -1,5 +1,6 @@
 // src/pages/DreamWebPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { htmlToPlainText } from "../utils/richText";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -40,7 +41,8 @@ import { buildNodeCardTextItems } from "../theme/nodeCardFields";
 import { mergeFieldStylePatch } from "../rearrange/fieldStyle";
 import { NodeFieldVisibilityPopover } from "../components/NodeFieldVisibilityPopover";
 import { Dream, DreamLink, DreamPriority, ProgressNode as ProgressNodeModel } from "../types/models";
-import { Goal, Project, ProjectWidget, ProjectWidgetType } from "../types/project";
+import { Goal, Project, ProjectWidget, ProjectWidgetType, Pane } from "../types/project";
+import { NodeWidgetOverlay } from "../components/NodeWidgetOverlay";
 import { Responsibility, ResponsibilityCompletion } from "../types/responsibility";
 import {
   DreamNode,
@@ -81,6 +83,7 @@ import {
 import { addPage } from "../db/notes";
 import { NoteWebNode } from "../components/NoteWebNode";
 import { WebWidgetNode, WEB_WIDGET_DEFAULT_WIDTH, WEB_WIDGET_DEFAULT_HEIGHT } from "../components/WebWidgetNode";
+import { PaneNode, PaneNodeData } from "../components/PaneNode";
 import {
   fetchWidgetsForWebOwners,
   addWebWidget,
@@ -88,6 +91,20 @@ import {
   updateWebWidgetSize,
   deleteWidget,
 } from "../db/projects";
+import {
+  fetchPanesForWebOwners,
+  addPane,
+  updatePanePosition,
+  updatePaneSize,
+  updatePaneTitle,
+  updatePaneColor,
+  updatePaneOpacity,
+  updatePaneFront,
+  updatePaneHeaderFontSize,
+  updatePaneHeaderColor,
+  updatePaneLocked,
+  deletePane,
+} from "../db/panes";
 import { WIDGET_TYPE_LABELS } from "../rearrange/AddFieldMenu";
 import { fetchSkillsForDreams, updateDreamSkillPosition } from "../db/skills";
 import { Skill } from "../types/skill";
@@ -103,6 +120,7 @@ import { DecalLayer } from "../theme/DecalLayer";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import { useMobileLayout } from "../theme/useMobileLayout";
 import { useUiPreferences } from "../context/UiPreferencesContext";
+import { useWebNodeLock } from "../context/WebNodeLockContext";
 import "./Page.css";
 import "./DreamWebPage.css";
 
@@ -116,6 +134,7 @@ const nodeTypes = {
   goalRespNode: ResponsibilityCardNode,
   noteNode: NoteWebNode,
   widgetNode: WebWidgetNode,
+  paneNode: PaneNode,
 };
 const edgeTypes = { angleEdge: AngleEdge };
 
@@ -142,6 +161,36 @@ const NEW_NOTE_SENTINEL = "__new__";
 // any other prefix on this canvas.
 const widgetNodeId = (id: number) => `wg-${id}`;
 const parseWidgetNodeId = (id: string) => Number(id.slice(3));
+// Purely visual grouping panes (see components/PaneNode.tsx) attached
+// directly to a dream (web_type "dream", web_owner_id the dream id) —
+// keyed by the web_panes row id, "pn-" so it can't collide with any
+// other prefix on this canvas.
+const paneNodeId = (id: number) => `pn-${id}`;
+const parsePaneNodeId = (id: string) => Number(id.slice(3));
+
+// A resize drag needs the box to visibly track the cursor every frame,
+// not just jump into place on release — but routing that through the
+// canonical `panes` state (and the big node-rebuild effect it drives)
+// would rebuild the entire node graph on every pointer-move tick. This
+// patches only the live-resizing pane's own node entry directly, the
+// same "touch `nodes` during the gesture, sync canonical state only at
+// the end" split position-dragging already uses (see onNodesChange).
+function patchPaneSizeLive(setNodes: Dispatch<SetStateAction<Node[]>>, nodeId: string, width: number, height: number) {
+  setNodes((nds) =>
+    nds.map((n) =>
+      n.id === nodeId
+        ? { ...n, data: { ...n.data, pane: { ...(n.data as unknown as PaneNodeData).pane, width, height } } }
+        : n
+    )
+  );
+}
+
+function rectsOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number }
+): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
 
 // Full-mode cluster sub-node ids are namespaced by their goal instance
 // id (see above) plus GoalWebPage's own id scheme, joined by "::" so
@@ -338,6 +387,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   const { overrides: pageBgOverrides } = usePageBackground();
   const mobile = useMobileLayout();
   const { preferences: uiPreferences, setPreference: setUiPreference } = useUiPreferences();
+  const { locked: nodesLocked } = useWebNodeLock();
   const { zoom } = useViewport();
   const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
   const [dreams, setDreams] = useState<Dream[]>([]);
@@ -376,9 +426,22 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
   // components/WebWidgetNode.tsx) — same picker pattern as notes above:
   // pick which dream owns it, then which widget type to add.
   const [webWidgets, setWebWidgets] = useState<ProjectWidget[]>([]);
+  // A free-floating Image Dock widget's edit click opens this instead of
+  // its own internal overlay — see WebWidgetNode.tsx's onEditDock.
+  const [openWidget, setOpenWidget] = useState<ProjectWidget | null>(null);
   const [showWidgetsPanel, setShowWidgetsPanel] = useState(false);
   const [widgetDreamChoice, setWidgetDreamChoice] = useState("");
   const [widgetChoice, setWidgetChoice] = useState<ProjectWidgetType | "">("");
+  // Purely visual grouping rectangles attached directly to a dream — see
+  // components/PaneNode.tsx. Same picker pattern as widgets above: pick
+  // which dream owns it, then add.
+  const [panes, setPanes] = useState<Pane[]>([]);
+  const [showPanesPanel, setShowPanesPanel] = useState(false);
+  const [paneDreamChoice, setPaneDreamChoice] = useState("");
+  const [addingPane, setAddingPane] = useState(false);
+  // Ctrl+click a pane — same "Looks" popup convention as dream/goal
+  // cards, just editing color/fill opacity instead of a scale percent.
+  const [paneLooksTargetId, setPaneLooksTargetId] = useState<number | null>(null);
 
   const gridLines = useMemo(buildGridLines, []);
 
@@ -411,6 +474,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     setNoteLinks(await fetchNoteWebLinksForOwners("dream", activeDreams.map((d) => d.id)));
     setNotePickerOptions(await fetchNotePagesForPicker());
     setWebWidgets(await fetchWidgetsForWebOwners("dream", activeDreams.map((d) => d.id)));
+    setPanes(await fetchPanesForWebOwners("dream", activeDreams.map((d) => d.id)));
   };
 
   useEffect(() => {
@@ -737,7 +801,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
               deletable: false,
               data: {
                 name: resp.name,
-                description: resp.description,
+                description: htmlToPlainText(resp.description),
                 consistencyPct: consistencyPercent(resp, completions),
                 daysPerWeek: daysPerWeekFor(resp),
                 onUnlink: () => unlinkResponsibilityFromGoal(resp.id, goalId).then(load),
@@ -752,13 +816,17 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
               position: { x: pos.x + p.x, y: pos.y + p.y },
               deletable: false,
               data: {
-                category: task.category,
+                categories: task.categories,
                 shortDescription: task.shortDescription,
                 difficulty: task.difficulty,
                 isComplete: task.isComplete,
                 isRead: task.isRead,
                 imageData: task.imageData,
                 cost: task.cost,
+                webScale: task.webScale,
+                favorite: task.favorite,
+                glowAmount: task.glowAmount,
+                glowColor: task.glowColor,
               },
             };
           });
@@ -834,11 +902,76 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
               setWebWidgets((prev) => prev.map((x) => (x.id === w.id ? { ...x, width, height } : x)));
             },
             onOpen: () => handleOpenWebWidget(w),
+            onEditDock: () => setOpenWidget(w),
           },
         };
       });
 
-    setNodes([...dreamNodes, ...goalNodes, ...standaloneGoalNodes, ...skillNodes, ...clusterNodes, ...noteNodes, ...widgetNodes]);
+    // Panes default to a spot just below a dream's widgets (which sit at
+    // dp.y + ds.height + 20 + siblings*40, see widgetNodes above) until
+    // dragged — same "default near the owner, then free" convention.
+    // Always rendered behind every other node (negative zIndex) except
+    // while brought to front, which jumps it far above everything else
+    // instead (see PaneNode.tsx).
+    const panesByDream = new Map<number, Pane[]>();
+    for (const p of panes) {
+      const list = panesByDream.get(p.webOwnerId) ?? [];
+      list.push(p);
+      panesByDream.set(p.webOwnerId, list);
+    }
+    const paneNodes: Node[] = panes
+      .filter((p) => dreamById.has(p.webOwnerId))
+      .map((p) => {
+        const dream = dreamById.get(p.webOwnerId)!;
+        const dp = positionFor(dream);
+        const ds = nodeSizeFor(dream.priority, 1);
+        const siblings = panesByDream.get(p.webOwnerId) ?? [];
+        const idx = siblings.indexOf(p);
+        const hasStoredPos = p.posX !== 0 || p.posY !== 0;
+        return {
+          id: paneNodeId(p.id),
+          type: "paneNode",
+          position: hasStoredPos
+            ? { x: p.posX, y: p.posY }
+            : { x: dp.x - ds.width / 2 - 60, y: dp.y + ds.height + 20 + idx * 40 },
+          deletable: false,
+          // Explicit false pins this one pane regardless of the
+          // canvas-wide drag lock; undefined (not true) lets it inherit
+          // that default instead of always overriding it, so the mobile
+          // auto-lock still applies to an unlocked pane.
+          draggable: p.locked ? false : undefined,
+          zIndex: p.isFront ? 1000 : -1,
+          data: {
+            pane: p,
+            isMobile: mobile,
+            onResizeLive: (width: number, height: number) => {
+              patchPaneSizeLive(setNodes, paneNodeId(p.id), width, height);
+            },
+            onResizeEnd: (width: number, height: number) => {
+              updatePaneSize(p.id, width, height);
+              setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, width, height } : x)));
+            },
+            onRename: () => {
+              const name = window.prompt("Rename pane:", p.title);
+              if (name === null) return;
+              const trimmed = name.trim() || "Pane";
+              updatePaneTitle(p.id, trimmed);
+              setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, title: trimmed } : x)));
+            },
+            onToggleFront: () => {
+              updatePaneFront(p.id, !p.isFront);
+              setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, isFront: !x.isFront } : x)));
+            },
+            onToggleLocked: () => {
+              updatePaneLocked(p.id, !p.locked);
+              setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, locked: !x.locked } : x)));
+            },
+            onDelete: () => deletePane(p.id).then(load),
+          },
+        };
+      });
+
+    setNodes([...paneNodes, ...dreamNodes, ...goalNodes, ...standaloneGoalNodes, ...skillNodes, ...clusterNodes, ...noteNodes, ...widgetNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeDreams,
@@ -859,6 +992,8 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     completions,
     noteLinks,
     webWidgets,
+    panes,
+    mobile,
   ]);
 
   const edges: Edge[] = useMemo(() => {
@@ -887,7 +1022,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           targetHandle: `in-${snapToAnchor(targetAngle)}`,
           reconnectable: true,
           type: "angleEdge",
-          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } satisfies AngleEdgeData,
+          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, cuttable: true } satisfies AngleEdgeData,
           style: { stroke: theme.dreamLinkColor, strokeWidth: 2 },
         };
       });
@@ -926,7 +1061,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           selectable: true,
           reconnectable: true,
           type: "angleEdge",
-          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } satisfies AngleEdgeData,
+          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, cuttable: true } satisfies AngleEdgeData,
           style: { stroke: theme.dreamGoalNodeOutlineColor, strokeWidth: 1.5, strokeDasharray: "4 3", opacity: 0.7 },
         };
       });
@@ -1029,7 +1164,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           sourceHandle: `out-${snapToAnchor(sourceAngle)}`,
           targetHandle: `in-${snapToAnchor(targetAngle)}`,
           type: "angleEdge",
-          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y },
+          data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, cuttable: true },
           reconnectable: false,
           style: { stroke: theme.dreamGoalNodeOutlineColor, strokeWidth: 1.5, opacity: 0.75 },
         },
@@ -1084,7 +1219,58 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
 
   const goalInstanceById = useMemo(() => new Map(goalInstances.map((i) => [i.instanceId, i])), [goalInstances]);
 
-  const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
+  // A pane brought to front is meant to act like everything grouped
+  // inside it got packed into one glass box (see PaneNode.tsx's front
+  // toggle) — dragging the pane itself should carry those nodes along
+  // instead of leaving them behind. Captured at drag START (whatever
+  // currently overlaps the pane's rect, even partially — it's on the
+  // user to not overlap nodes they don't want swept up) rather than at
+  // toggle time, so a pane that's been sitting "in front" for a while
+  // still picks up whatever has since been dropped into it.
+  const packedDragRef = useRef<null | {
+    paneNodeId: string;
+    paneStart: { x: number; y: number };
+    children: { id: string; startX: number; startY: number }[];
+  }>(null);
+
+  const onNodeDragStart = (_: MouseEvent | TouchEvent, node: Node) => {
+    if (!node.id.startsWith("pn-")) return;
+    const id = parsePaneNodeId(node.id);
+    const pane = panes.find((p) => p.id === id);
+    if (!pane?.isFront) return;
+    const rect = { x: node.position.x, y: node.position.y, width: pane.width, height: pane.height };
+    const children = nodes
+      .filter((n) => n.id !== node.id)
+      .filter((n) => {
+        const nw = n.measured?.width ?? 200;
+        const nh = n.measured?.height ?? 140;
+        return rectsOverlap(rect, { x: n.position.x, y: n.position.y, width: nw, height: nh });
+      })
+      .map((n) => ({ id: n.id, startX: n.position.x, startY: n.position.y }));
+    packedDragRef.current = { paneNodeId: node.id, paneStart: { x: node.position.x, y: node.position.y }, children };
+  };
+
+  // Live-follow for the packed children, same "move with the cursor, not
+  // just on drop" reasoning as PaneNode's own resize (see onResizeLive).
+  const onNodeDrag = (_: MouseEvent | TouchEvent, node: Node) => {
+    const packed = packedDragRef.current;
+    if (!packed || packed.paneNodeId !== node.id) return;
+    const dx = node.position.x - packed.paneStart.x;
+    const dy = node.position.y - packed.paneStart.y;
+    setNodes((nds) =>
+      nds.map((n) => {
+        const child = packed.children.find((c) => c.id === n.id);
+        return child ? { ...n, position: { x: child.startX + dx, y: child.startY + dy } } : n;
+      })
+    );
+  };
+
+  // The exact per-node-type "world position -> owner-local position,
+  // then persist" logic every drag stop needs — factored out so a
+  // packed pane's carried-along children (see onNodeDragStart above) can
+  // reuse it for their own final position, not just the node the user's
+  // cursor actually dragged.
+  const persistNodePosition = (node: { id: string; position: { x: number; y: number } }) => {
     const cluster = parseClusterNodeId(node.id);
     if (cluster) {
       // Only task cards are draggable inside a cluster (see clusterNodes
@@ -1125,6 +1311,13 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       setWebWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, posX: x, posY: y } : w)));
       return;
     }
+    if (node.id.startsWith("pn-")) {
+      const id = parsePaneNodeId(node.id);
+      const { x, y } = node.position;
+      updatePanePosition(id, x, y);
+      setPanes((prev) => prev.map((p) => (p.id === id ? { ...p, posX: x, posY: y } : p)));
+      return;
+    }
     if (isStandaloneGoalNodeId(node.id)) {
       const goalId = parseStandaloneGoalNodeId(node.id);
       updateGoalWebPosition(goalId, node.position.x, node.position.y);
@@ -1149,6 +1342,19 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       updateDreamPosition(id, x, y);
     }
     setDreams((prev) => prev.map((d) => (d.id === id ? { ...d, posX: x, posY: y } : d)));
+  };
+
+  const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
+    persistNodePosition(node);
+    const packed = packedDragRef.current;
+    if (packed && packed.paneNodeId === node.id) {
+      const dx = node.position.x - packed.paneStart.x;
+      const dy = node.position.y - packed.paneStart.y;
+      for (const child of packed.children) {
+        persistNodePosition({ id: child.id, position: { x: child.startX + dx, y: child.startY + dy } });
+      }
+      packedDragRef.current = null;
+    }
   };
 
   const onConnect = (connection: Connection) => {
@@ -1301,6 +1507,11 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
       // inline widget content) — same as skill nodes above.
       return;
     }
+    if (node.id.startsWith("pn-")) {
+      const id = parsePaneNodeId(node.id);
+      if (event.ctrlKey && panes.some((p) => p.id === id)) setPaneLooksTargetId(id);
+      return;
+    }
     if (isStandaloneGoalNodeId(node.id)) {
       onNavigate({ type: "goal-detail", goalId: parseStandaloneGoalNodeId(node.id) });
       return;
@@ -1401,6 +1612,19 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
     );
     setWidgetChoice("");
     load();
+  };
+
+  // Same one-dropdown, one-button convention as handleAddWebWidget —
+  // pick which dream owns the pane, then add it with default size/color.
+  const handleAddPane = async () => {
+    if (!paneDreamChoice) return;
+    setAddingPane(true);
+    try {
+      await addPane("dream", Number(paneDreamChoice), 0, 0);
+      load();
+    } finally {
+      setAddingPane(false);
+    }
   };
 
   const timeline = [...activeDreams].sort(timelineSort);
@@ -1620,6 +1844,43 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
                 </div>
               )}
             </div>
+            <div style={{ position: "relative" }}>
+              <button className="add-button secondary" onClick={() => setShowPanesPanel((v) => !v)}>
+                🗂 Panes
+              </button>
+              {showPanesPanel && (
+                <div className="goal-web-add-panel" style={{ position: "absolute", top: "100%", right: 0, zIndex: 20 }}>
+                  <div className="goal-web-add-panel-row">
+                    <span className="goal-web-add-panel-label">ADD PANE</span>
+                    <span style={{ fontSize: "10px", opacity: 0.65 }}>
+                      A colored backdrop for grouping nearby nodes. Ctrl+click one to edit its color/opacity.
+                    </span>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <select
+                        className="inline-add-input"
+                        style={{ marginBottom: 0, flex: 1 }}
+                        value={paneDreamChoice}
+                        onChange={(e) => setPaneDreamChoice(e.target.value)}
+                      >
+                        <option value="">To dream…</option>
+                        {activeDreams.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="add-button secondary"
+                        onClick={handleAddPane}
+                        disabled={!paneDreamChoice || addingPane}
+                      >
+                        {addingPane ? "Adding…" : "Add"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <StyledButton buttonKey="web-zoom-back" iconKey="back" onClick={() => onNavigate({ type: "home" })} />
           </div>
         </div>
@@ -1640,6 +1901,8 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onConnect={onConnect}
             onReconnect={onReconnect}
@@ -1653,6 +1916,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
             deleteKeyCode={["Backspace", "Delete"]}
             minZoom={0.05}
             maxZoom={4}
+            nodesDraggable={!nodesLocked}
             panOnDrag
             zoomOnPinch
             proOptions={{ hideAttribution: true }}
@@ -1827,6 +2091,7 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           </ReactFlow>
         </div>
       </div>
+      {openWidget && <NodeWidgetOverlay widget={openWidget} onClose={() => setOpenWidget(null)} />}
       {fieldVisibilityDreamId != null && (
         <NodeFieldVisibilityPopover
           title={dreamById.get(fieldVisibilityDreamId)?.name ?? "Dream"}
@@ -1835,6 +2100,50 @@ function DreamWebInner({ onNavigate }: { onNavigate: (view: View) => void }) {
           onClose={() => setFieldVisibilityDreamId(null)}
         />
       )}
+      {paneLooksTargetId != null &&
+        (() => {
+          const pane = panes.find((p) => p.id === paneLooksTargetId);
+          if (!pane) return null;
+          return (
+            <NodeFieldVisibilityPopover
+              title={pane.title || "Pane"}
+              onClose={() => setPaneLooksTargetId(null)}
+              looks={{
+                scalePercent: null,
+                onScaleChange: () => {},
+                hideSize: true,
+                color: {
+                  value: pane.color,
+                  onChange: (color) => {
+                    const next = color ?? "#38bdf8";
+                    updatePaneColor(pane.id, next);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, color: next } : p)));
+                  },
+                },
+                opacity: {
+                  valuePercent: Math.round(pane.opacity * 100),
+                  onChange: (percent) => {
+                    const next = percent / 100;
+                    updatePaneOpacity(pane.id, next);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, opacity: next } : p)));
+                  },
+                },
+                headerStyle: {
+                  fontSize: pane.headerFontSize,
+                  onFontSizeChange: (px) => {
+                    updatePaneHeaderFontSize(pane.id, px);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, headerFontSize: px } : p)));
+                  },
+                  textColor: pane.headerColor,
+                  onTextColorChange: (color) => {
+                    updatePaneHeaderColor(pane.id, color);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, headerColor: color } : p)));
+                  },
+                },
+              }}
+            />
+          );
+        })()}
     </div>
   );
 }

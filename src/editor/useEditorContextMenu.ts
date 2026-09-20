@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { useEditorSettings } from "./EditorSettingsContext";
 import { resolveInputMode } from "./inputMode";
-import { buildEditorContextMenuSections } from "./editorMenuSections";
+import { buildEditorContextMenuSections, buildSpellingSection } from "./editorMenuSections";
 import type { ContextMenuSection } from "../components/ContextMenu";
 
 const LONG_PRESS_MS = 500;
@@ -47,7 +47,11 @@ export function useEditorContextMenu(editor: Editor | null) {
     longPressTimer.current = window.setTimeout(() => setMenuPos({ x, y }), LONG_PRESS_MS);
   };
 
-  const sections: ContextMenuSection[] = editor ? buildEditorContextMenuSections(editor, close) : [];
+  const spellingSections: ContextMenuSection[] =
+    editor && menuPos && settings.spellcheckEnabled ? buildSpellingSection(editor, menuPos, close) : [];
+  const sections: ContextMenuSection[] = editor
+    ? [...spellingSections, ...buildEditorContextMenuSections(editor, close)]
+    : [];
 
   return {
     menuPos,

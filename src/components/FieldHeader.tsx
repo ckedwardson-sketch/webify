@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { CSSProperties, useState } from "react";
 
 // A field's label, editable via double-click while rearrange mode is
 // active — for every built-in field (Goals, Reasoning, Priority, ...),
@@ -12,6 +12,7 @@ export function FieldHeader({
   onRename,
   as: Tag = "label",
   className = "project-field-label",
+  style,
 }: {
   defaultLabel: string;
   customLabel: string | null;
@@ -19,6 +20,7 @@ export function FieldHeader({
   onRename: (label: string | null) => void;
   as?: "label" | "span" | "h2";
   className?: string;
+  style?: CSSProperties;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(customLabel ?? defaultLabel);
@@ -43,6 +45,7 @@ export function FieldHeader({
     return (
       <input
         className={`${className} field-header-rename-input`}
+        style={style}
         autoFocus
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -59,6 +62,7 @@ export function FieldHeader({
   return (
     <Tag
       className={`${className}${editable ? " field-header-editable" : ""}`}
+      style={style}
       onDoubleClick={(e) => {
         if (!editable) return;
         e.preventDefault();

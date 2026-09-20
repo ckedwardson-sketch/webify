@@ -1,5 +1,6 @@
-// src/pages/GoalWebPage.tsx
-import { useEffect, useMemo, useState } from "react";
+﻿// src/pages/GoalWebPage.tsx
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { htmlToPlainText } from "../utils/richText";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -29,9 +30,12 @@ import {
   updateWebWidgetPosition,
   updateWebWidgetSize,
   deleteWidget,
+  fetchWidgetsByIds,
+  updateProjectWebCardScale,
+  updateProjectWebCardColor,
 } from "../db/projects";
-import { fetchWidgetsForGoal, updateGoalWebScale } from "../db/goals";
-import { fetchFieldLayout, fetchFreetextFields, updateFieldStyle, FieldLayoutRow, FieldStylePatch, FreetextField } from "../db/fieldLayout";
+import { fetchWidgetsForGoal, updateGoalWebScale, deleteGoal, addPassionProject } from "../db/goals";
+import { fetchFieldLayout, fetchFreetextFields, updateFieldStyle, soloDockRefIdsToShowOnWeb, FieldLayoutRow, FieldStylePatch, FreetextField } from "../db/fieldLayout";
 import { buildNodeCardTextItems, widgetsVisibleOnWeb } from "../theme/nodeCardFields";
 import { mergeFieldStylePatch } from "../rearrange/fieldStyle";
 import { NodeWidgetOverlay } from "../components/NodeWidgetOverlay";
@@ -42,6 +46,10 @@ import {
   fetchProgressNodesForProjectsOfGoal,
   addProgressNode,
   updateProgressPosition,
+  updateProgressWebScale,
+  updateProgressFavorite,
+  updateProgressGlowAmount,
+  updateProgressGlowColor,
 } from "../db/progress";
 import {
   fetchResponsibilitiesForGoal,
@@ -68,13 +76,28 @@ import {
 import { addPage } from "../db/notes";
 import { WIDGET_TYPE_LABELS } from "../rearrange/AddFieldMenu";
 import { computeGoalCluster, nextTaskGridPosition, nodeBoxFor } from "../webGraph/goalCluster";
-import { Goal, Project, ProjectWidget, ProjectWidgetType } from "../types/project";
+import {
+  fetchPanesForWeb,
+  addPane,
+  updatePanePosition,
+  updatePaneSize,
+  updatePaneTitle,
+  updatePaneColor,
+  updatePaneOpacity,
+  updatePaneFront,
+  updatePaneHeaderFontSize,
+  updatePaneHeaderColor,
+  updatePaneLocked,
+  deletePane,
+} from "../db/panes";
+import { Goal, Project, ProjectWidget, ProjectWidgetType, Pane } from "../types/project";
 import { ProgressNode as ProgressNodeModel } from "../types/models";
 import { Responsibility, ResponsibilityCompletion, DailySchedule } from "../types/responsibility";
 import { ProgressNode as ProgressNodeView } from "../components/ProgressGraphNodes";
 import { GoalSummaryNode, ProjectCardNode, ResponsibilityCardNode, ResponsibilityCardData } from "../components/GoalGraphNodes";
 import { NoteWebNode } from "../components/NoteWebNode";
 import { WebWidgetNode, WEB_WIDGET_DEFAULT_WIDTH, WEB_WIDGET_DEFAULT_HEIGHT } from "../components/WebWidgetNode";
+import { PaneNode, PaneNodeData } from "../components/PaneNode";
 import { AngleEdge, anchorPoint, parseAngleHandleId, snapToAnchor } from "../components/DreamGraphNodes";
 import { angleFromDirection } from "../theme/nodeBoundary";
 import { View } from "../types/nav";
@@ -90,6 +113,7 @@ import { parseDecals } from "../theme/decals";
 import { DecalLayer } from "../theme/DecalLayer";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import { useMobileLayout } from "../theme/useMobileLayout";
+import { useWebNodeLock } from "../context/WebNodeLockContext";
 import "./Page.css";
 import "./GoalWebPage.css";
 
@@ -104,6 +128,32 @@ const parseNoteNodeId = (nodeId: string) => Number(nodeId.slice(3));
 const outputNodeId = (id: number) => `op-${id}`;
 const widgetNodeId = (id: number) => `wg-${id}`;
 const parseWidgetNodeId = (nodeId: string) => Number(nodeId.slice(3));
+const paneNodeId = (id: number) => `pn-${id}`;
+const parsePaneNodeId = (nodeId: string) => Number(nodeId.slice(3));
+
+// A resize drag needs the box to visibly track the cursor every frame,
+// not just jump into place on release — but routing that through the
+// canonical `panes` state (and the big node-rebuild effect it drives)
+// would rebuild the entire node graph on every pointer-move tick. This
+// patches only the live-resizing pane's own node entry directly, the
+// same "touch `nodes` during the gesture, sync canonical state only at
+// the end" split position-dragging already uses (see onNodesChange).
+function patchPaneSizeLive(setNodes: Dispatch<SetStateAction<Node[]>>, nodeId: string, width: number, height: number) {
+  setNodes((nds) =>
+    nds.map((n) =>
+      n.id === nodeId
+        ? { ...n, data: { ...n.data, pane: { ...(n.data as unknown as PaneNodeData).pane, width, height } } }
+        : n
+    )
+  );
+}
+
+function rectsOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number }
+): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
 const GOAL_NODE_ID = "goal-end";
 const NEW_RESP_SENTINEL = "__new__";
 const NEW_NOTE_SENTINEL = "__new__";
@@ -116,14 +166,37 @@ const nodeTypes = {
   noteNode: NoteWebNode,
   outputNode: OutputWebNode,
   widgetNode: WebWidgetNode,
+  paneNode: PaneNode,
 };
 const edgeTypes = { angleEdge: AngleEdge };
 
-function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (view: View) => void }) {
+function GoalWebInner({
+  goalId,
+  onNavigate,
+  isDualPaneWebRight,
+  onOpenOnLeftPane,
+}: {
+  goalId: number;
+  onNavigate: (view: View) => void;
+  isDualPaneWebRight?: boolean;
+  onOpenOnLeftPane?: (view: View) => void;
+}) {
+  // Every navigation this page triggers goes through here instead of
+  // `onNavigate` directly. In single-pane (or when this isn't the
+  // dual-pane-web right pane) it's just `onNavigate`. When this IS the
+  // right pane, navigating in place would silently change what the
+  // right pane shows — instead the target opens on the LEFT pane
+  // (pushed onto its normal history trail), leaving this web exactly as
+  // it was. See src/App.tsx's onOpenOnLeftPane.
+  const openOrNavigate = (target: View) => {
+    if (isDualPaneWebRight && onOpenOnLeftPane) onOpenOnLeftPane(target);
+    else onNavigate(target);
+  };
   const { theme } = useTheme();
   const decals = useMemo(() => parseDecals(theme.decals), [theme.decals]);
   const { overrides: pageBgOverrides } = usePageBackground();
   const mobile = useMobileLayout();
+  const { locked: nodesLocked } = useWebNodeLock();
   const { setViewport, getViewport } = useReactFlow();
   const [goal, setGoal] = useState<Goal | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -146,14 +219,26 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   const [freetextById, setFreetextById] = useState<Map<number, FreetextField>>(new Map());
   const [goalWidgets, setGoalWidgets] = useState<ProjectWidget[]>([]);
   const [projectWidgetsById, setProjectWidgetsById] = useState<Map<number, ProjectWidget[]>>(new Map());
+  // solo_dock fields switched on for the web — shown alongside the bay's
+  // own widgets regardless of whether the whole bay itself is visible
+  // (see fieldLayout.ts's soloDockRefIdsToShowOnWeb).
+  const [goalSoloDockWebWidgets, setGoalSoloDockWebWidgets] = useState<ProjectWidget[]>([]);
+  const [projectSoloDockWebWidgetsById, setProjectSoloDockWebWidgetsById] = useState<Map<number, ProjectWidget[]>>(new Map());
   const [openWidget, setOpenWidget] = useState<ProjectWidget | null>(null);
   const [fieldVisibilityTarget, setFieldVisibilityTarget] = useState<
     { category: "goal"; ownerId: number } | { category: "project"; ownerId: number } | null
   >(null);
+  // Ctrl+click a task node — Looks-only popup (size % + favorite/glow),
+  // no "Show on web" section since tasks don't have field-layout rows.
+  const [taskLooksTargetId, setTaskLooksTargetId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [creatingPassionGoal, setCreatingPassionGoal] = useState(false);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  // Collapsed Size/Zooms/+Add menu, dual-pane-web right pane only — see
+  // the header render below.
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [linkProjectChoice, setLinkProjectChoice] = useState("");
   // "" = nothing picked, NEW_RESP_SENTINEL = "add new" picked, else a
   // Responsibility id — the single dropdown drives which the button
@@ -172,6 +257,13 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   // goal_id.
   const [webWidgets, setWebWidgets] = useState<ProjectWidget[]>([]);
   const [widgetChoice, setWidgetChoice] = useState<ProjectWidgetType | "">("");
+  // Purely visual grouping rectangles placed directly on this canvas —
+  // see components/PaneNode.tsx.
+  const [panes, setPanes] = useState<Pane[]>([]);
+  const [addingPane, setAddingPane] = useState(false);
+  // Ctrl+click a pane — same "Looks" popup convention as project/task
+  // cards, just editing color/fill opacity instead of a scale percent.
+  const [paneLooksTargetId, setPaneLooksTargetId] = useState<number | null>(null);
 
   const scopeKey = `goal-web:${goalId}`;
 
@@ -191,6 +283,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       fetchNoteWebLinks("goal", goalId),
       fetchNotePagesForPicker(),
       fetchWidgetsForWeb("goal", goalId),
+      fetchPanesForWeb("goal", goalId),
     ]).then(
       ([
         g,
@@ -207,6 +300,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         noteWebLinks,
         notePages,
         webWidgetRows,
+        paneRows,
       ]) => {
         setGoal(g);
         setProjects(goalProjects);
@@ -221,6 +315,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         setNoteLinks(noteWebLinks);
         setNotePickerOptions(notePages);
         setWebWidgets(webWidgetRows);
+        setPanes(paneRows);
         setLoading(false);
 
         loadWebFieldConfig(goalProjects);
@@ -244,6 +339,13 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       .filter((f) => f.fieldType === "freetext" && f.refId !== null)
       .map((f) => f.refId!);
     setFreetextById(await fetchFreetextFields(freetextIds));
+
+    const [gSoloDockWidgets, pSoloDockWidgetLists] = await Promise.all([
+      fetchWidgetsByIds(soloDockRefIdsToShowOnWeb(gFields)),
+      Promise.all(pFieldLists.map((fields) => fetchWidgetsByIds(soloDockRefIdsToShowOnWeb(fields)))),
+    ]);
+    setGoalSoloDockWebWidgets(gSoloDockWidgets);
+    setProjectSoloDockWebWidgetsById(new Map(currentProjects.map((p, i) => [p.id, pSoloDockWidgetLists[i]])));
   };
 
   useEffect(() => {
@@ -294,18 +396,72 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     updateFieldStyle(fieldId, patch);
   };
 
+  const handleUpdateProjectWebCardScale = (projectId: number, percent: number | null) => {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, webCardScale: percent } : p)));
+    updateProjectWebCardScale(projectId, percent);
+  };
+
+  const handleUpdateProjectWebCardColor = (projectId: number, color: string | null) => {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, webCardColor: color } : p)));
+    updateProjectWebCardColor(projectId, color);
+  };
+
+  const handleUpdateTaskWebScale = (taskId: number, percent: number | null) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, webScale: percent } : t)));
+    updateProgressWebScale(taskId, percent);
+  };
+
+  const handleUpdateTaskFavorite = (taskId: number, favorite: boolean) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, favorite } : t)));
+    updateProgressFavorite(taskId, favorite);
+  };
+
+  const handleUpdateTaskGlowAmount = (taskId: number, amount: number | null) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, glowAmount: amount } : t)));
+    updateProgressGlowAmount(taskId, amount);
+  };
+
+  const handleUpdateTaskGlowColor = (taskId: number, color: string | null) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, glowColor: color } : t)));
+    updateProgressGlowColor(taskId, color);
+  };
+
+  // Only ever wired up for a passion project's own anchor node (see the
+  // goalNode useEffect below) — a real goal is still only deletable from
+  // its full detail page (GoalDetailPage.tsx's handleDeleteGoal, which
+  // this mirrors).
+  const handleDeleteGoalFromWeb = async () => {
+    if (!goal) return;
+    if (!confirm(`Delete "${goal.name}"? This also removes its widgets and everything in them.`)) return;
+    await deleteGoal(goal.id);
+    openOrNavigate({ type: "projects-home" });
+  };
+
   const handleOpenWidget = (widget: ProjectWidget) => {
     const owner = widget.projectId != null ? { projectId: widget.projectId } : { goalId: widget.goalId! };
     if (widget.widgetType === "table") {
-      onNavigate({ type: "project-table", widgetId: widget.id, ...owner });
+      openOrNavigate({ type: "project-table", widgetId: widget.id, ...owner });
     } else if (widget.widgetType === "journal") {
-      onNavigate({ type: "project-journal", widgetId: widget.id, ...owner });
+      openOrNavigate({ type: "project-journal", widgetId: widget.id, ...owner });
     } else if (widget.widgetType === "linkboard") {
-      onNavigate({ type: "project-board", widgetId: widget.id, ...owner });
+      openOrNavigate({ type: "project-board", widgetId: widget.id, ...owner });
     } else {
       // photo / dock — no dedicated page, open inline instead of navigating away.
       setOpenWidget(widget);
     }
+  };
+
+  // Persists a big-display Image Dock's drag-resized box (see
+  // NodeCardFields.tsx's .node-card-widget-dock-big) — the widget could
+  // be in any of four lists (goal/project bay, or their solo_dock-on-web
+  // counterparts), so just patch whichever one actually has it.
+  const handleResizeCardWidget = (widget: ProjectWidget, width: number, height: number) => {
+    updateWebWidgetSize(widget.id, width, height);
+    const patch = (list: ProjectWidget[]) => list.map((w) => (w.id === widget.id ? { ...w, width, height } : w));
+    setGoalWidgets(patch);
+    setGoalSoloDockWebWidgets(patch);
+    setProjectWidgetsById((prev) => new Map(Array.from(prev, ([k, v]) => [k, patch(v)])));
+    setProjectSoloDockWebWidgetsById((prev) => new Map(Array.from(prev, ([k, v]) => [k, patch(v)])));
   };
 
   // Journal/linkboard floating widgets have no inline render on the
@@ -316,11 +472,11 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   // fully inline on the node itself, so they never call this.
   const handleOpenWebWidget = (widget: ProjectWidget) => {
     if (widget.widgetType === "table") {
-      onNavigate({ type: "project-table", widgetId: widget.id, goalId });
+      openOrNavigate({ type: "project-table", widgetId: widget.id, goalId });
     } else if (widget.widgetType === "journal") {
-      onNavigate({ type: "project-journal", widgetId: widget.id, goalId });
+      openOrNavigate({ type: "project-journal", widgetId: widget.id, goalId });
     } else if (widget.widgetType === "linkboard") {
-      onNavigate({ type: "project-board", widgetId: widget.id, goalId });
+      openOrNavigate({ type: "project-board", widgetId: widget.id, goalId });
     }
   };
 
@@ -347,8 +503,17 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
                   : undefined
             )
           : [],
-        widgets: widgetsVisibleOnWeb(goalFields) ? goalWidgets : [],
+        widgets: [...(widgetsVisibleOnWeb(goalFields) ? goalWidgets : []), ...goalSoloDockWebWidgets],
         onOpenWidget: handleOpenWidget,
+        onResizeWidget: handleResizeCardWidget,
+        // A passion project's own anchor card doesn't need the same
+        // ceremony a real goal's does — smaller, shows its name with no
+        // field setup required, and can be removed right from its own
+        // web instead of only from the full detail page. See
+        // GoalSummaryNode in GoalGraphNodes.tsx.
+        name: goal?.name ?? "",
+        compact: !!goal?.isPassionProject,
+        onDelete: goal?.isPassionProject ? () => handleDeleteGoalFromWeb() : undefined,
       },
     };
 
@@ -373,10 +538,14 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
               ? { start: project.expectedDateStart, end: project.expectedDateEnd }
               : undefined
         ),
-        widgets: widgetsVisibleOnWeb(projectFieldsById.get(project.id) ?? [])
-          ? projectWidgetsById.get(project.id) ?? []
-          : [],
+        widgets: [
+          ...(widgetsVisibleOnWeb(projectFieldsById.get(project.id) ?? []) ? projectWidgetsById.get(project.id) ?? [] : []),
+          ...(projectSoloDockWebWidgetsById.get(project.id) ?? []),
+        ],
         onOpenWidget: handleOpenWidget,
+        onResizeWidget: handleResizeCardWidget,
+        scalePercent: project.webCardScale,
+        cardColor: project.webCardColor,
       },
     }));
 
@@ -387,7 +556,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       deletable: false,
       data: {
         name: resp.name,
-        description: resp.description,
+        description: htmlToPlainText(resp.description),
         consistencyPct: consistencyPercent(resp, completions),
         daysPerWeek: daysPerWeekFor(resp),
         taskTimeHours: resp.category === "daily" ? (resp.schedule as DailySchedule).taskTimeHours : undefined,
@@ -401,13 +570,17 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       position: cluster.taskPos.get(task.id) ?? { x: 0, y: 0 },
       deletable: false,
       data: {
-        category: task.category,
+        categories: task.categories,
         shortDescription: task.shortDescription,
         difficulty: task.difficulty,
         isComplete: task.isComplete,
         isRead: task.isRead,
         imageData: task.imageData,
         cost: task.cost,
+        webScale: task.webScale,
+        favorite: task.favorite,
+        glowAmount: task.glowAmount,
+        glowColor: task.glowColor,
       },
     }));
 
@@ -467,10 +640,54 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
           setWebWidgets((prev) => prev.map((x) => (x.id === w.id ? { ...x, width, height } : x)));
         },
         onOpen: () => handleOpenWebWidget(w),
+        onEditDock: () => setOpenWidget(w),
       },
     }));
 
-    setNodes([goalNode, ...projectNodes, ...responsibilityNodes, ...taskNodes, ...noteNodes, ...outputNodes, ...widgetNodes]);
+    // Panes always render behind every other node (negative zIndex),
+    // regardless of array order — except while brought to front, which
+    // jumps it far above everything else instead (see PaneNode.tsx).
+    const paneNodes: Node[] = panes.map((p) => ({
+      id: paneNodeId(p.id),
+      type: "paneNode",
+      position: { x: p.posX, y: p.posY },
+      deletable: false,
+      // Explicit false pins this one pane regardless of the canvas-wide
+      // drag lock; undefined (not true) lets it fall through to that
+      // canvas-wide nodesDraggable default instead of always overriding
+      // it — so the mobile auto-lock still applies to an unlocked pane.
+      draggable: p.locked ? false : undefined,
+      zIndex: p.isFront ? 1000 : -1,
+      data: {
+        pane: p,
+        isMobile: mobile,
+        onResizeLive: (width: number, height: number) => {
+          patchPaneSizeLive(setNodes, paneNodeId(p.id), width, height);
+        },
+        onResizeEnd: (width: number, height: number) => {
+          updatePaneSize(p.id, width, height);
+          setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, width, height } : x)));
+        },
+        onRename: () => {
+          const name = window.prompt("Rename pane:", p.title);
+          if (name === null) return;
+          const trimmed = name.trim() || "Pane";
+          updatePaneTitle(p.id, trimmed);
+          setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, title: trimmed } : x)));
+        },
+        onToggleFront: () => {
+          updatePaneFront(p.id, !p.isFront);
+          setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, isFront: !x.isFront } : x)));
+        },
+        onToggleLocked: () => {
+          updatePaneLocked(p.id, !p.locked);
+          setPanes((prev) => prev.map((x) => (x.id === p.id ? { ...x, locked: !x.locked } : x)));
+        },
+        onDelete: () => deletePane(p.id).then(load),
+      },
+    }));
+
+    setNodes([...paneNodes, goalNode, ...projectNodes, ...responsibilityNodes, ...taskNodes, ...noteNodes, ...outputNodes, ...widgetNodes]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     cluster,
@@ -484,9 +701,13 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     freetextById,
     goalWidgets,
     projectWidgetsById,
+    goalSoloDockWebWidgets,
+    projectSoloDockWebWidgetsById,
     noteLinks,
     outputs,
     webWidgets,
+    panes,
+    mobile,
   ]);
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
@@ -538,7 +759,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         targetHandle: `in-${snapToAnchor(targetAngle)}`,
         reconnectable: false,
         type: "angleEdge",
-        data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y },
+        data: { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, cuttable: true },
         style: { stroke: theme.accent, strokeWidth: 2 },
       });
     }
@@ -557,7 +778,58 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     return { x: pos.x - task.posX * scale, y: pos.y - task.posY * scale };
   };
 
-  const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
+  // A pane brought to front is meant to act like everything grouped
+  // inside it got packed into one glass box (see PaneNode.tsx's front
+  // toggle) — dragging the pane itself should carry those nodes along
+  // instead of leaving them behind. Captured at drag START (whatever
+  // currently overlaps the pane's rect, even partially — it's on the
+  // user to not overlap nodes they don't want swept up) rather than at
+  // toggle time, so a pane that's been sitting "in front" for a while
+  // still picks up whatever has since been dropped into it.
+  const packedDragRef = useRef<null | {
+    paneNodeId: string;
+    paneStart: { x: number; y: number };
+    children: { id: string; startX: number; startY: number }[];
+  }>(null);
+
+  const onNodeDragStart = (_: MouseEvent | TouchEvent, node: Node) => {
+    if (!node.id.startsWith("pn-")) return;
+    const id = parsePaneNodeId(node.id);
+    const pane = panes.find((p) => p.id === id);
+    if (!pane?.isFront) return;
+    const rect = { x: node.position.x, y: node.position.y, width: pane.width, height: pane.height };
+    const children = nodes
+      .filter((n) => n.id !== node.id)
+      .filter((n) => {
+        const nw = n.measured?.width ?? 200;
+        const nh = n.measured?.height ?? 140;
+        return rectsOverlap(rect, { x: n.position.x, y: n.position.y, width: nw, height: nh });
+      })
+      .map((n) => ({ id: n.id, startX: n.position.x, startY: n.position.y }));
+    packedDragRef.current = { paneNodeId: node.id, paneStart: { x: node.position.x, y: node.position.y }, children };
+  };
+
+  // Live-follow for the packed children, same "move with the cursor, not
+  // just on drop" reasoning as PaneNode's own resize (see onResizeLive).
+  const onNodeDrag = (_: MouseEvent | TouchEvent, node: Node) => {
+    const packed = packedDragRef.current;
+    if (!packed || packed.paneNodeId !== node.id) return;
+    const dx = node.position.x - packed.paneStart.x;
+    const dy = node.position.y - packed.paneStart.y;
+    setNodes((nds) =>
+      nds.map((n) => {
+        const child = packed.children.find((c) => c.id === n.id);
+        return child ? { ...n, position: { x: child.startX + dx, y: child.startY + dy } } : n;
+      })
+    );
+  };
+
+  // The exact per-node-type "world position -> owner-local position,
+  // then persist" logic every drag stop needs — factored out so a
+  // packed pane's carried-along children (see onNodeDragStart above) can
+  // reuse it for their own final position, not just the node the user's
+  // cursor actually dragged.
+  const persistNodePosition = (node: { id: string; position: { x: number; y: number } }) => {
     if (node.id.startsWith("tk-")) {
       const id = parseTaskNodeId(node.id);
       const task = taskById.get(id);
@@ -614,6 +886,26 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       const { x, y } = node.position;
       updateWebWidgetPosition(id, x, y);
       setWebWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, posX: x, posY: y } : w)));
+      return;
+    }
+    if (node.id.startsWith("pn-")) {
+      const id = parsePaneNodeId(node.id);
+      const { x, y } = node.position;
+      updatePanePosition(id, x, y);
+      setPanes((prev) => prev.map((p) => (p.id === id ? { ...p, posX: x, posY: y } : p)));
+    }
+  };
+
+  const onNodeDragStop = (_: MouseEvent | TouchEvent, node: Node) => {
+    persistNodePosition(node);
+    const packed = packedDragRef.current;
+    if (packed && packed.paneNodeId === node.id) {
+      const dx = node.position.x - packed.paneStart.x;
+      const dy = node.position.y - packed.paneStart.y;
+      for (const child of packed.children) {
+        persistNodePosition({ id: child.id, position: { x: child.startX + dx, y: child.startY + dy } });
+      }
+      packedDragRef.current = null;
     }
   };
 
@@ -637,7 +929,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         setFieldVisibilityTarget({ category: "goal", ownerId: goalId });
         return;
       }
-      onNavigate({ type: "goal-detail", goalId });
+      openOrNavigate({ type: "goal-detail", goalId });
       return;
     }
     if (node.id.startsWith("pr-")) {
@@ -646,19 +938,23 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         if (projectById.has(id)) setFieldVisibilityTarget({ category: "project", ownerId: id });
         return;
       }
-      if (projectById.has(id)) onNavigate({ type: "project-detail", projectId: id });
+      if (projectById.has(id)) openOrNavigate({ type: "project-detail", projectId: id });
       return;
     }
     if (node.id.startsWith("rs-")) {
       const id = parseRespNodeId(node.id);
-      onNavigate({ type: "responsibility-detail", responsibilityId: id });
+      openOrNavigate({ type: "responsibility-detail", responsibilityId: id });
       return;
     }
     if (node.id.startsWith("tk-")) {
       const id = parseTaskNodeId(node.id);
       const task = taskById.get(id);
       if (!task) return;
-      onNavigate({
+      if (event.ctrlKey) {
+        setTaskLooksTargetId(id);
+        return;
+      }
+      openOrNavigate({
         type: "progress-node-detail",
         nodeId: id,
         projectId: task.projectId ?? undefined,
@@ -670,7 +966,12 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
       const id = parseNoteNodeId(node.id);
       const link = noteLinks.find((l) => l.id === id);
       if (!link) return;
-      onNavigate({ type: "notes", pageId: link.noteId });
+      openOrNavigate({ type: "notes", pageId: link.noteId });
+      return;
+    }
+    if (node.id.startsWith("pn-")) {
+      const id = parsePaneNodeId(node.id);
+      if (event.ctrlKey && panes.some((p) => p.id === id)) setPaneLooksTargetId(id);
     }
   };
 
@@ -679,9 +980,23 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     try {
       const id = await addProject(goal?.dreamId ?? null, "New Project");
       await updateProjectGoalId(id, goalId);
-      onNavigate({ type: "project-detail", projectId: id });
+      openOrNavigate({ type: "project-detail", projectId: id });
     } finally {
       setCreatingProject(false);
+    }
+  };
+
+  // Only offered inside a passion project's own web (see the add-panel
+  // row below) — a quick way to spin up another small passion project
+  // without leaving this one, since passion projects don't need the
+  // full Projects-home "+ Passion Project" flow to feel worth creating.
+  const handleAddPassionGoal = async () => {
+    setCreatingPassionGoal(true);
+    try {
+      const id = await addPassionProject("New Passion Project");
+      openOrNavigate({ type: "goal-detail", goalId: id });
+    } finally {
+      setCreatingPassionGoal(false);
     }
   };
 
@@ -702,7 +1017,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     ).length;
     const { x, y } = nextTaskGridPosition(countForOwner);
     const id = await addProgressNode(owner, x, y);
-    onNavigate({
+    openOrNavigate({
       type: "progress-node-detail",
       nodeId: id,
       projectId,
@@ -722,7 +1037,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         const id = await addResponsibility("New Responsibility", "daily");
         await linkResponsibilityToGoal(id, goalId);
         setRespChoice("");
-        onNavigate({ type: "responsibility-detail", responsibilityId: id });
+        openOrNavigate({ type: "responsibility-detail", responsibilityId: id });
       } finally {
         setCreatingResp(false);
       }
@@ -764,6 +1079,17 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
     await addWebWidget("goal", goalId, widgetChoice, WIDGET_TYPE_LABELS[widgetChoice], x, y, WEB_WIDGET_DEFAULT_WIDTH, WEB_WIDGET_DEFAULT_HEIGHT);
     setWidgetChoice("");
     load();
+  };
+
+  const handleAddPane = async () => {
+    setAddingPane(true);
+    try {
+      const { x, y } = nextTaskGridPosition(panes.length);
+      await addPane("goal", goalId, x, y);
+      load();
+    } finally {
+      setAddingPane(false);
+    }
   };
 
   // useReactFlow()'s getViewport() throws if called before the canvas
@@ -821,9 +1147,9 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
         <Breadcrumb
           crumbs={[
             goal.isPassionProject
-              ? { label: "Projects", onClick: () => onNavigate({ type: "projects-home" }) }
-              : { label: "Goals", onClick: () => onNavigate({ type: "goals-home" }) },
-            { label: goal.name, onClick: () => onNavigate({ type: "goal-detail", goalId }) },
+              ? { label: "Projects", onClick: () => openOrNavigate({ type: "projects-home" }) }
+              : { label: "Goals", onClick: () => openOrNavigate({ type: "goals-home" }) },
+            { label: goal.name, onClick: () => openOrNavigate({ type: "goal-detail", goalId }) },
             { label: "Goal Web" },
           ]}
         />
@@ -833,9 +1159,57 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
             {goal.name} — Goal Web
           </h1>
           <div className="web-page-header-actions" style={{ position: "relative" }}>
-            <button className="add-button secondary" onClick={() => setShowSizeControl((v) => !v)}>
-              ⚄ Size
-            </button>
+            {isDualPaneWebRight ? (
+              <>
+                <button
+                  className="add-button secondary"
+                  onClick={() => setShowOverflowMenu((v) => !v)}
+                  title="More actions"
+                >
+                  ⋯
+                </button>
+                {showOverflowMenu && (
+                  <div className="goal-web-overflow-menu">
+                    <button
+                      onClick={() => {
+                        setShowSizeControl((v) => !v);
+                        setShowOverflowMenu(false);
+                      }}
+                    >
+                      ⚄ Size
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowBookmarks((v) => !v);
+                        setShowOverflowMenu(false);
+                      }}
+                    >
+                      📍 Zooms ({bookmarks.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddPanel((v) => !v);
+                        setShowOverflowMenu(false);
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <button className="add-button secondary" onClick={() => setShowSizeControl((v) => !v)}>
+                  ⚄ Size
+                </button>
+                <button className="add-button secondary" onClick={() => setShowBookmarks((v) => !v)}>
+                  {mobile ? `📍 ${bookmarks.length}` : `📍 Zooms (${bookmarks.length})`}
+                </button>
+                <button className="add-button" onClick={() => setShowAddPanel((v) => !v)}>
+                  + Add
+                </button>
+              </>
+            )}
             {showSizeControl && (
               <div className="goal-web-size-popover">
                 <label style={{ fontSize: "11px", opacity: 0.8 }}>Web size: {scale.toFixed(2)}x</label>
@@ -853,12 +1227,6 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
                 />
               </div>
             )}
-            <button className="add-button secondary" onClick={() => setShowBookmarks((v) => !v)}>
-              {mobile ? `📍 ${bookmarks.length}` : `📍 Zooms (${bookmarks.length})`}
-            </button>
-            <button className="add-button" onClick={() => setShowAddPanel((v) => !v)}>
-              + Add
-            </button>
           </div>
         </div>
 
@@ -880,6 +1248,15 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
 
           {showAddPanel && (
             <div className="goal-web-add-panel">
+              {goal?.isPassionProject && (
+                <div className="goal-web-add-panel-row">
+                  <span className="goal-web-add-panel-label">PASSION PROJECT</span>
+                  <button className="add-button secondary" onClick={handleAddPassionGoal} disabled={creatingPassionGoal}>
+                    {creatingPassionGoal ? "Adding…" : "+ New passion project"}
+                  </button>
+                </div>
+              )}
+
               <div className="goal-web-add-panel-row">
                 <span className="goal-web-add-panel-label">PROJECTS</span>
                 <button className="add-button secondary" onClick={handleAddProject} disabled={creatingProject}>
@@ -994,6 +1371,16 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
                   </button>
                 </div>
               </div>
+
+              <div className="goal-web-add-panel-row">
+                <span className="goal-web-add-panel-label">PANES</span>
+                <button className="add-button secondary" onClick={handleAddPane} disabled={addingPane}>
+                  {addingPane ? "Adding…" : "+ New pane"}
+                </button>
+                <span style={{ fontSize: "10px", opacity: 0.65 }}>
+                  A colored backdrop for grouping nearby nodes. Ctrl+click one to edit its color/opacity.
+                </span>
+              </div>
             </div>
           )}
 
@@ -1024,6 +1411,8 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={onNodeClick}
             onConnect={onConnect}
@@ -1035,6 +1424,7 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
             connectionLineType={ConnectionLineType.Straight}
             minZoom={0.05}
             maxZoom={4}
+            nodesDraggable={!nodesLocked}
             panOnDrag
             zoomOnPinch
             proOptions={{ hideAttribution: true }}
@@ -1073,8 +1463,87 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
             handleUpdateFieldWeb(fieldVisibilityTarget.category, fieldVisibilityTarget.ownerId, fieldId, patch)
           }
           onClose={() => setFieldVisibilityTarget(null)}
+          looks={
+            fieldVisibilityTarget.category === "project"
+              ? {
+                  scalePercent: projectById.get(fieldVisibilityTarget.ownerId)?.webCardScale ?? null,
+                  onScaleChange: (percent) => handleUpdateProjectWebCardScale(fieldVisibilityTarget.ownerId, percent),
+                  color: {
+                    value: projectById.get(fieldVisibilityTarget.ownerId)?.webCardColor ?? null,
+                    onChange: (color) => handleUpdateProjectWebCardColor(fieldVisibilityTarget.ownerId, color),
+                  },
+                }
+              : undefined
+          }
         />
       )}
+      {taskLooksTargetId != null &&
+        (() => {
+          const task = taskById.get(taskLooksTargetId);
+          if (!task) return null;
+          return (
+            <NodeFieldVisibilityPopover
+              title={task.shortDescription || "Task"}
+              onClose={() => setTaskLooksTargetId(null)}
+              looks={{
+                scalePercent: task.webScale,
+                onScaleChange: (percent) => handleUpdateTaskWebScale(task.id, percent),
+                favorite: {
+                  value: task.favorite,
+                  onToggle: (value) => handleUpdateTaskFavorite(task.id, value),
+                  glowAmount: task.glowAmount,
+                  onGlowAmountChange: (amount) => handleUpdateTaskGlowAmount(task.id, amount),
+                  glowColor: task.glowColor,
+                  onGlowColorChange: (color) => handleUpdateTaskGlowColor(task.id, color),
+                },
+              }}
+            />
+          );
+        })()}
+      {paneLooksTargetId != null &&
+        (() => {
+          const pane = panes.find((p) => p.id === paneLooksTargetId);
+          if (!pane) return null;
+          return (
+            <NodeFieldVisibilityPopover
+              title={pane.title || "Pane"}
+              onClose={() => setPaneLooksTargetId(null)}
+              looks={{
+                scalePercent: null,
+                onScaleChange: () => {},
+                hideSize: true,
+                color: {
+                  value: pane.color,
+                  onChange: (color) => {
+                    const next = color ?? "#38bdf8";
+                    updatePaneColor(pane.id, next);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, color: next } : p)));
+                  },
+                },
+                opacity: {
+                  valuePercent: Math.round(pane.opacity * 100),
+                  onChange: (percent) => {
+                    const next = percent / 100;
+                    updatePaneOpacity(pane.id, next);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, opacity: next } : p)));
+                  },
+                },
+                headerStyle: {
+                  fontSize: pane.headerFontSize,
+                  onFontSizeChange: (px) => {
+                    updatePaneHeaderFontSize(pane.id, px);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, headerFontSize: px } : p)));
+                  },
+                  textColor: pane.headerColor,
+                  onTextColorChange: (color) => {
+                    updatePaneHeaderColor(pane.id, color);
+                    setPanes((prev) => prev.map((p) => (p.id === pane.id ? { ...p, headerColor: color } : p)));
+                  },
+                },
+              }}
+            />
+          );
+        })()}
       {editingOutput && (
         <OutputEditorModal
           output={editingOutput}
@@ -1093,10 +1562,25 @@ function GoalWebInner({ goalId, onNavigate }: { goalId: number; onNavigate: (vie
   );
 }
 
-export function GoalWebPage({ goalId, onNavigate }: { goalId: number; onNavigate: (view: View) => void }) {
+export function GoalWebPage({
+  goalId,
+  onNavigate,
+  isDualPaneWebRight,
+  onOpenOnLeftPane,
+}: {
+  goalId: number;
+  onNavigate: (view: View) => void;
+  isDualPaneWebRight?: boolean;
+  onOpenOnLeftPane?: (view: View) => void;
+}) {
   return (
     <ReactFlowProvider>
-      <GoalWebInner goalId={goalId} onNavigate={onNavigate} />
+      <GoalWebInner
+        goalId={goalId}
+        onNavigate={onNavigate}
+        isDualPaneWebRight={isDualPaneWebRight}
+        onOpenOnLeftPane={onOpenOnLeftPane}
+      />
     </ReactFlowProvider>
   );
 }

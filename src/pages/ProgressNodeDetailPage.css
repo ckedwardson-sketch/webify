@@ -41,6 +41,20 @@ html.mobile-layout .progress-field-grid {
   grid-template-columns: 1fr;
 }
 
+.progress-labor-type-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.progress-labor-type-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 .progress-detail-image-wrapper {
   position: relative;
   margin-bottom: 16px;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FieldLayoutRow, updateFreetextField } from "../db/fieldLayout";
-import { contentStyle, headerStyle, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle } from "../rearrange/fieldStyle";
+import { RichTextField } from "../editor/RichTextField";
 
 // A generic label+textarea "area" — the one genuinely new field kind
 // the generalized rearrange system adds (see db/fieldLayout.ts), for
@@ -38,14 +39,14 @@ export function FreetextFieldEditor({
           onBlur={() => updateFreetextField(refId, { label: labelDraft })}
         />
       </div>
-      <textarea
+      <RichTextField
         className="instructions-textarea"
-        rows={3}
         style={contentStyle(field)}
         value={contentDraft}
-        onChange={(e) => setContentDraft(e.target.value)}
+        onChange={setContentDraft}
         onBlur={() => updateFreetextField(refId, { content: contentDraft })}
-        onMouseUp={(e) => handleFieldResizeMouseUp(e, field.id, onResize)}
+        fieldId={field.id}
+        onResizeField={onResize}
       />
     </div>
   );

@@ -4,8 +4,12 @@
   gap: var(--space-md);
 }
 
+/* One column on mobile: at 2-up, each slot was squeezed short enough
+   that its content barely had room to render. One wide card per row
+   (1.8:1) gives each app enough height, and you scroll down for the
+   next one instead of seeing everything shrunk to fit at once. */
 html.mobile-layout .quick-apps-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .quick-app-slot {
@@ -14,14 +18,10 @@ html.mobile-layout .quick-apps-grid {
   min-height: 220px;
 }
 
-/* At 2 columns a 4:5 slot runs taller than it needs to — cap it so
-   ~2.5 rows peek into the viewport as a scroll affordance, since
-   horizontal panning is disabled app-wide on mobile (overflow-x: clip
-   on .app-content, see theme/mobile.css). */
 html.mobile-layout .quick-app-slot {
-  aspect-ratio: auto;
+  aspect-ratio: 1.8 / 1;
   min-height: 0;
-  height: 34vh;
+  height: auto;
 }
 
 .quick-app-slot-empty {

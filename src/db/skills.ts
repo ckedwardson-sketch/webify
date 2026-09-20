@@ -504,7 +504,8 @@ export async function fetchSkillSettings(skillId: number): Promise<SkillSettings
             direction, h_spacing as hSpacing, v_spacing as vSpacing, branch_spacing as branchSpacing,
             historical_spacing as historicalSpacing, task_offset as taskOffset,
             path_bend_distance as pathBendDistance, dream_node_fields as dreamNodeFields,
-            dream_node_active_goal_id as dreamNodeActiveGoalId
+            dream_node_active_goal_id as dreamNodeActiveGoalId,
+            task_cooldown_type as taskCooldownType, task_cooldown_hours as taskCooldownHours
      FROM skill_settings WHERE skill_id = $1`,
     [skillId]
   );
@@ -524,6 +525,8 @@ export async function fetchSkillSettings(skillId: number): Promise<SkillSettings
     pathBendDistance: row.pathBendDistance ?? DEFAULT_SKILL_SETTINGS.pathBendDistance,
     dreamNodeFields: row.dreamNodeFields ? (JSON.parse(row.dreamNodeFields) as SkillDreamNodeField[]) : DEFAULT_SKILL_SETTINGS.dreamNodeFields,
     dreamNodeActiveGoalId: row.dreamNodeActiveGoalId ?? null,
+    taskCooldownType: row.taskCooldownType ?? DEFAULT_SKILL_SETTINGS.taskCooldownType,
+    taskCooldownHours: row.taskCooldownHours ?? DEFAULT_SKILL_SETTINGS.taskCooldownHours,
   };
 }
 
@@ -532,15 +535,17 @@ export async function saveSkillSettings(settings: SkillSettings): Promise<void> 
   await db.execute(
     `INSERT INTO skill_settings
        (skill_id, ring_palette, node_width, node_height, direction, h_spacing, v_spacing, branch_spacing,
-        historical_spacing, task_offset, path_bend_distance, dream_node_fields, dream_node_active_goal_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        historical_spacing, task_offset, path_bend_distance, dream_node_fields, dream_node_active_goal_id,
+        task_cooldown_type, task_cooldown_hours)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      ON CONFLICT(skill_id) DO UPDATE SET
        ring_palette = excluded.ring_palette, node_width = excluded.node_width,
        node_height = excluded.node_height, direction = excluded.direction,
        h_spacing = excluded.h_spacing, v_spacing = excluded.v_spacing,
        branch_spacing = excluded.branch_spacing, historical_spacing = excluded.historical_spacing,
        task_offset = excluded.task_offset, path_bend_distance = excluded.path_bend_distance,
-       dream_node_fields = excluded.dream_node_fields, dream_node_active_goal_id = excluded.dream_node_active_goal_id`,
+       dream_node_fields = excluded.dream_node_fields, dream_node_active_goal_id = excluded.dream_node_active_goal_id,
+       task_cooldown_type = excluded.task_cooldown_type, task_cooldown_hours = excluded.task_cooldown_hours`,
     [
       settings.skillId,
       settings.ringPalette,
@@ -555,6 +560,8 @@ export async function saveSkillSettings(settings: SkillSettings): Promise<void> 
       settings.pathBendDistance,
       JSON.stringify(settings.dreamNodeFields),
       settings.dreamNodeActiveGoalId,
+      settings.taskCooldownType,
+      settings.taskCooldownHours,
     ]
   );
 }

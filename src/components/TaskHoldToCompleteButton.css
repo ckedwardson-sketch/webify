@@ -1,0 +1,49 @@
+.task-hold-complete-button {
+  position: relative;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: transform 0.1s ease;
+}
+
+.task-hold-complete-button.holding {
+  transform: scale(0.98);
+}
+
+.task-hold-complete-button.disabled {
+  cursor: default;
+  background: var(--color-bg-secondary);
+  opacity: 0.7;
+}
+
+.task-hold-complete-button.disabled .task-hold-complete-label {
+  color: var(--color-text-secondary);
+  text-shadow: none;
+}
+
+.task-hold-complete-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: color-mix(in srgb, var(--color-accent) 70%, white 0%);
+  opacity: 0.6;
+  transition: width 0.05s linear;
+  pointer-events: none;
+  box-shadow: 0 0 10px 1px var(--color-accent);
+}
+
+.task-hold-complete-label {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  color: #fff;
+}

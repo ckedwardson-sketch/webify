@@ -30,6 +30,12 @@ const TOGGLE_FIELDS: { key: keyof EditorToolSettings; label: string; desc: strin
     desc: 'Type "/" at the start of a line to insert a block.',
     focusKey: "editor-slash-command",
   },
+  {
+    key: "spellcheckEnabled",
+    label: "Spellcheck",
+    desc: "Underlines misspelled words and adds suggestions to the right-click / long-press menu.",
+    focusKey: "editor-spellcheck",
+  },
 ];
 
 export function SettingsEditorPage({

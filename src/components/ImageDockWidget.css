@@ -69,6 +69,22 @@ html.mobile-layout .image-dock-resize-handle {
   gap: 10px;
 }
 
+.image-dock-editor-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Standalone use gives .image-dock-box real room to stretch into via the
+   viewport-sized .image-dock-overlay; embedded use (inside
+   NodeWidgetOverlay, which sizes to content) needs an explicit height
+   instead since there's no ancestor flex context to stretch into. */
+.image-dock-editor-content .image-dock-box {
+  min-height: 320px;
+}
+
 .image-dock-trash {
   margin-left: auto;
   width: 40px;

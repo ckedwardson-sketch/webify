@@ -173,6 +173,40 @@ html.mobile-layout .goal-web-bookmarks-panel {
   color: #fff;
 }
 
+/* Dual-pane-web right pane only — Size/Zooms/+Add collapsed behind the
+   "⋯" button in the header (see GoalWebPage.tsx's isDualPaneWebRight
+   branch). Reuses the same popover-card look as .goal-web-size-popover. */
+.goal-web-overflow-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  background: rgba(20, 20, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  padding: 6px;
+}
+
+.goal-web-overflow-menu button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.goal-web-overflow-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* Small invisible drag points at the bottom of a Goal Web card (see
    GoalGraphNodes.tsx's GoalWebLinkHandles) — same "big invisible hit
    area, no visible dot" convention as DreamWebPage.css's
@@ -185,4 +219,32 @@ html.mobile-layout .goal-web-bookmarks-panel {
   border-radius: 50% !important;
   opacity: 0 !important;
   cursor: crosshair;
+}
+
+/* Delete button on a passion project's compact anchor card (see
+   GoalGraphNodes.tsx's GoalSummaryNode) — a real goal's card never gets
+   one (data.onDelete is only ever set for isPassionProject goals). */
+.goal-summary-node-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-danger);
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.goal-summary-node-delete:hover {
+  background: var(--color-danger);
+  color: #fff;
 }

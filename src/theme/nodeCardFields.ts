@@ -6,6 +6,7 @@
 // into the result; everything else (including any field type this
 // system has no renderer for) is silently skipped.
 import { FieldLayoutRow, FIELD_TYPE_LABELS, FreetextField, webFieldKind } from "../db/fieldLayout";
+import { htmlToPlainText } from "../utils/richText";
 
 export interface NodeCardTextItem {
   id: number;
@@ -57,7 +58,8 @@ export function buildNodeCardTextItems(
     const kind = webFieldKind(f.fieldType);
     if (kind === "text") {
       const ft = f.fieldType === "freetext" && f.refId != null ? freetextById.get(f.refId) : undefined;
-      const raw = f.fieldType === "freetext" ? ft?.content : textFor(f.fieldType);
+      const rawHtml = f.fieldType === "freetext" ? ft?.content : textFor(f.fieldType);
+      const raw = rawHtml ? htmlToPlainText(rawHtml) : rawHtml;
       if (!raw || !raw.trim()) continue;
       const label = f.customLabel ?? (f.fieldType === "freetext" ? ft?.label ?? "" : FIELD_TYPE_LABELS[f.fieldType]);
       items.push({ id: f.id, header: f.webHeader ? label : null, text: truncate(raw) });

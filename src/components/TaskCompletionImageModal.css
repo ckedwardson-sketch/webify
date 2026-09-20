@@ -1,0 +1,8 @@
+.task-completion-image-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.task-completion-image-error {
+  color: var(--color-danger);
+}

@@ -23,22 +23,36 @@ export interface GoalSummaryNodeData {
   webFields: NodeCardTextItem[];
   widgets: ProjectWidget[];
   onOpenWidget: (widget: ProjectWidget) => void;
+  onResizeWidget?: (widget: ProjectWidget, width: number, height: number) => void;
+  // The goal's own name — shown by default on a compact card (see
+  // `compact` below) so a passion project's anchor node is meaningful
+  // with zero field setup, instead of demanding you pick fields to show
+  // before it displays anything at all.
+  name?: string;
+  // Passion projects (Goal.isPassionProject) don't need the same
+  // ceremony a real goal's anchor card does — smaller, shows its name
+  // by default, and offers a delete button right here instead of only
+  // on the full detail page. See ProjectsHomePage.tsx's comment on
+  // isPassionProject.
+  compact?: boolean;
+  onDelete?: () => void;
 }
 
 export function GoalSummaryNode({ data }: { data: GoalSummaryNodeData }) {
   const { theme } = useTheme();
   const hasExtras = data.webFields.length > 0 || data.widgets.length > 0;
   const growToFit = theme.nodeCardGrowToFit === "1";
+  const compact = !!data.compact;
   return (
     <div
       style={{
-        width: "180px",
-        minHeight: "90px",
+        width: compact ? "130px" : "180px",
+        minHeight: compact ? "56px" : "90px",
         borderRadius: "14px",
         border: `2px dashed ${theme.accent}`,
         background: "rgba(0,0,0,0.35)",
         color: "#ffffff",
-        padding: "10px 12px",
+        padding: compact ? "6px 8px" : "10px 12px",
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
@@ -49,6 +63,19 @@ export function GoalSummaryNode({ data }: { data: GoalSummaryNodeData }) {
       title="Goal's own goals — click to edit on the goal page"
     >
       <GoalWebLinkHandles />
+      {data.onDelete && (
+        <button
+          type="button"
+          className="goal-summary-node-delete"
+          title="Delete this goal"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onDelete!();
+          }}
+        >
+          ✕
+        </button>
+      )}
       <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: theme.accent }}>
         🎯 GOAL
       </span>
@@ -57,9 +84,12 @@ export function GoalSummaryNode({ data }: { data: GoalSummaryNodeData }) {
           items={data.webFields}
           widgets={data.widgets}
           onOpenWidget={data.onOpenWidget}
+          onResizeWidget={data.onResizeWidget}
           fullText={growToFit}
           capHeightPx={growToFit ? undefined : 70}
         />
+      ) : compact ? (
+        <span style={{ fontSize: "12px", fontWeight: 600 }}>{data.name}</span>
       ) : (
         <span style={{ fontSize: "11px", opacity: 0.7 }}>
           Nothing shown yet — pick fields to show on the web via 🎨 on the goal page.
@@ -76,11 +106,17 @@ export interface ProjectCardNodeData {
   webFields: NodeCardTextItem[];
   widgets: ProjectWidget[];
   onOpenWidget: (widget: ProjectWidget) => void;
+  onResizeWidget?: (widget: ProjectWidget, width: number, height: number) => void;
+  // "Looks" section of NodeFieldVisibilityPopover — see GoalWebPage.tsx.
+  // Null = 100% size / theme default background.
+  scalePercent?: number | null;
+  cardColor?: string | null;
 }
 
 export function ProjectCardNode({ data }: { data: ProjectCardNodeData }) {
   const { theme } = useTheme();
   const growToFit = theme.nodeCardGrowToFit === "1";
+  const scale = (data.scalePercent ?? 100) / 100;
   return (
     <div
       style={{
@@ -88,13 +124,15 @@ export function ProjectCardNode({ data }: { data: ProjectCardNodeData }) {
         minHeight: "84px",
         borderRadius: "12px",
         border: `2px solid ${theme.goalProjectNodeOutlineColor}`,
-        background: theme.goalProjectNodeBackground,
+        background: data.cardColor ?? theme.goalProjectNodeBackground,
         color: "#ffffff",
         padding: "9px 11px",
         boxSizing: "border-box",
         cursor: "pointer",
         boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
         position: "relative",
+        transform: scale !== 1 ? `scale(${scale})` : undefined,
+        transformOrigin: "top left",
       }}
     >
       <GoalWebLinkHandles />
@@ -164,6 +202,7 @@ export function ProjectCardNode({ data }: { data: ProjectCardNodeData }) {
           items={data.webFields}
           widgets={data.widgets}
           onOpenWidget={data.onOpenWidget}
+          onResizeWidget={data.onResizeWidget}
           fullText={growToFit}
           capHeightPx={growToFit ? undefined : 60}
         />

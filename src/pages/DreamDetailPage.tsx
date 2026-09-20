@@ -42,7 +42,9 @@ import { FreetextFieldEditor } from "../components/FreetextFieldEditor";
 import { useRearrangeMode, AddableField, FieldClipboard } from "../rearrange/RearrangeModeContext";
 import { useFieldStyleRegistry } from "../rearrange/FieldStyleRegistryContext";
 import { RearrangeableField, FieldGap } from "../rearrange/RearrangeableField";
-import { contentStyle, headerStyle, mergeFieldStylePatch, handleFieldResizeMouseUp } from "../rearrange/fieldStyle";
+import { contentStyle, headerStyle, mergeFieldStylePatch } from "../rearrange/fieldStyle";
+import { RichTextField } from "../editor/RichTextField";
+import { FieldHeader } from "../components/FieldHeader";
 import { withFieldUndo } from "../rearrange/fieldUndo";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import { useTheme } from "../theme/ThemeContext";
@@ -504,7 +506,7 @@ export function DreamDetailPage({
         return (
           <label className="dream-field">
             <div className="field-slot-header-row">
-              <span className="dream-field-label" style={headerStyle(f)}>Expected date</span>
+              <FieldHeader as="span" defaultLabel="Expected date" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="dream-field-label" style={headerStyle(f)} />
             </div>
             <DreamDateRangeField
               start={dream.expectedDateStart}
@@ -536,16 +538,16 @@ export function DreamDetailPage({
         return (
           <label className="dream-field">
             <div className="field-slot-header-row">
-              <span className="dream-field-label" style={headerStyle(f)}>Reasoning — why this dream matters</span>
+              <FieldHeader as="span" defaultLabel="Reasoning — why this dream matters" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="dream-field-label" style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={4}
               style={contentStyle(f)}
               value={reasoningDraft}
-              onChange={(e) => setReasoningDraft(e.target.value)}
+              onChange={setReasoningDraft}
               onBlur={commitReasoning}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="Why does this matter to you?"
             />
           </label>
@@ -554,16 +556,16 @@ export function DreamDetailPage({
         return (
           <label className="dream-field">
             <div className="field-slot-header-row">
-              <span className="dream-field-label" style={headerStyle(f)}>Other words</span>
+              <FieldHeader as="span" defaultLabel="Other words" customLabel={f.customLabel} editable={rearranging} onRename={(label) => handleFieldStyleRename(f.id, label)} className="dream-field-label" style={headerStyle(f)} />
             </div>
-            <textarea
+            <RichTextField
               className="instructions-textarea"
-              rows={4}
               style={contentStyle(f)}
               value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
+              onChange={setNotesDraft}
               onBlur={commitNotes}
-              onMouseUp={(e) => handleFieldResizeMouseUp(e, f.id, handleFieldResize)}
+              fieldId={f.id}
+              onResizeField={handleFieldResize}
               placeholder="Anything else — details, feelings, plans…"
             />
           </label>

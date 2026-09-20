@@ -1,5 +1,5 @@
 // src/components/DreamGraphNodes.tsx
-import { BaseEdge, EdgeProps, Handle, Position, useViewport } from "@xyflow/react";
+import { BaseEdge, EdgeProps, Handle, Position, useReactFlow, useViewport } from "@xyflow/react";
 import { useTheme } from "../theme/ThemeContext";
 import { clipPathFor, contentInsetFor } from "../theme/nodeShapes";
 import { pointOnShapeBoundary } from "../theme/nodeBoundary";
@@ -175,13 +175,46 @@ export interface AngleEdgeData {
   y1: number;
   x2: number;
   y2: number;
+  // Double-clicking anywhere along the line removes it — only set on
+  // edges the user actually drew/attached themselves (dream links,
+  // dream-goal attach lines, Goal Web links). Left unset on read-only
+  // reflections (e.g. Dream Web "full view"'s copies of a goal's own
+  // Goal Web links) where deleting wouldn't do anything sensible anyway.
+  // Clicking/pressing Delete on a selected edge already removed edges
+  // before this existed (see each page's onEdgesDelete) — the double-
+  // click is purely a discoverability fix for that, reusing the exact
+  // same removal path via React Flow's own deleteElements. (A hover-×
+  // button was tried first and dropped — double-click along the line
+  // reads clearer than hunting for a small button at the midpoint.)
+  cuttable?: boolean;
   [key: string]: unknown;
 }
 
-export function AngleEdge({ data, style, markerEnd }: EdgeProps) {
+export function AngleEdge({ id, data, style, markerEnd }: EdgeProps) {
   const d = data as AngleEdgeData | undefined;
+  const { deleteElements } = useReactFlow();
   if (!d) return null;
-  return <BaseEdge path={`M ${d.x1} ${d.y1} L ${d.x2} ${d.y2}`} style={style} markerEnd={markerEnd} />;
+  return (
+    <>
+      {d.cuttable && (
+        <path
+          className="angle-edge-cut-target"
+          d={`M ${d.x1} ${d.y1} L ${d.x2} ${d.y2}`}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={16}
+          pointerEvents="stroke"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            deleteElements({ edges: [{ id }] });
+          }}
+        >
+          <title>Double-click to delete this link</title>
+        </path>
+      )}
+      <BaseEdge path={`M ${d.x1} ${d.y1} L ${d.x2} ${d.y2}`} style={style} markerEnd={markerEnd} />
+    </>
+  );
 }
 
 // Given a node's top-left canvas position and its box size, the exact

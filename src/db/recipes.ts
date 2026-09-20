@@ -1,6 +1,6 @@
 // src/db/recipes.ts
 import { getDb, generateUniqueDisplayId } from "./database";
-import { Recipe } from "../types/models";
+import { Recipe, FutureSlotLink } from "../types/models";
 
 export interface GraphRecipeNode {
   id: number;
@@ -47,7 +47,9 @@ type RawRecipeRow = {
   isFutureSlot: number;
   futureSlotOrigin: number;
   inspiration?: string | null;
-  futureSlotLinks?: string | null; // JSON-encoded number[]
+  futureSlotLinks?: string | null; // JSON-encoded FutureSlotLink[]
+  referenceContent?: string | null;
+  editorWidth?: number | null;
 };
 
 function mapRecipeRow(row: RawRecipeRow): Recipe {
@@ -62,11 +64,16 @@ function mapRecipeRow(row: RawRecipeRow): Recipe {
     );
   }
 
-  let futureSlotRecipeLinks: number[] | undefined;
+  let futureSlotLinks: FutureSlotLink[] | undefined;
   if (row.futureSlotLinks) {
     try {
       const parsed = JSON.parse(row.futureSlotLinks);
-      if (Array.isArray(parsed)) futureSlotRecipeLinks = parsed;
+      if (Array.isArray(parsed)) {
+        futureSlotLinks = parsed.filter(
+          (item): item is FutureSlotLink =>
+            !!item && typeof item === "object" && typeof item.id === "string" && typeof item.url === "string"
+        );
+      }
     } catch {
       // Ignore malformed JSON rather than throwing — treat as "no links".
     }
@@ -87,7 +94,9 @@ function mapRecipeRow(row: RawRecipeRow): Recipe {
     isFutureSlot: toBool(row.isFutureSlot),
     futureSlotOrigin: toBool(row.futureSlotOrigin),
     inspiration: row.inspiration ?? undefined,
-    futureSlotRecipeLinks,
+    futureSlotLinks,
+    referenceContent: row.referenceContent ?? undefined,
+    editorWidth: row.editorWidth ?? undefined,
   };
 }
 
@@ -110,7 +119,9 @@ const RECIPE_COLUMNS = `
   is_future_slot as isFutureSlot,
   future_slot_origin as futureSlotOrigin,
   inspiration,
-  future_slot_links as futureSlotLinks
+  future_slot_links as futureSlotLinks,
+  reference_content as referenceContent,
+  editor_width as editorWidth
 `;
 
 export async function fetchAllGraphData(): Promise<GraphData> {
@@ -323,15 +334,31 @@ export async function updateRecipeInspiration(id: number, text: string): Promise
   await db.execute("UPDATE recipes SET inspiration = $1 WHERE id = $2", [text, id]);
 }
 
-export async function updateFutureSlotRecipeLinks(
+export async function updateFutureSlotLinks(
   id: number,
-  linkedRecipeIds: number[]
+  links: FutureSlotLink[]
 ): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE recipes SET future_slot_links = $1 WHERE id = $2", [
-    JSON.stringify(linkedRecipeIds),
+    JSON.stringify(links),
     id,
   ]);
+}
+
+// The Future Slot's persistent "second column" content.
+export async function updateReferenceContent(id: number, text: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE recipes SET reference_content = $1 WHERE id = $2", [
+    text,
+    id,
+  ]);
+}
+
+// The user-draggable width (px) of this recipe's editor column — null
+// clears back to the theme default (see RecipeDetailPage's resize handle).
+export async function updateRecipeEditorWidth(id: number, widthPx: number | null): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE recipes SET editor_width = $1 WHERE id = $2", [widthPx, id]);
 }
 
 // Flips isFutureSlot off ("Make it a Real Recipe"). future_slot_origin

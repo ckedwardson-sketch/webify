@@ -162,7 +162,10 @@ function SaveLayoutDialog({ onClose }: { onClose: () => void }) {
     if (!target || !name.trim()) return;
     setSaving(true);
     try {
-      await saveLayout(name.trim(), target.category, includeContent, target.widgets);
+      await saveLayout(name.trim(), target.category, includeContent, target.widgets, {
+        category: target.category,
+        ownerId: target.ownerId,
+      });
       onClose();
     } finally {
       setSaving(false);
