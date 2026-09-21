@@ -3,6 +3,7 @@
 // from the per-page Breadcrumb (Breadcrumb.tsx), which shows entity
 // ancestry ("Projects / MyProject / Journal") rather than the sequence of
 // pages actually visited.
+
 import { View } from "../types/nav";
 
 export interface PathEntry {
@@ -10,6 +11,7 @@ export interface PathEntry {
   view: View;
   label: string;
 }
+
 import { fetchDream } from "../db/dreams";
 import { fetchProject, fetchWidget } from "../db/projects";
 import { fetchGoal } from "../db/goals";
