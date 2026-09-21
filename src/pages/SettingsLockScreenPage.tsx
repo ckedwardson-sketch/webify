@@ -1,0 +1,274 @@
+import { useEffect, useRef, useState } from "react";
+import { View } from "../types/nav";
+import { Breadcrumb } from "../components/Breadcrumb";
+import {
+  LOCK_SCREEN_DEFAULTS,
+  LockScreenSettings,
+  fetchLockScreenSettings,
+  normalizeLockScreenSettings,
+  saveLockScreenSettings,
+} from "../lockscreen/lockScreenSettings";
+import { getNative } from "../lockscreen/nativeBridge";
+import { pushLockScreenNow, requestLockScreenRefresh } from "../lockscreen/lockScreenSync";
+import "./Page.css";
+import "./SettingsShared.css";
+import "./SettingsThemePage.css"; // .theme-number-input, reused below
+import "./SettingsMobilePage.css"; // .mobile-spacing-field layout, reused below
+
+// Crops the picked image to the phone's screen shape and shrinks it to
+// 1080px wide before it crosses into native code — a full camera photo
+// as a base64 string is several MB for no visible benefit.
+async function coverCropToDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const screenRatio = window.screen.height / window.screen.width;
+  const targetW = 1080;
+  const targetH = Math.round(targetW * (screenRatio > 1 ? screenRatio : 2280 / 1080));
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Couldn't prepare the image.");
+  const scale = Math.max(targetW / bitmap.width, targetH / bitmap.height);
+  const drawW = bitmap.width * scale;
+  const drawH = bitmap.height * scale;
+  ctx.drawImage(bitmap, (targetW - drawW) / 2, (targetH - drawH) / 2, drawW, drawH);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.88);
+}
+
+type NumericKey = "fontSize" | "bgDim" | "bannerTop" | "listTop" | "listBottom";
+type ColorKey = "textColor" | "secondaryColor" | "bgColor";
+type ToggleKey = "enabled" | "showTasks" | "showResponsibilities";
+
+function RangeField({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="mobile-spacing-field">
+      <span>
+        {label}: {value}
+        {suffix}
+      </span>
+      <input type="range" min={min} max={max} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </label>
+  );
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="mobile-spacing-field">
+      <span>{label}</span>
+      <div className="mobile-spacing-field-row">
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
+        <span>{value}</span>
+      </div>
+    </label>
+  );
+}
+
+export function SettingsLockScreenPage({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const native = getNative();
+  const [settings, setSettings] = useState<LockScreenSettings>(LOCK_SCREEN_DEFAULTS);
+  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [bgPreview, setBgPreview] = useState<string | null>(null);
+  const skipNextSave = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchLockScreenSettings()
+      .then((s) => {
+        skipNextSave.current = true;
+        setSettings(s);
+        setLoaded(true);
+      })
+      .catch((err) => setStatus(`Couldn't load settings: ${err instanceof Error ? err.message : String(err)}`));
+    const preview = getNative()?.getBackgroundPreview();
+    if (preview) setBgPreview(preview);
+  }, []);
+
+  // Sliders fire on every tick — save once things settle, then let the
+  // phone redraw.
+  useEffect(() => {
+    if (!loaded) return;
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+    const handle = setTimeout(() => {
+      saveLockScreenSettings(settings)
+        .then(() => requestLockScreenRefresh(300))
+        .catch((err) => setStatus(`Couldn't save: ${err instanceof Error ? err.message : String(err)}`));
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [settings, loaded]);
+
+  const setNumber = (key: NumericKey, value: number) =>
+    setSettings((prev) => normalizeLockScreenSettings({ ...prev, [key]: value }));
+  const setColor = (key: ColorKey, value: string) => setSettings((prev) => ({ ...prev, [key]: value }));
+  const setToggle = (key: ToggleKey, value: boolean) => setSettings((prev) => ({ ...prev, [key]: value }));
+
+  const applyNow = async () => {
+    setBusy(true);
+    try {
+      await saveLockScreenSettings(settings);
+      setStatus(await pushLockScreenNow(true));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pickImage = async (file: File) => {
+    const api = getNative();
+    if (!api) return;
+    setBusy(true);
+    try {
+      const result = api.setBackground(await coverCropToDataUrl(file));
+      setBgPreview(api.getBackgroundPreview() || null);
+      setStatus(result === "ok" ? await pushLockScreenNow(true) : result);
+    } catch (err) {
+      setStatus(`Couldn't use that image: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearImage = async () => {
+    const api = getNative();
+    if (!api) return;
+    setBusy(true);
+    try {
+      api.clearBackground();
+      setBgPreview(null);
+      setStatus(await pushLockScreenNow(true));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="page">
+      <Breadcrumb
+        crumbs={[
+          { label: "Settings", onClick: () => onNavigate({ type: "settings-home" }) },
+          { label: "Lock Screen" },
+        ]}
+      />
+      <h1 className="page-title">Lock Screen</h1>
+      <p className="page-text">
+        Draws your task and responsibility lists onto the phone's lock screen wallpaper, and keeps them current while
+        Webify is closed. It's a picture, so it can't be tapped — check items off in the app. Notifications draw on
+        top of it, so keep the list area clear of the clock.
+      </p>
+      {!native && (
+        <p className="page-text">
+          This only takes effect in the Android app. You can still set it up here — the settings sync to the phone with
+          the rest of the database — but the background image has to be chosen on the phone.
+        </p>
+      )}
+
+      <div className="settings-groups">
+        <section>
+          <h2 className="settings-group-title">Show</h2>
+          <div className="mobile-spacing-fields">
+            <label>
+              <input type="checkbox" checked={settings.enabled} onChange={(e) => setToggle("enabled", e.target.checked)} />{" "}
+              Update the lock screen wallpaper
+            </label>
+            <label>
+              <input type="checkbox" checked={settings.showTasks} onChange={(e) => setToggle("showTasks", e.target.checked)} />{" "}
+              Tasks (list and status banner above the clock)
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.showResponsibilities}
+                onChange={(e) => setToggle("showResponsibilities", e.target.checked)}
+              />{" "}
+              Responsibilities
+            </label>
+          </div>
+          <p className="page-text mobile-mode-help">
+            Turning the first one off stops updates. The wallpaper that's already set stays until you change it in
+            Samsung's wallpaper settings.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="settings-group-title">Text</h2>
+          <div className="mobile-spacing-fields">
+            <RangeField label="Text size" value={settings.fontSize} min={24} max={64} suffix="" onChange={(v) => setNumber("fontSize", v)} />
+            <ColorField label="Text color" value={settings.textColor} onChange={(v) => setColor("textColor", v)} />
+            <ColorField label="Secondary text color" value={settings.secondaryColor} onChange={(v) => setColor("secondaryColor", v)} />
+          </div>
+        </section>
+
+        <section>
+          <h2 className="settings-group-title">Background</h2>
+          <div className="mobile-spacing-fields">
+            <ColorField label="Background color" value={settings.bgColor} onChange={(v) => setColor("bgColor", v)} />
+            {native && (
+              <>
+                <div className="mobile-spacing-field-row">
+                  <button type="button" className="add-button secondary" disabled={busy} onClick={() => fileInputRef.current?.click()}>
+                    {bgPreview ? "Change image" : "Choose image"}
+                  </button>
+                  {bgPreview && (
+                    <button type="button" className="add-button danger" disabled={busy} onClick={clearImage}>
+                      Remove image
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void pickImage(file);
+                    }}
+                  />
+                </div>
+                {bgPreview && (
+                  <img src={bgPreview} alt="Current lock screen background" style={{ width: 120, borderRadius: 8 }} />
+                )}
+              </>
+            )}
+            <RangeField label="Image dimming" value={settings.bgDim} min={0} max={80} suffix="%" onChange={(v) => setNumber("bgDim", v)} />
+          </div>
+        </section>
+
+        <section>
+          <h2 className="settings-group-title">Position</h2>
+          <p className="page-text mobile-mode-help">Percent of the screen height, measured from the top.</p>
+          <div className="mobile-spacing-fields">
+            <RangeField label="Status banner (above clock)" value={settings.bannerTop} min={0} max={30} suffix="%" onChange={(v) => setNumber("bannerTop", v)} />
+            <RangeField label="Lists start (below clock)" value={settings.listTop} min={5} max={80} suffix="%" onChange={(v) => setNumber("listTop", v)} />
+            <RangeField label="Lists end" value={settings.listBottom} min={20} max={98} suffix="%" onChange={(v) => setNumber("listBottom", v)} />
+          </div>
+        </section>
+
+        <section>
+          <button type="button" className="add-button" disabled={busy} onClick={applyNow}>
+            Apply now
+          </button>
+          {status && <p className="page-text mobile-mode-help">{status}</p>}
+        </section>
+      </div>
+    </div>
+  );
+}
