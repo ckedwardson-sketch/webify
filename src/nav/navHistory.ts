@@ -43,6 +43,8 @@ const STATIC_LABELS: Partial<Record<View["type"], string>> = {
   "projects-home": "Projects",
   notes: "Notes",
   "skills-home": "Skills",
+  "checklist-home": "Checklist",
+  "checklist-settings": "Settings",
   "quick-apps-home": "Quick Apps",
   "quick-apps-raft-dog-fullscreen": "Raft With Dog",
   "quick-apps-sleep-study": "Sleep Study",
@@ -106,6 +108,7 @@ export function sidebarSectionForView(view: View): string | null {
   if (view.type.startsWith("goal")) return "Goals";
   if (view.type === "notes") return "Notes";
   if (view.type.startsWith("skill")) return "Skills";
+  if (view.type.startsWith("checklist")) return "Checklist";
   if (view.type.startsWith("quick-apps")) return "Quick Apps";
   if (view.type === "placeholder") return view.label;
   return null;

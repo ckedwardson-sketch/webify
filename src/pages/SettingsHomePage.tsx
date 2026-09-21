@@ -22,6 +22,7 @@ const NAV_CARDS: { view: View; title: string; desc: string }[] = [
   { view: { type: "settings-theme" }, title: "Theme", desc: "Colors, fonts, radius, density, backgrounds" },
   { view: { type: "settings-mobile" }, title: "Mobile", desc: "Layout Mode: Automatic, Mobile, or Desktop" },
   { view: { type: "settings-lockscreen" }, title: "Lock Screen", desc: "Tasks and responsibilities drawn onto the phone's lock screen" },
+  { view: { type: "checklist-settings", tab: "page" }, title: "Checklist", desc: "Text size, truncation, clear/archive button, dates, multiple lists" },
   { view: { type: "settings-editor" }, title: "Editor Tools", desc: "Toolbar, right-click menu, selection menu, slash commands" },
   { view: { type: "settings-headers" }, title: "Headers", desc: "Sidebar title/nav item font size, color, bold, underline" },
   { view: { type: "settings-widget-visibility" }, title: "Widget Visibility", desc: "Show/hide capture, search, web controls, and labor legend buttons" },

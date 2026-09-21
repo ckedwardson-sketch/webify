@@ -10,6 +10,8 @@ import {
   todayISO,
 } from "../responsibilities/scheduling";
 import { Responsibility, ResponsibilityCompletion } from "../types/responsibility";
+import { checklistLockRows, ChecklistLockRow } from "../checklist/checklistFormat";
+import { fetchChecklistSettings, fetchChecklistState } from "../checklist/checklistStorage";
 import { fetchLockScreenSettings, LockScreenSettings } from "./lockScreenSettings";
 
 // Builds what the phone draws onto the lock screen wallpaper.
@@ -53,6 +55,8 @@ export interface LockRespRow {
   done: boolean;
 }
 
+export type { ChecklistLockRow };
+
 // status/banner are "" (never null) when there's no task banner —
 // org.json on Android turns a JSON null into the string "null".
 export interface LockFrame {
@@ -61,6 +65,9 @@ export interface LockFrame {
   banner: string;
   tasks: LockTaskRow[];
   responsibilities: LockRespRow[];
+  // Unticked checklist tasks. Unlike the other two these don't change
+  // with the passage of time, so every frame carries the same rows.
+  checklist: ChecklistLockRow[];
 }
 
 export interface LockPayload {
@@ -74,6 +81,7 @@ export interface SnapshotInput {
   tasks: TimedTask[];
   responsibilities: Responsibility[];
   completions: ResponsibilityCompletion[];
+  checklist: ChecklistLockRow[];
   settings: LockScreenSettings;
   nowMs: number;
 }
@@ -201,6 +209,7 @@ function buildFrame(input: SnapshotInput, at: number): LockFrame {
     banner: taskRows.length > 0 ? bannerText(taskRows) : "",
     tasks: taskRows,
     responsibilities: respRows,
+    checklist: settings.showChecklist ? input.checklist : [],
   };
 }
 
@@ -253,7 +262,13 @@ function collectMoments(input: SnapshotInput, endMs: number): number[] {
 }
 
 function frameContentKey(frame: LockFrame): string {
-  return JSON.stringify({ s: frame.status, b: frame.banner, t: frame.tasks, r: frame.responsibilities });
+  return JSON.stringify({
+    s: frame.status,
+    b: frame.banner,
+    t: frame.tasks,
+    r: frame.responsibilities,
+    c: frame.checklist,
+  });
 }
 
 export function buildLockScreenPayload(input: SnapshotInput): LockPayload {
@@ -298,17 +313,32 @@ async function fetchTimedBoardTasks(): Promise<TimedTask[]> {
   return tasks;
 }
 
+// Truncation is a checklist setting, not a lock-screen one, so the rows
+// arrive already cut to length (see checklist/checklistFormat.ts).
+async function loadChecklistRows(): Promise<ChecklistLockRow[]> {
+  const [state, settings] = await Promise.all([fetchChecklistState(), fetchChecklistSettings()]);
+  return checklistLockRows(state, settings);
+}
+
 export async function loadLockScreenPayload(nowMs = Date.now()): Promise<LockPayload> {
   const settings = await fetchLockScreenSettings();
   if (!settings.enabled) {
     // Nothing to draw — one empty frame is enough for the phone to
     // notice it has been switched off and stop its alarms.
-    return buildLockScreenPayload({ tasks: [], responsibilities: [], completions: [], settings, nowMs });
+    return buildLockScreenPayload({
+      tasks: [],
+      responsibilities: [],
+      completions: [],
+      checklist: [],
+      settings,
+      nowMs,
+    });
   }
-  const [tasks, responsibilities, completions] = await Promise.all([
+  const [tasks, responsibilities, completions, checklist] = await Promise.all([
     settings.showTasks ? fetchTimedBoardTasks() : Promise.resolve([] as TimedTask[]),
     settings.showResponsibilities ? fetchResponsibilities() : Promise.resolve([] as Responsibility[]),
     settings.showResponsibilities ? fetchAllCompletions() : Promise.resolve([] as ResponsibilityCompletion[]),
+    settings.showChecklist ? loadChecklistRows() : Promise.resolve([] as ChecklistLockRow[]),
   ]);
-  return buildLockScreenPayload({ tasks, responsibilities, completions, settings, nowMs });
+  return buildLockScreenPayload({ tasks, responsibilities, completions, checklist, settings, nowMs });
 }

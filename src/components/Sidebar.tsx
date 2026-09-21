@@ -34,6 +34,7 @@ export function Sidebar({ view, onNavigate, onToggle, lastViewBySection }: Sideb
     if (label === "Goals") return view.type.startsWith("goal");
     if (label === "Notes") return view.type === "notes";
     if (label === "Skills") return view.type.startsWith("skill");
+    if (label === "Checklist") return view.type.startsWith("checklist");
     if (label === "Quick Apps") return view.type.startsWith("quick-apps");
     if (view.type === "placeholder") return view.label === label;
     return false;
@@ -58,6 +59,7 @@ export function Sidebar({ view, onNavigate, onToggle, lastViewBySection }: Sideb
     if (label === "Goals") return onNavigate({ type: "goals-home" });
     if (label === "Notes") return onNavigate({ type: "notes" });
     if (label === "Skills") return onNavigate({ type: "skills-home" });
+    if (label === "Checklist") return onNavigate({ type: "checklist-home" });
     if (label === "Quick Apps") return onNavigate({ type: "quick-apps-home" });
     if (isPlaceholder) return onNavigate({ type: "placeholder", label });
   };

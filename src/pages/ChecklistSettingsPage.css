@@ -1,0 +1,98 @@
+/* Two tabs across the top, sized to be hit with a thumb. */
+
+.cls-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.cls-tab {
+  flex: 1 1 0;
+  padding: 16px 12px;
+  border: var(--surface-border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-family: var(--heading-font);
+  font-size: 1.02rem;
+  cursor: pointer;
+  transition: background-color var(--motion-speed) var(--motion-easing),
+    border-color var(--motion-speed) var(--motion-easing);
+}
+
+.cls-tab:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.cls-tab.active {
+  background: var(--color-primary-bg);
+  border-color: transparent;
+  color: var(--color-primary-text);
+}
+
+/* ---- Switch rows ----------------------------------------------------- */
+
+.cls-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
+  cursor: pointer;
+}
+
+.cls-switch:hover {
+  border-color: var(--color-border-strong);
+}
+
+.cls-switch input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--color-checkbox-accent, var(--color-accent));
+  cursor: pointer;
+}
+
+.cls-switch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cls-switch-label {
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.cls-switch-help {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.cls-select {
+  padding: 9px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.cls-help {
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+
+.cls-error {
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}

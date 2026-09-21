@@ -1,0 +1,135 @@
+/* The editor is meant to read as one big text field, so the rows have
+   no boxes, borders or hover states of their own — only the checkbox in
+   front of a line says "this is a task". --cl-font-size is set inline
+   from the Text size setting (see ChecklistEditor.tsx). */
+
+.cl-editor {
+  --cl-font-size: 17px;
+  --cl-line-height: 1.65;
+  flex: 1 1 auto;
+  min-height: 50vh;
+  /* Tapping anywhere below the last line puts the caret there, so
+     leave a generous amount of "anywhere". */
+  padding: 10px 2px 35vh;
+  cursor: text;
+}
+
+.cl-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.cl-box,
+.cl-box-spacer {
+  flex: 0 0 auto;
+  width: calc(var(--cl-font-size) * 1.05);
+  height: calc(var(--cl-font-size) * 1.05);
+  /* Line up with the middle of the first line of text rather than its
+     top, which is where a raw checkbox would sit. */
+  margin: calc(var(--cl-font-size) * (var(--cl-line-height) - 1.05) / 2) 0 0;
+}
+
+.cl-box {
+  accent-color: var(--color-checkbox-accent, var(--color-accent));
+  cursor: pointer;
+}
+
+.cl-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  overflow: hidden;
+  font: inherit;
+  font-size: var(--cl-font-size);
+  line-height: var(--cl-line-height);
+  color: var(--color-text);
+}
+
+.cl-input:focus {
+  outline: none;
+}
+
+/* A ticked task strikes through its continuation lines too — they're
+   part of the same block. */
+.cl-row.is-checked .cl-input {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* Free text: below the list, past two blank lines, outside the system.
+   Dimmed and ruled so it's obvious it won't be ticked or cleared. */
+.cl-free {
+  border-left: 2px solid var(--color-border);
+  padding-left: 10px;
+  margin-left: calc(var(--cl-font-size) * 0.5);
+}
+
+.cl-free .cl-input {
+  color: var(--color-text-secondary);
+}
+
+/* ---- Archive (archive mode only) ------------------------------------ */
+
+/* Ten blank lines between the last thing you wrote and the first
+   archived task. */
+.cl-archive-gap {
+  height: calc(var(--cl-font-size) * var(--cl-line-height) * 10);
+}
+
+.cl-archive {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+.cl-arow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 1px 0;
+}
+
+.cl-arow .cl-box {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.cl-atext {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Archived blocks keep their line breaks. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--cl-font-size);
+  line-height: var(--cl-line-height);
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* The date column is the one thing on the page aligned to the right. */
+.cl-adate {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 12px;
+  text-align: right;
+  font-size: calc(var(--cl-font-size) * 0.8);
+  line-height: var(--cl-line-height);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+html.mobile-layout .cl-adate {
+  font-size: calc(var(--cl-font-size) * 0.72);
+  padding-left: 8px;
+}

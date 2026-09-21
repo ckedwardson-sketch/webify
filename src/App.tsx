@@ -48,6 +48,8 @@ import { VaultPage } from "./pages/VaultPage";
 import { VaultSessionProvider } from "./vault/VaultSessionContext";
 import { SkillsHomePage } from "./pages/SkillsHomePage";
 import { SkillTreePage } from "./pages/SkillTreePage";
+import { ChecklistPage } from "./pages/ChecklistPage";
+import { ChecklistSettingsPage } from "./pages/ChecklistSettingsPage";
 import { QuickAppsHomePage } from "./pages/QuickAppsHomePage";
 import { RaftWithDogFullscreenPage } from "./pages/RaftWithDogFullscreenPage";
 import { SleepStudyPage } from "./pages/SleepStudyPage";
@@ -550,6 +552,10 @@ export default function App() {
         return <SkillsHomePage onNavigate={navigate} />;
       case "skill-tree":
         return <SkillTreePage skillId={v.skillId} onNavigate={navigate} />;
+      case "checklist-home":
+        return <ChecklistPage onNavigate={navigate} />;
+      case "checklist-settings":
+        return <ChecklistSettingsPage onNavigate={navigate} tab={v.tab} />;
       case "quick-apps-home":
         return <QuickAppsHomePage onNavigate={navigate} />;
       case "quick-apps-raft-dog-fullscreen":

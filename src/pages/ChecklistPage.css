@@ -1,0 +1,342 @@
+.checklist-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: var(--space-page-top, var(--space-page-y)) var(--space-page-right, var(--space-page-x)) 0
+    var(--space-page-left, var(--space-page-x));
+}
+
+/* ---- Top bar --------------------------------------------------------- */
+
+.cl-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.cl-topbar-left,
+.cl-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cl-topbar-right {
+  flex: 0 0 auto;
+}
+
+.cl-topbar-left {
+  flex: 1 1 auto;
+}
+
+.cl-btn {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border: var(--surface-border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--motion-speed) var(--motion-easing),
+    border-color var(--motion-speed) var(--motion-easing);
+}
+
+.cl-btn:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-accent);
+}
+
+.cl-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* "Decently large" — this is the button the whole page is built around. */
+.cl-clear {
+  padding: 12px 20px;
+  font-size: 1rem;
+  background: var(--color-primary-bg);
+  color: var(--color-primary-text);
+  border-color: transparent;
+}
+
+.cl-clear:hover:not(:disabled) {
+  background: var(--color-primary-hover-bg);
+  border-color: transparent;
+}
+
+.cl-gridbtn {
+  font-size: 1.15rem;
+  padding: 9px 13px;
+}
+
+.cl-gridbtn.active {
+  background: var(--color-accent);
+  color: var(--color-primary-text);
+  border-color: transparent;
+}
+
+/* ---- List tabs ------------------------------------------------------- */
+
+/* The grid button sits before the tabs in the same flex row, so opening
+   grid view shifts the tabs across rather than covering them. */
+.cl-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  padding-bottom: 1px;
+}
+
+.cl-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 190px;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: color-mix(in srgb, var(--color-bg-elevated) 60%, transparent);
+  transition: background-color var(--motion-speed) var(--motion-easing);
+}
+
+.cl-tab:hover {
+  background: var(--color-bg-secondary);
+}
+
+.cl-tab.active {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 2px 0 var(--color-accent);
+}
+
+.cl-tab-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 9px 12px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cl-tab.active .cl-tab-name {
+  color: var(--color-text);
+}
+
+.cl-tab-rename {
+  width: 130px;
+  margin: 4px 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.cl-tab-rename:focus {
+  outline: none;
+}
+
+.cl-tab-close {
+  flex: 0 0 auto;
+  margin-right: 5px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.cl-tab-close:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+}
+
+/* Armed by the first tap; a second within 3s actually deletes. */
+.cl-tab-close.armed {
+  background: var(--color-danger);
+  color: var(--color-primary-text);
+  font-size: 0.75rem;
+  padding: 3px 7px;
+}
+
+/* ---- Grid view ------------------------------------------------------- */
+
+.cl-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px 2px;
+}
+
+.cl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: var(--surface-border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-speed) var(--motion-easing),
+    border-color var(--motion-speed) var(--motion-easing);
+}
+
+.cl-card:hover {
+  border-color: var(--color-accent);
+  transform: translateY(var(--hover-lift)) scale(var(--hover-scale));
+}
+
+.cl-card.active {
+  border-color: var(--color-accent);
+}
+
+.cl-card-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The "picture" of a list: the list itself, shrunk. Always current,
+   costs nothing, and stays readable in a way a screenshot wouldn't. */
+.cl-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 128px;
+  overflow: hidden;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg) 70%, transparent);
+  font-size: 7px;
+  line-height: 1.5;
+  /* Fades out at the bottom instead of cutting a row in half. */
+  mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+}
+
+.cl-thumb-empty {
+  margin: auto;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.cl-thumb-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text);
+}
+
+.cl-thumb-row.done {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.cl-thumb-box,
+.cl-thumb-box-spacer {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+
+.cl-thumb-box {
+  border: 1px solid var(--color-text-secondary);
+}
+
+.cl-thumb-box.on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.cl-thumb-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Errors ---------------------------------------------------------- */
+
+.cl-error {
+  margin: 10px 0 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+/* ---- Mobile ---------------------------------------------------------- */
+
+html.mobile-layout .cl-topbar {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+html.mobile-layout .cl-topbar-left {
+  order: 2;
+  flex: 1 1 100%;
+}
+
+html.mobile-layout .cl-topbar-right {
+  order: 1;
+  flex: 1 1 100%;
+  justify-content: space-between;
+}
+
+html.mobile-layout .cl-clear {
+  flex: 1 1 auto;
+  padding: 12px 10px;
+  font-size: 0.95rem;
+}
+
+/* The gear keeps its label on desktop and drops to the icon on a
+   phone, where the top bar has no room to spare. */
+html.mobile-layout .cl-settings-label {
+  display: none;
+}
+
+html.mobile-layout .cl-newlist,
+html.mobile-layout .cl-settings {
+  padding: 10px 12px;
+  font-size: 0.86rem;
+}
+
+html.mobile-layout .cl-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

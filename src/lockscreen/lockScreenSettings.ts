@@ -12,6 +12,8 @@ export interface LockScreenSettings {
   // Off = the task banner AND the task list disappear completely.
   showTasks: boolean;
   showResponsibilities: boolean;
+  // The Checklist section's unticked tasks (checklist/checklistStorage).
+  showChecklist: boolean;
   // Row text size in px on a 1080px-wide screen; other sizes scale.
   fontSize: number;
   textColor: string;
@@ -32,6 +34,7 @@ export const LOCK_SCREEN_DEFAULTS: LockScreenSettings = {
   enabled: false,
   showTasks: true,
   showResponsibilities: true,
+  showChecklist: true,
   fontSize: 40,
   textColor: "#ffffff",
   secondaryColor: "#b8c0cc",
@@ -70,6 +73,7 @@ export function normalizeLockScreenSettings(raw: Partial<Record<keyof LockScreen
     enabled: bool(r.enabled, d.enabled),
     showTasks: bool(r.showTasks, d.showTasks),
     showResponsibilities: bool(r.showResponsibilities, d.showResponsibilities),
+    showChecklist: bool(r.showChecklist, d.showChecklist),
     fontSize: clamp(r.fontSize, 24, 64, d.fontSize),
     textColor: color(r.textColor, d.textColor),
     secondaryColor: color(r.secondaryColor, d.secondaryColor),
