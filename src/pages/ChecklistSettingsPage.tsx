@@ -85,6 +85,7 @@ function PageFunctionSettings() {
   return (
     <div className="settings-groups">
       {error && <p className="cls-error">{error}</p>}
+
       <section>
         <h2 className="settings-group-title">Text</h2>
         <div className="mobile-spacing-fields">
@@ -102,6 +103,7 @@ function PageFunctionSettings() {
           <p className="page-text cls-help" style={{ fontSize: `${settings.textSize}px` }}>
             The checklist looks like this.
           </p>
+
           <label className="mobile-spacing-field">
             <span>Text truncation: {truncLabel}</span>
             <input
@@ -207,6 +209,7 @@ export function ChecklistSettingsPage({
         ]}
       />
       <h1 className="page-title">Checklist Settings</h1>
+
       <div className="cls-tabs" role="tablist" aria-label="Checklist settings">
         <button
           type="button"
@@ -227,6 +230,7 @@ export function ChecklistSettingsPage({
           Page function
         </button>
       </div>
+
       {active === "lockscreen" ? <LockScreenSettingsPanel /> : <PageFunctionSettings />}
     </div>
   );

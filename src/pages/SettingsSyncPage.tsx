@@ -46,10 +46,8 @@ export function SettingsSyncPage({ onNavigate }: { onNavigate: (view: View) => v
       setStatus("Enter the computer's IP address first.");
       return;
     }
-
     setSyncing(true);
     setStatus("Syncing…");
-
     try {
       const outcome = await syncWithComputer(ip);
       setStatus(describeOutcome(outcome));

@@ -1,4 +1,5 @@
 /* Two tabs across the top, sized to be hit with a thumb. */
+
 .cls-tabs {
   display: flex;
   gap: 8px;
@@ -18,7 +19,7 @@
   font-size: 1.02rem;
   cursor: pointer;
   transition: background-color var(--motion-speed) var(--motion-easing),
-              border-color var(--motion-speed) var(--motion-easing);
+    border-color var(--motion-speed) var(--motion-easing);
 }
 
 .cls-tab:hover {
@@ -33,6 +34,7 @@
 }
 
 /* ---- Switch rows ----------------------------------------------------- */
+
 .cls-switch {
   display: flex;
   align-items: flex-start;

@@ -5,7 +5,7 @@ import { useTextElements } from "../icons/TextElementContext";
 import { useButtonStyles } from "../icons/ButtonStyleContext";
 import { useTheme } from "../theme/ThemeContext";
 import { fetchPresets, savePreset, deletePreset, fetchPresetData, ThemePresetRow } from "../db/themePresets";
-import { buildSettingsSearchIndex } from "../settingsSearchIndex";
+import { buildSettingsSearchIndex } from "./settingsSearchIndex";
 import { useDynamicOverlay } from "../overlay/DynamicOverlayContext";
 import { ThemeExport } from "../theme/themeExport";
 import { isValidCustomSliderDef } from "../theme/customSliders";
@@ -35,7 +35,8 @@ const NAV_CARDS: { view: View; title: string; desc: string }[] = [
 ];
 
 export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => void }) {
-  const { overrides: iconOverrides, setOverride: setIconOverride, clearOverride: clearIconOverride } = useIcons();
+  const { overrides: iconOverrides, setOverride: setIconOverride, clearOverride: clearIconOverride } =
+    useIcons();
   const {
     overrides: textOverrides,
     setOverride: setTextOverride,
@@ -48,7 +49,6 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
   } = useButtonStyles();
   const { overrides: themeOverrides, replaceTheme, customSliders, replaceCustomSliders } = useTheme();
   const { requestQuickEdit } = useDynamicOverlay();
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -86,7 +86,7 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     textElements: textOverrides,
     buttonStyles: buttonOverrides,
     themeSettings: themeOverrides,
-    // Export each slider's current value as its default, so
+    // Export each slider's *current* value as its default, so
     // re-importing this exact file reproduces what's on screen now
     // rather than resetting sliders back to whatever the original
     // designer shipped.
@@ -110,10 +110,8 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
     for (const key of Object.keys(iconOverrides)) await clearIconOverride(key);
     for (const key of Object.keys(textOverrides)) await clearTextOverride(key);
     for (const key of Object.keys(buttonOverrides)) await clearButtonOverride(key);
-
     await replaceTheme(themeSettings);
     await replaceCustomSliders(customSliderDefs);
-
     if (parsed.pageBackgrounds && typeof parsed.pageBackgrounds === "object") {
       await replaceSectionPageBackgrounds(parsed.pageBackgrounds);
     }
@@ -128,14 +126,12 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
         iconCount++;
       }
     }
-
     for (const [key, override] of Object.entries(textElements)) {
       if (override && typeof override === "object") {
         await setTextOverride(key, override);
         textCount++;
       }
     }
-
     for (const [key, override] of Object.entries(buttonStyles)) {
       if (override && typeof override === "object") {
         await setButtonOverride(key, override);
@@ -169,15 +165,13 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setStatus(`Reading ${file.name}...`);
-    const reader = new FileReader();
 
+    const reader = new FileReader();
     reader.onerror = () => {
       console.error("FileReader error:", reader.error);
       setStatus(`Failed to read the file: ${reader.error?.message ?? "unknown error"}`);
     };
-
     reader.onload = async () => {
       let parsed: Partial<ThemeExport>;
       try {
@@ -198,7 +192,6 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
         setStatus(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
-
     reader.readAsText(file);
     e.target.value = "";
   };
@@ -206,7 +199,6 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
   const handleSavePreset = async () => {
     const name = presetNameDraft.trim();
     if (!name) return;
-
     setSavingPreset(true);
     try {
       const data = JSON.stringify(await captureCurrentExport());
@@ -254,12 +246,14 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
   return (
     <div className="page">
       <h1 className="page-title">Settings</h1>
+
       <input
         className="settings-search"
         placeholder='Search all settings (e.g. "filter button", "proven", "radius")...'
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+
       {query.trim() && (
         results.length === 0 ? (
           <p className="settings-search-empty">No matches for "{query}".</p>
@@ -315,7 +309,9 @@ export function SettingsHomePage({ onNavigate }: { onNavigate: (view: View) => v
               Save current as preset
             </button>
           </div>
+
           {presets.length === 0 && <p className="page-text">No saved presets yet.</p>}
+
           {presets.map((preset) => (
             <div key={preset.id} className="theme-color-row">
               <span className="theme-color-label">{preset.name}</span>

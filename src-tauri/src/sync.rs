@@ -11,7 +11,6 @@
 // WebView was hanging for minutes and sometimes getting the whole app
 // OOM-killed with no catchable error — streaming avoids ever holding
 // the whole file in memory at once.
-
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -20,7 +19,6 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 pub const SYNC_PORT: u16 = 4600;
-
 const DB_FILE_NAME: &str = "webify.db";
 const INCOMING_FILE_NAME: &str = "webify_incoming.db";
 const SQLITE_HEADER: &[u8] = b"SQLite format 3\0";
@@ -95,7 +93,6 @@ pub fn sync_status(computer_ip: String) -> Result<SyncStatus, String> {
     if !resp.status().is_success() {
         return Err(format!("Couldn't reach the computer (status {})", resp.status()));
     }
-
     resp.json::<SyncStatus>().map_err(|e| e.to_string())
 }
 
@@ -214,7 +211,6 @@ mod server {
                         .respond(tiny_http::Response::from_file(file).with_header(header))
                         .map_err(|e| e.to_string())
                 })();
-
                 let _ = std::fs::remove_file(&tmp_path);
                 result
             }
@@ -233,7 +229,6 @@ mod server {
                             .map_err(|e| e.to_string());
                     }
                 };
-
                 if header != SQLITE_HEADER {
                     return request
                         .respond(
@@ -255,6 +250,7 @@ mod server {
                 drop(file);
 
                 let _ = app.emit("sync-db-received", ());
+
                 request
                     .respond(tiny_http::Response::from_string("ok".to_string()))
                     .map_err(|e| e.to_string())

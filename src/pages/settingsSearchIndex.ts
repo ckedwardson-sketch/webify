@@ -166,11 +166,25 @@ export function buildSettingsSearchIndex(): SettingsSearchItem[] {
     view: { type: "settings-context-capture" },
   });
 
+  // One page, three tabs — each entry deep-links to its tab (see
+  // SettingsSyncPage's `tab` prop and the settings-sync View in nav.ts).
   items.push({
-    section: "Sync",
+    section: "Data saving / transfer",
     label: "Sync with computer",
     key: "sync-with-computer",
-    view: { type: "settings-sync" },
+    view: { type: "settings-sync", tab: "sync" },
+  });
+  items.push({
+    section: "Data saving / transfer",
+    label: "Automatic cloud backups",
+    key: "automatic-cloud-backups",
+    view: { type: "settings-sync", tab: "cloud-backups" },
+  });
+  items.push({
+    section: "Data saving / transfer",
+    label: "Download database",
+    key: "db-download",
+    view: { type: "settings-sync", tab: "db-download" },
   });
 
   return items;

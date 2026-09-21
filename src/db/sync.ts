@@ -13,10 +13,9 @@ import { getDb, getSyncMeta, closeDb } from "./database";
 // "whichever whole copy changed more recently replaces the other one".
 //
 // The actual file transfer happens entirely in native Rust, streaming
-// straight to/from disk — a large db buffered through fetch()
+// straight to/from disk — a large db buffered through fetch().
 // arrayBuffer() + writeFile() was hanging for minutes and sometimes
 // getting the whole app OOM-killed on mobile with no catchable error.
-
 const DB_FILE_NAME = "webify.db";
 const INCOMING_FILE_NAME = "webify_incoming.db";
 const BACKUP_FILE_NAME = "webify_backup_previous.db";
@@ -38,6 +37,7 @@ interface RemoteStatus {
 export async function syncWithComputer(computerIp: string): Promise<SyncOutcome> {
   const db = await getDb();
   const local = await getSyncMeta(db);
+
   const remote = await invoke<RemoteStatus>("sync_status", { computerIp });
 
   if (remote.revision === local.revision) {

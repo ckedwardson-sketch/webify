@@ -5,6 +5,7 @@ import { PathEntry, resolveLabel, staticLabel, viewKey, sidebarSectionForView } 
 import { NavHistoryBar } from "./components/NavHistoryBar";
 import { getDb } from "./db/database";
 import { listenForIncomingSync } from "./db/sync";
+import { maybeRunAutomaticBackup } from "./db/backup";
 import { startLockScreenSync } from "./lockscreen/lockScreenSync";
 import { Sidebar } from "./components/Sidebar";
 import { HomePage } from "./pages/HomePage";
@@ -379,6 +380,16 @@ export default function App() {
     });
 }, []);
 
+  // Due automatic backups (Settings → Data saving / transfer). No-op unless
+  // the user has enabled them and the interval has elapsed, so this is safe
+  // to run on every launch once the database is open.
+  useEffect(() => {
+    if (!dbReady) return;
+    void maybeRunAutomaticBackup().catch((err) =>
+      console.warn("automatic backup:", err)
+    );
+  }, [dbReady]);
+
   // Resolves the real display name (dream/project/goal/... title) for
   // whichever view is current, then backfills it onto the matching path
   // entry — entries start with a static fallback label and upgrade once
@@ -462,7 +473,7 @@ export default function App() {
       case "settings-context-capture":
         return <SettingsContextCapturePage onNavigate={navigate} />;
       case "settings-sync":
-        return <SettingsSyncPage onNavigate={navigate} />;
+        return <SettingsSyncPage onNavigate={navigate} tab={v.tab} />;
       case "settings-widget-visibility":
         return <SettingsWidgetVisibilityPage onNavigate={navigate} focusKey={v.focusKey} />;
       case "settings-panel-memory":
