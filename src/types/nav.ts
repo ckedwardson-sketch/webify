@@ -22,7 +22,8 @@ export type View =
   | { type: "settings-headers"; focusKey?: string }
   | { type: "settings-issues" }
   | { type: "settings-context-capture" }
-  | { type: "settings-sync" }
+  // Three tabs: wifi sync, automatic backups, one-off DB download.
+  | { type: "settings-sync"; tab?: "sync" | "cloud-backups" | "db-download" }
   | { type: "settings-widget-visibility"; focusKey?: string }
   | { type: "settings-panel-memory"; focusKey?: string }
   | { type: "settings-dynamic-search" }
