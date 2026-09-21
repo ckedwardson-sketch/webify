@@ -23,9 +23,9 @@ import kotlin.math.min
  * All sizes are authored for a 1080px-wide screen and scaled from there.
  *
  * Layout, top to bottom (positions are % of screen height, from settings):
- *   status banner  — only when there are tasks; a pill above the clock
+ *   status banner  — only when there are timed tasks; a pill above the clock
  *   [clock area]   — left empty, Samsung draws the clock there
- *   tasks list, then responsibilities list
+ *   checklist, then tasks, then responsibilities
  */
 object LockScreenRenderer {
     private const val REFERENCE_WIDTH = 1080f
@@ -121,11 +121,16 @@ object LockScreenRenderer {
         }
 
         // ---- Lists ---------------------------------------------------------
-        val tasks = frame.optJSONArray("tasks") ?: JSONArray()
-        val resp = frame.optJSONArray("responsibilities") ?: JSONArray()
-        val nT = tasks.length()
-        val nR = resp.length()
-        if (nT + nR == 0) return bitmap
+        // Drawn in this order, skipping any section the payload left
+        // empty. The marker in front of a row says which list it came
+        // from: a checkbox for the Checklist page, a status dot for a
+        // timed task, a ring that fills in for a responsibility.
+        val sections = listOf(
+            Triple("Checklist", frame.optJSONArray("checklist") ?: JSONArray(), "checklist"),
+            Triple("Tasks", frame.optJSONArray("tasks") ?: JSONArray(), "task"),
+            Triple("Responsibilities", frame.optJSONArray("responsibilities") ?: JSONArray(), "responsibility")
+        ).filter { it.second.length() > 0 }
+        if (sections.isEmpty()) return bitmap
 
         val rowH = fontPx * 1.62f
         val headerH = fontPx * 1.3f
@@ -133,17 +138,23 @@ object LockScreenRenderer {
         val listTop = h * settings.optInt("listTop", 28) / 100f
         val listBottom = h * settings.optInt("listBottom", 70) / 100f
 
-        val headers = (if (nT > 0) 1 else 0) + (if (nR > 0) 1 else 0)
-        val gaps = if (nT > 0 && nR > 0) 1 else 0
-        val capacity = max(0, ((listBottom - listTop - headers * headerH - gaps * sectionGap) / rowH).toInt())
+        val totalRows = sections.sumOf { it.second.length() }
+        val chrome = sections.size * headerH + (sections.size - 1) * sectionGap
+        val capacity = max(0, ((listBottom - listTop - chrome) / rowH).toInt())
 
-        // How many rows each section gets when they don't all fit: tasks
-        // first, but never squeezing responsibilities below half.
-        var showT = nT
-        var showR = nR
-        if (nT + nR > capacity) {
-            showT = if (nR == 0) min(nT, capacity) else min(nT, max(capacity / 2, capacity - nR))
-            showR = if (nT == 0) min(nR, capacity) else min(nR, capacity - showT)
+        // When it all fits, everything is drawn. When it doesn't, each
+        // section gets a share of the room proportional to its size —
+        // but never less than one row, so no list silently disappears,
+        // and the last one mops up whatever rounding left over.
+        val shown = IntArray(sections.size) { sections[it].second.length() }
+        if (totalRows > capacity) {
+            var remaining = capacity
+            for (i in sections.indices) {
+                val want = sections[i].second.length()
+                val share = if (i == sections.size - 1) remaining else capacity * want / totalRows
+                shown[i] = min(want, max(1, share)).coerceAtMost(max(0, remaining))
+                remaining -= shown[i]
+            }
         }
 
         val markerX = side + fontPx * 0.28f
@@ -159,8 +170,8 @@ object LockScreenRenderer {
                 canvas.drawText(detail, right - detailW, rowBaseline(rowTop, detailPaint), detailPaint)
             }
             val nameMax = right - nameX - detailW - (if (detail.isEmpty()) 0f else fontPx * 0.6f)
-            val shown = TextUtils.ellipsize(name, namePaintForRow, max(0f, nameMax), TextUtils.TruncateAt.END).toString()
-            canvas.drawText(shown, nameX, rowBaseline(rowTop, namePaintForRow), namePaintForRow)
+            val shownName = TextUtils.ellipsize(name, namePaintForRow, max(0f, nameMax), TextUtils.TruncateAt.END).toString()
+            canvas.drawText(shownName, nameX, rowBaseline(rowTop, namePaintForRow), namePaintForRow)
         }
 
         fun drawMore(rowTop: Float, count: Int) {
@@ -168,49 +179,52 @@ object LockScreenRenderer {
         }
 
         var y = listTop
-
-        if (nT > 0) {
-            canvas.drawText("Tasks", side, y + headerPaint.textSize, headerPaint)
+        for ((index, section) in sections.withIndex()) {
+            val (title, rows, kind) = section
+            val total = rows.length()
+            if (index > 0) y += sectionGap
+            canvas.drawText(title, side, y + headerPaint.textSize, headerPaint)
             y += headerH
-            val truncated = showT < nT
-            val drawn = if (truncated) max(0, showT - 1) else showT
+
+            // A truncated section spends its last row on "+N more"
+            // rather than stopping mid-list with no explanation.
+            val truncated = shown[index] < total
+            val drawn = if (truncated) max(0, shown[index] - 1) else shown[index]
             for (i in 0 until drawn) {
-                val row = tasks.getJSONObject(i)
-                markerFill.color = statusColor(row.optString("status", "green"))
-                canvas.drawCircle(markerX, y + rowH / 2f, markerR, markerFill)
-                drawDetailAndName(y, row.optString("name", ""), row.optString("detail", ""), namePaint)
+                val row = rows.getJSONObject(i)
+                val centerY = y + rowH / 2f
+                var namePaintForRow = namePaint
+                when (kind) {
+                    "task" -> {
+                        markerFill.color = statusColor(row.optString("status", "green"))
+                        canvas.drawCircle(markerX, centerY, markerR, markerFill)
+                    }
+                    "checklist" -> {
+                        val box = markerR * 1.8f
+                        canvas.drawRoundRect(
+                            RectF(markerX - box / 2f, centerY - box / 2f, markerX + box / 2f, centerY + box / 2f),
+                            box * 0.22f,
+                            box * 0.22f,
+                            markerRing
+                        )
+                    }
+                    else -> {
+                        if (row.optBoolean("done", false)) {
+                            markerFill.color = secondaryColor
+                            canvas.drawCircle(markerX, centerY, markerR, markerFill)
+                            namePaintForRow = doneNamePaint
+                        } else {
+                            canvas.drawCircle(markerX, centerY, markerR - markerRing.strokeWidth / 2f, markerRing)
+                        }
+                    }
+                }
+                drawDetailAndName(y, row.optString("name", ""), row.optString("detail", ""), namePaintForRow)
                 y += rowH
             }
             if (truncated) {
-                drawMore(y, nT - drawn)
+                drawMore(y, total - drawn)
                 y += rowH
             }
-            if (nR > 0) y += sectionGap
-        }
-
-        if (nR > 0) {
-            canvas.drawText("Responsibilities", side, y + headerPaint.textSize, headerPaint)
-            y += headerH
-            val truncated = showR < nR
-            val drawn = if (truncated) max(0, showR - 1) else showR
-            for (i in 0 until drawn) {
-                val row = resp.getJSONObject(i)
-                val done = row.optBoolean("done", false)
-                if (done) {
-                    markerFill.color = secondaryColor
-                    canvas.drawCircle(markerX, y + rowH / 2f, markerR, markerFill)
-                } else {
-                    canvas.drawCircle(markerX, y + rowH / 2f, markerR - markerRing.strokeWidth / 2f, markerRing)
-                }
-                drawDetailAndName(
-                    y,
-                    row.optString("name", ""),
-                    row.optString("detail", ""),
-                    if (done) doneNamePaint else namePaint
-                )
-                y += rowH
-            }
-            if (truncated) drawMore(y, nR - drawn)
         }
 
         return bitmap

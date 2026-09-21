@@ -221,9 +221,22 @@ export function typeInLine(
   return { lines: out };
 }
 
-// Enter. Inside the list it starts a new task; Shift+Enter (`soft`)
-// continues the current one instead; inside free text it's just a
-// newline.
+// Enter always starts a new task — every new line assumes a checkbox
+// until it's deleted (see backspaceAtStart). Shift+Enter (`soft`)
+// continues the current task instead, with no checkbox of its own.
+//
+// This applies even past a free-text boundary: free text isn't a mode
+// you "enter" and get stuck in, it's just what a run of blank,
+// checkbox-less lines happens to look like right now. A checkbox
+// planted anywhere becomes the new last-checkbox anchor the moment
+// classifyLines next runs, which pushes the free-text boundary past it
+// — so ticking a fresh task back into existence here is exactly how
+// you reclaim that space for the list. (Previously this forced
+// checkbox: false whenever the line above was already classified
+// "free", which both stopped that reclaiming and — for a task whose
+// own blank continuation lines happened to trigger the boundary —
+// could leave an already-checked task's block unrecognized by
+// clearChecked/archiveChecked, i.e. impossible to clear.)
 export function splitLine(
   lines: ChecklistLine[],
   index: number,
@@ -232,11 +245,10 @@ export function splitLine(
 ): EditResult | null {
   const line = lines[index];
   if (!line) return null;
-  const free = classifyLines(lines)[index].kind === "free";
   const next: ChecklistLine = {
     id: newLineId(),
     text: line.text.slice(caret),
-    checkbox: !free && !soft,
+    checkbox: !soft,
     checked: false,
   };
   const out = lines.slice();
@@ -299,7 +311,6 @@ export function pasteIntoLine(
 ): EditResult | null {
   const line = lines[index];
   if (!line) return null;
-  const free = classifyLines(lines)[index].kind === "free";
   const head = line.text.slice(0, start);
   const tail = line.text.slice(end);
   const pieces = text.replace(/\r\n?/g, "\n").split("\n");
@@ -316,18 +327,17 @@ export function pasteIntoLine(
     const isLast = n === rest.length - 1;
     let body = piece;
     // Each pasted line becomes its own task, matching what Enter does —
-    // except in free text, and except for blank lines, which would
-    // otherwise turn into a run of empty tasks.
-    let checkbox = !free;
+    // except for a genuinely blank line, which would otherwise turn
+    // into an empty task with nothing on it.
+    let checkbox = true;
     let checked = false;
     const marked = PASTED_TASK.exec(piece);
     if (marked) {
       body = piece.slice(marked[0].length);
-      checkbox = true;
       checked = marked[1].toLowerCase() === "x";
     } else if (piece.trim() === "") {
       checkbox = false;
-    } else if (!free) {
+    } else {
       body = piece.replace(PASTED_BULLET, "");
     }
     return {

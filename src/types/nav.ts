@@ -52,6 +52,9 @@ export type View =
   | { type: "vault" }
   | { type: "skills-home" }
   | { type: "skill-tree"; skillId: number }
+  | { type: "checklist-home" }
+  // Two tabs: the lock screen settings, and the checklist page's own.
+  | { type: "checklist-settings"; tab?: "lockscreen" | "page" }
   | { type: "quick-apps-home" }
   | { type: "quick-apps-raft-dog-fullscreen" }
   | { type: "quick-apps-sleep-study" };
