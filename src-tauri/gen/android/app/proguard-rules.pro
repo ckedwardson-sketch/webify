@@ -5,21 +5,6 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
 # Lock screen list: methods the web app calls through
 # window.WebifyNative must survive release-build minification.
 -keepattributes JavascriptInterface
@@ -27,3 +12,6 @@
 -keepclassmembers class com.ckedw.webify.LockScreenBridge {
     @android.webkit.JavascriptInterface <methods>;
 }
+
+# Quick Settings tile service + prefs keys used from the bridge.
+-keep class com.ckedw.webify.ChecklistTileService { *; }

@@ -403,7 +403,11 @@ export default function App() {
   const renderPage = (v: View = view, forRightPane = false) => {
     switch (v.type) {
       case "home":
-        return <HomePage />;
+        // Home hosts whichever page is assigned in Settings > Page
+        // Settings > Home Page — see pages/HomePage.tsx. It gets the
+        // themed renderer so a hosted Recipes/Dreams/Responsibilities
+        // page still picks up its own section palette.
+        return <HomePage renderPage={renderThemedPage} />;
       case "placeholder":
         return <PlaceholderPage label={v.label} />;
       case "recipes-home":
@@ -575,6 +579,16 @@ export default function App() {
     if (viewType.startsWith("responsibilit")) return "responsibility";
     return null;
   };
+
+  // A view wrapped in its section's theme scope, if it has one — the
+  // same wrapping `page` below applies to the current view, reusable
+  // for a page rendered inside another (Home's assigned page).
+  const renderThemedPage = (v: View): React.ReactNode =>
+    sectionFor(v.type) ? (
+      <SectionThemeScope section={sectionFor(v.type)!}>{renderPage(v)}</SectionThemeScope>
+    ) : (
+      renderPage(v)
+    );
 
   if (dbError) {
     return (

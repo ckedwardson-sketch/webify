@@ -5,6 +5,12 @@ import { getDb } from "../db/database";
 // schema change is needed. Like every other setting they travel with
 // the database when it syncs; the background *image* does not — it's
 // kept on the phone only (see LockScreenBridge.kt).
+//
+// Quick Settings tile fields live here too: the tile shows the same
+// remaining-checklist count the lock screen uses, and its tap target is
+// any first-level destination (same set the sidebar Home button can
+// open). The tile itself is declared in the Android manifest; these
+// settings only control whether we feed it a count and where a tap goes.
 export interface LockScreenSettings {
   // Master switch. Off = the phone stops updating the lock screen
   // wallpaper (whatever is currently set stays until you change it).
@@ -28,7 +34,42 @@ export interface LockScreenSettings {
   bannerTop: number;
   listTop: number;
   listBottom: number;
+
+  // ---- Quick Settings tile ----------------------------------------------
+  // When true, every lock-screen push also writes the remaining
+  // checklist count into SharedPreferences so ChecklistTileService can
+  // show it. Off = tile stays at its last number (or "—") and still
+  // opens the app on tap.
+  qsTileEnabled: boolean;
+  // First-level destination the tile opens. Keys match the sidebar's
+  // home-style routes (see FIRST_LEVEL_DESTINATIONS).
+  qsTileDestination: string;
 }
+
+// Sidebar "first level" destinations the tile (and any future home-button
+// style shortcut) can open. Labels match sidebarItems; keys are the
+// View.type strings App.tsx already understands.
+export interface FirstLevelDestination {
+  key: string;
+  label: string;
+}
+
+export const FIRST_LEVEL_DESTINATIONS: FirstLevelDestination[] = [
+  { key: "home", label: "Home" },
+  { key: "checklist-home", label: "Checklist" },
+  { key: "tasks-home", label: "Tasks" },
+  { key: "goals-home", label: "Goals" },
+  { key: "projects-home", label: "Projects" },
+  { key: "dreams-web", label: "Dreams" },
+  { key: "responsibilities-home", label: "Responsibilities" },
+  { key: "recipes-home", label: "Recipes" },
+  { key: "notes", label: "Notes" },
+  { key: "skills-home", label: "Skills" },
+  { key: "quick-apps-home", label: "Quick Apps" },
+  { key: "settings-home", label: "Settings" },
+];
+
+const DESTINATION_KEYS = new Set(FIRST_LEVEL_DESTINATIONS.map((d) => d.key));
 
 export const LOCK_SCREEN_DEFAULTS: LockScreenSettings = {
   enabled: false,
@@ -43,6 +84,8 @@ export const LOCK_SCREEN_DEFAULTS: LockScreenSettings = {
   bannerTop: 5,
   listTop: 28,
   listBottom: 70,
+  qsTileEnabled: true,
+  qsTileDestination: "checklist-home",
 };
 
 const KEY = "lockscreen.settings";
@@ -60,6 +103,10 @@ function color(value: unknown, fallback: string): string {
 
 function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function destination(value: unknown, fallback: string): string {
+  return typeof value === "string" && DESTINATION_KEYS.has(value) ? value : fallback;
 }
 
 // Fills anything missing/invalid with the default and clamps ranges, so
@@ -82,6 +129,8 @@ export function normalizeLockScreenSettings(raw: Partial<Record<keyof LockScreen
     bannerTop: clamp(r.bannerTop, 0, 30, d.bannerTop),
     listTop,
     listBottom: Math.min(98, listBottom),
+    qsTileEnabled: bool(r.qsTileEnabled, d.qsTileEnabled),
+    qsTileDestination: destination(r.qsTileDestination, d.qsTileDestination),
   };
 }
 

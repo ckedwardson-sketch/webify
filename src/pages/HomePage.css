@@ -1,0 +1,43 @@
+/* Only used when no home page has been assigned yet — centers the
+   picker in the middle of the content area. */
+.home-page-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  padding: var(--space-page-y) var(--space-page-x);
+  box-sizing: border-box;
+}
+
+.home-page-picker-card {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  padding: 24px;
+  box-sizing: border-box;
+  border: var(--surface-border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-elevated) var(--surface-bg-opacity), transparent);
+  box-shadow: var(--surface-shadow);
+}
+
+.home-page-picker-card .page-title {
+  margin-bottom: 12px;
+}
+
+.home-page-picker-card select {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+}
+
+.home-page-picker-card select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}

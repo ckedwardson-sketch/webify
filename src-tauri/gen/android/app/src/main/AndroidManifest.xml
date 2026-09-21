@@ -57,6 +57,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- Quick Settings tile: remaining checklist count + open to a
+             first-level page. User adds it via Edit on the QS panel.
+             See ChecklistTileService.kt. -->
+        <service
+            android:name=".ChecklistTileService"
+            android:exported="true"
+            android:label="Checklist"
+            android:icon="@drawable/ic_qs_checklist"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
         <provider
           android:name="androidx.core.content.FileProvider"
           android:authorities="${applicationId}.fileprovider"

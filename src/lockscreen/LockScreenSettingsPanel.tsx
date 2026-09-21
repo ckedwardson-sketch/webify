@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  FIRST_LEVEL_DESTINATIONS,
   LOCK_SCREEN_DEFAULTS,
   LockScreenSettings,
   fetchLockScreenSettings,
@@ -42,7 +43,12 @@ async function coverCropToDataUrl(file: File): Promise<string> {
 
 type NumericKey = "fontSize" | "bgDim" | "bannerTop" | "listTop" | "listBottom";
 type ColorKey = "textColor" | "secondaryColor" | "bgColor";
-type ToggleKey = "enabled" | "showTasks" | "showResponsibilities" | "showChecklist";
+type ToggleKey =
+  | "enabled"
+  | "showTasks"
+  | "showResponsibilities"
+  | "showChecklist"
+  | "qsTileEnabled";
 
 function RangeField({
   label,
@@ -65,47 +71,61 @@ function RangeField({
         {label}: {value}
         {suffix}
       </span>
-      <input type="range" min={min} max={max} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
     </label>
   );
 }
 
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="mobile-spacing-field">
       <span>{label}</span>
-      <div className="mobile-spacing-field-row">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
-        <span>{value}</span>
-      </div>
+      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
 
 export function LockScreenSettingsPanel() {
-  const native = getNative();
   const [settings, setSettings] = useState<LockScreenSettings>(LOCK_SCREEN_DEFAULTS);
   const [loaded, setLoaded] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [bgPreview, setBgPreview] = useState<string | null>(null);
-  const skipNextSave = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const skipNextSave = useRef(true);
+  const native = getNative();
 
   useEffect(() => {
     fetchLockScreenSettings()
       .then((s) => {
-        skipNextSave.current = true;
         setSettings(s);
         setLoaded(true);
+        skipNextSave.current = true;
       })
-      .catch((err) => setStatus(`Couldn't load settings: ${err instanceof Error ? err.message : String(err)}`));
-    const preview = getNative()?.getBackgroundPreview();
-    if (preview) setBgPreview(preview);
-  }, []);
+      .catch((err) => setStatus(`Couldn't load: ${err instanceof Error ? err.message : String(err)}`));
+    if (native) {
+      try {
+        setBgPreview(native.getBackgroundPreview() || null);
+      } catch {
+        setBgPreview(null);
+      }
+    }
+  }, [native]);
 
-  // Sliders fire on every tick — save once things settle, then let the
-  // phone redraw.
   useEffect(() => {
     if (!loaded) return;
     if (skipNextSave.current) {
@@ -181,44 +201,94 @@ export function LockScreenSettingsPanel() {
         <section>
           <h2 className="settings-group-title">Show</h2>
           <div className="mobile-spacing-fields">
-            <label>
-              <input type="checkbox" checked={settings.enabled} onChange={(e) => setToggle("enabled", e.target.checked)} />{" "}
-              Update the lock screen wallpaper
-            </label>
-            <label>
+            <label className="mobile-spacing-field">
+              <span>Lock screen list</span>
               <input
                 type="checkbox"
-                checked={settings.showChecklist}
-                onChange={(e) => setToggle("showChecklist", e.target.checked)}
-              />{" "}
-              Checklist (unticked tasks from the list you're on)
+                checked={settings.enabled}
+                onChange={(e) => setToggle("enabled", e.target.checked)}
+              />
             </label>
-            <label>
-              <input type="checkbox" checked={settings.showTasks} onChange={(e) => setToggle("showTasks", e.target.checked)} />{" "}
-              Tasks (list and status banner above the clock)
+            <label className="mobile-spacing-field">
+              <span>Tasks</span>
+              <input
+                type="checkbox"
+                checked={settings.showTasks}
+                onChange={(e) => setToggle("showTasks", e.target.checked)}
+              />
             </label>
-            <label>
+            <label className="mobile-spacing-field">
+              <span>Responsibilities</span>
               <input
                 type="checkbox"
                 checked={settings.showResponsibilities}
                 onChange={(e) => setToggle("showResponsibilities", e.target.checked)}
-              />{" "}
-              Responsibilities
+              />
+            </label>
+            <label className="mobile-spacing-field">
+              <span>Checklist</span>
+              <input
+                type="checkbox"
+                checked={settings.showChecklist}
+                onChange={(e) => setToggle("showChecklist", e.target.checked)}
+              />
             </label>
           </div>
+        </section>
+
+        <section>
+          <h2 className="settings-group-title">Quick Settings tile</h2>
           <p className="page-text mobile-mode-help">
-            Turning the first one off stops updates. The wallpaper that's already set stays until you change it in
-            Samsung's wallpaper settings. How much of a long checklist task fits is set by Text truncation, on the
-            Checklist's own settings tab.
+            A tile you can add to the phone's Quick Settings panel (swipe down twice → Edit). It shows the number of
+            remaining checklist tasks — the same count as the lock screen — and opens Webify to the page you pick
+            below. On Samsung, look for &quot;Checklist&quot; under the app's tiles.
           </p>
+          <div className="mobile-spacing-fields">
+            <label className="mobile-spacing-field">
+              <span>Update tile count</span>
+              <input
+                type="checkbox"
+                checked={settings.qsTileEnabled}
+                onChange={(e) => setToggle("qsTileEnabled", e.target.checked)}
+              />
+            </label>
+            <label className="mobile-spacing-field">
+              <span>Open on tap</span>
+              <select
+                value={settings.qsTileDestination}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    normalizeLockScreenSettings({ ...prev, qsTileDestination: e.target.value })
+                  )
+                }
+              >
+                {FIRST_LEVEL_DESTINATIONS.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </section>
 
         <section>
           <h2 className="settings-group-title">Text</h2>
           <div className="mobile-spacing-fields">
-            <RangeField label="Text size" value={settings.fontSize} min={24} max={64} suffix="" onChange={(v) => setNumber("fontSize", v)} />
+            <RangeField
+              label="Font size"
+              value={settings.fontSize}
+              min={24}
+              max={64}
+              suffix="px"
+              onChange={(v) => setNumber("fontSize", v)}
+            />
             <ColorField label="Text color" value={settings.textColor} onChange={(v) => setColor("textColor", v)} />
-            <ColorField label="Secondary text color" value={settings.secondaryColor} onChange={(v) => setColor("secondaryColor", v)} />
+            <ColorField
+              label="Secondary color"
+              value={settings.secondaryColor}
+              onChange={(v) => setColor("secondaryColor", v)}
+            />
           </div>
         </section>
 
@@ -229,7 +299,12 @@ export function LockScreenSettingsPanel() {
             {native && (
               <>
                 <div className="mobile-spacing-field-row">
-                  <button type="button" className="add-button secondary" disabled={busy} onClick={() => fileInputRef.current?.click()}>
+                  <button
+                    type="button"
+                    className="add-button secondary"
+                    disabled={busy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     {bgPreview ? "Change image" : "Choose image"}
                   </button>
                   {bgPreview && (
@@ -254,7 +329,14 @@ export function LockScreenSettingsPanel() {
                 )}
               </>
             )}
-            <RangeField label="Image dimming" value={settings.bgDim} min={0} max={80} suffix="%" onChange={(v) => setNumber("bgDim", v)} />
+            <RangeField
+              label="Image dimming"
+              value={settings.bgDim}
+              min={0}
+              max={80}
+              suffix="%"
+              onChange={(v) => setNumber("bgDim", v)}
+            />
           </div>
         </section>
 
@@ -262,9 +344,30 @@ export function LockScreenSettingsPanel() {
           <h2 className="settings-group-title">Position</h2>
           <p className="page-text mobile-mode-help">Percent of the screen height, measured from the top.</p>
           <div className="mobile-spacing-fields">
-            <RangeField label="Status banner (above clock)" value={settings.bannerTop} min={0} max={30} suffix="%" onChange={(v) => setNumber("bannerTop", v)} />
-            <RangeField label="Lists start (below clock)" value={settings.listTop} min={5} max={80} suffix="%" onChange={(v) => setNumber("listTop", v)} />
-            <RangeField label="Lists end" value={settings.listBottom} min={20} max={98} suffix="%" onChange={(v) => setNumber("listBottom", v)} />
+            <RangeField
+              label="Status banner (above clock)"
+              value={settings.bannerTop}
+              min={0}
+              max={30}
+              suffix="%"
+              onChange={(v) => setNumber("bannerTop", v)}
+            />
+            <RangeField
+              label="Lists start (below clock)"
+              value={settings.listTop}
+              min={5}
+              max={80}
+              suffix="%"
+              onChange={(v) => setNumber("listTop", v)}
+            />
+            <RangeField
+              label="Lists end"
+              value={settings.listBottom}
+              min={20}
+              max={98}
+              suffix="%"
+              onChange={(v) => setNumber("listBottom", v)}
+            />
           </div>
         </section>
 

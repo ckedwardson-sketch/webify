@@ -67,4 +67,34 @@ class LockScreenBridge(context: Context) {
             ""
         }
     }
+
+    /**
+     * Remaining checklist count + where the Quick Settings tile should
+     * open. Written on every lock-screen push so the tile stays in step
+     * without its own DB access. See ChecklistTileService.
+     */
+    @JavascriptInterface
+    fun updateQuickTile(count: Int, destination: String, enabled: Boolean): String {
+        return try {
+            ChecklistTileService.update(ctx, count, destination, enabled)
+            "ok"
+        } catch (e: Exception) {
+            "error: ${e.javaClass.simpleName}: ${e.message}"
+        }
+    }
+
+    /**
+     * Returns the pending first-level view key stashed by a tile tap
+     * (or by MainActivity from the intent extra), then clears it so a
+     * later resume doesn't re-navigate.
+     */
+    @JavascriptInterface
+    fun consumeOpenView(): String {
+        val prefs = ChecklistTileService.prefs(ctx)
+        val view = prefs.getString(ChecklistTileService.KEY_PENDING_VIEW, "") ?: ""
+        if (view.isNotEmpty()) {
+            prefs.edit().remove(ChecklistTileService.KEY_PENDING_VIEW).apply()
+        }
+        return view
+    }
 }

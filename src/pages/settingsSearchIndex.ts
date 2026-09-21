@@ -135,6 +135,7 @@ export function buildSettingsSearchIndex(): SettingsSearchItem[] {
     { key: "nodeScale.aspectRatio", label: "Node scaling height:width ratio" },
     { key: "nodeScale.columnMode", label: "Columns per category mode" },
     { key: "nodeScale.fixedColumns", label: "Fixed columns per category" },
+    { key: "homePage.page", label: "Home page (which page Home shows)" },
   ];
   for (const field of PAGE_SETTINGS_FIELDS) {
     items.push({

@@ -10,6 +10,10 @@ import { loadLockScreenPayload, LockPayload } from "./lockScreenSnapshot";
 // settings page. A push whose content matches the previous one is
 // skipped, so unrelated writes (layout tweaks, theme changes, ...)
 // cost one cheap read and nothing else.
+//
+// After a successful push, the remaining checklist count is also fed
+// to the Quick Settings tile (ChecklistTileService) so the number on
+// the shade matches the lock screen.
 
 let started = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -25,6 +29,22 @@ function signatureOf(payload: LockPayload): string {
     settings: payload.settings,
     frames: payload.frames.map((f, i) => (i === 0 ? { ...f, at: 0 } : f)),
   });
+}
+
+function pushQuickTile(payload: LockPayload): void {
+  const native = getNative();
+  if (!native?.updateQuickTile) return;
+  const settings = payload.settings;
+  // Same source as the lock-screen checklist rows: unticked tasks of
+  // the active list (already filtered in the snapshot).
+  const count = settings.qsTileEnabled
+    ? (payload.frames[0]?.checklist?.length ?? 0)
+    : -1;
+  try {
+    native.updateQuickTile(count, settings.qsTileDestination, settings.qsTileEnabled);
+  } catch {
+    // Older Android builds without the method — ignore.
+  }
 }
 
 export function requestLockScreenRefresh(delayMs = 2500): void {
@@ -47,10 +67,17 @@ export async function pushLockScreenNow(force = false): Promise<string> {
   try {
     const payload = await loadLockScreenPayload();
     const signature = signatureOf(payload);
-    if (!force && signature === lastSignature) return lastResult || "ok (unchanged)";
+    if (!force && signature === lastSignature) {
+      // Still refresh the tile count in case only the checklist moved
+      // while settings/frames signature matched (shouldn't happen often,
+      // but the tile update is cheap).
+      pushQuickTile(payload);
+      return lastResult || "ok (unchanged)";
+    }
     const result = native.push(JSON.stringify(payload));
     lastSignature = signature;
     lastResult = result;
+    pushQuickTile(payload);
     return result;
   } catch (err) {
     return `error: ${err instanceof Error ? err.message : String(err)}`;
