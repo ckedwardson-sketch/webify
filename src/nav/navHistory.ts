@@ -34,7 +34,7 @@ const STATIC_LABELS: Partial<Record<View["type"], string>> = {
   "settings-lockscreen": "Lock Screen",
   "settings-issues": "Issues",
   "settings-context-capture": "Capture Context",
-  "settings-sync": "Sync",
+  "settings-sync": "Data saving / transfer",
   "responsibilities-home": "Responsibilities",
   "responsibilities-manage": "Manage",
   "tasks-home": "Tasks",

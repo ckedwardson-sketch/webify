@@ -45,13 +45,29 @@ regex = "1"
 rusqlite = { version = "0.31", features = ["bundled"] }
 
 # Desktop-only local sync server (see src/sync.rs) — a tiny blocking HTTP
-# server the phone talks to over the home LAN.
+# server the phone talks to over the home LAN. tauri-plugin-dialog is here
+# too: it's what backup.rs uses for the "choose a backup folder" native
+# picker on desktop (Android goes through tauri-plugin-android-fs instead,
+# below — the official dialog plugin doesn't implement a folder picker on
+# Android).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tiny_http = "0.12"
+tauri-plugin-dialog = "2"
+
+# Android-only: lets backup.rs write into a user-picked folder. Android's
+# scoped storage means a picked folder is only reachable via a content://
+# URI (SAF), which plain std::fs can't touch — this crate wraps the
+# Storage Access Framework calls needed to create/list/delete files there
+# and to persist the access grant across app restarts. Pinned exactly
+# (not "12", "=12.0.0") because this crate's method names have shifted
+# between versions; if `cargo tauri android build` fails to compile
+# src/backup.rs's android_backup module, check this pinned version's docs
+# on docs.rs and adjust the method names in that module to match.
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-android-fs = "=12.0.0"
 
 # opt-level lowered from the default 3 to reduce peak memory usage during
 # release compilation — this machine has only ~8GB RAM and rustc's codegen
 # was OOM-crashing at the default optimization level.
 [profile.release]
 opt-level = 1
-

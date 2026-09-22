@@ -30,7 +30,7 @@ const NAV_CARDS: { view: View; title: string; desc: string }[] = [
   { view: { type: "settings-page-settings" }, title: "Page Settings", desc: "Per-web layout: node scaling, columns, and more as it's built" },
   { view: { type: "settings-issues" }, title: "Reported Issues", desc: "Notes + screenshots saved from the capture button" },
   { view: { type: "settings-context-capture" }, title: "Capture Context", desc: "Save a titled, human/AI-readable PDF report of chosen pages" },
-  { view: { type: "settings-sync" }, title: "Sync", desc: "Sync this device's database with the computer over wifi" },
+  { view: { type: "settings-sync" }, title: "Data saving / transfer", desc: "Wifi sync, automatic cloud backups, and database download" },
   { view: { type: "settings-dynamic-search" }, title: "Dynamic Settings Search", desc: "Every setting, grouped by page and location" },
 ];
 

@@ -17,6 +17,13 @@ export interface BackupSettings {
   maxBackups: number;
   /** ISO timestamp of the last successful automatic backup, or null. */
   lastBackupAt: string | null;
+  /**
+   * Where backups are written. Empty string = default (this device's app
+   * data folder, under backups/). Otherwise an absolute path (desktop) or
+   * a content:// SAF URI (Android), as returned by pickBackupFolder() in
+   * db/backup.ts — never something the user types by hand.
+   */
+  backupLocation: string;
 }
 
 export const BACKUP_SETTINGS_DEFAULTS: BackupSettings = {
@@ -25,6 +32,7 @@ export const BACKUP_SETTINGS_DEFAULTS: BackupSettings = {
   interval: "daily",
   maxBackups: 7,
   lastBackupAt: null,
+  backupLocation: "",
 };
 
 export const BACKUP_INTERVAL_OPTIONS: { value: BackupInterval; label: string; hours: number }[] = [
@@ -51,12 +59,14 @@ export function normalizeBackupSettings(raw: unknown): BackupSettings {
       : BACKUP_SETTINGS_DEFAULTS.interval;
   const last =
     typeof o.lastBackupAt === "string" && o.lastBackupAt.length > 0 ? o.lastBackupAt : null;
+  const location = typeof o.backupLocation === "string" ? o.backupLocation : "";
   return {
     enabled: o.enabled === true,
     excludeImages: o.excludeImages !== false, // default on
     interval,
     maxBackups: clampInt(o.maxBackups, 1, 30, BACKUP_SETTINGS_DEFAULTS.maxBackups),
     lastBackupAt: last,
+    backupLocation: location,
   };
 }
 
