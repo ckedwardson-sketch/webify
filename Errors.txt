@@ -1,0 +1,173 @@
+ Compiling find-msvc-tools v0.1.11
+error: only metadata stub found for `dylib` dependency `std` please provide path to the corresponding .rmeta file with full metadata
+ --> C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.229\build.rs:1:5
+  |
+1 | use std::env;
+  |     ^^^
+
+error: only metadata stub found for `dylib` dependency `std` please provide path to the corresponding .rmeta file with full metadata
+ --> C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_properties_data-2.3.0\build.rs:6:8
+  |
+6 |     if std::env::var("ICU4X_DATA_DIR").is_ok() {
+  |        ^^^
+
+error: only metadata stub found for `dylib` dependency `std` please provide path to the corresponding .rmeta file with full metadata
+ --> C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_normalizer_data-2.3.0\build.rs:6:8
+  |
+6 |     if std::env::var("ICU4X_DATA_DIR").is_ok() {
+  |        ^^^
+
+error: only metadata stub found for `dylib` dependency `std` please provide path to the corresponding .rmeta file with full metadata
+ --> C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\quote-1.0.47\build.rs:1:5
+  |
+1 | use std::env;
+  |     ^^^
+
+error: only metadata stub found for `dylib` dependency `std` please provide path to the corresponding .rmeta file with full metadata
+ --> C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\parking_lot_core-0.9.12\build.rs:7:26
+  |
+7 |     let sanitizer_list = std::env::var("CARGO_CFG_SANITIZE").unwrap_or_default();
+  |                          ^^^
+
+error: only metadata stub found for `rlib` dependency `std` please provide path to the corresponding .rmeta file with full metadata
+ --> C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.229\build.rs:1:5
+  |
+1 | use std::env;
+  |     ^^^
+
+memory allocation of 81920 bytes failed
+memory allocation of 114688 bytes failed
+stack backtrace:
+stack backtrace:
+error: could not compile `serde_core` (build script) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `serde_core` (build script) due to 1 previous error
+error: could not compile `icu_normalizer_data` (build script) due to 1 previous error
+error: could not compile `quote` (build script) due to 1 previous error
+error: could not compile `parking_lot_core` (build script) due to 1 previous error
+   0:     0x7ffe7169f38e - std::backtrace_rs::backtrace::win64::trace
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+   1:     0x7ffe7169f38e - std::backtrace_rs::backtrace::trace_unsynchronized
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+   2:     0x7ffe7169f38e - std::sys::backtrace::_print_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:74
+   3:     0x7ffe7169f38e - std::sys::backtrace::impl$0::print::impl$0::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:44
+   0:     0x7ffe7169f38e - std::backtrace_rs::backtrace::win64::trace
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\..\..\backtrace\src\backtrace\win64.rs:85
+   1:     0x7ffe7169f38e - std::backtrace_rs::backtrace::trace_unsynchronized
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\..\..\backtrace\src\backtrace\mod.rs:66
+   2:     0x7ffe7169f38e - std::sys::backtrace::_print_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:74
+   3:     0x7ffe7169f38e - std::sys::backtrace::impl$0::print::impl$0::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:44
+   4:     0x7ffe716c7c61 - core::fmt::write
+   4:     0x7ffe716c7c61 - core::fmt::write
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\core\src\fmt\mod.rs:0
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\core\src\fmt\mod.rs:0
+   5:     0x7ffe716af7e4 - std::io::default_write_fmt
+   5:     0x7ffe716af7e4 - std::io::default_write_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\io\mod.rs:622
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\io\mod.rs:622
+   6:     0x7ffe716af7e4 - std::io::Write::write_fmt<std::sys::stdio::windows::Stderr>
+   6:     0x7ffe716af7e4 - std::io::Write::write_fmt<std::sys::stdio::windows::Stderr>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\io\mod.rs:1977
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\io\mod.rs:1977
+   7:     0x7ffe71692794 - std::sys::backtrace::BacktraceLock::print
+   7:     0x7ffe71692794 - std::sys::backtrace::BacktraceLock::print
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:47
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:47
+   8:     0x7ffe71692794 - std::alloc::default_alloc_error_hook
+   8:     0x7ffe71692794 - std::alloc::default_alloc_error_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:397
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:397
+   9:     0x7ffe7167808c - std::alloc::rust_oom::closure$0
+   9:     0x7ffe7167808c - std::alloc::rust_oom::closure$0
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:428
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:428
+  10:     0x7ffe7167579f - std::sys::backtrace::__rust_end_short_backtrace<std::alloc::rust_oom::closure_env$0,never$>
+  10:     0x7ffe7167579f - std::sys::backtrace::__rust_end_short_backtrace<std::alloc::rust_oom::closure_env$0,never$>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:182
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\backtrace.rs:182
+  11:     0x7ffe7169283b - std::alloc::rust_oom
+  11:     0x7ffe7169283b - std::alloc::rust_oom
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:424
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:424
+  12:     0x7ffe71678fd8 - std::alloc::_::__rust_alloc_error_handler
+  12:     0x7ffe71678fd8 - std::alloc::_::__rust_alloc_error_handler
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:423
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\alloc.rs:423
+  13:     0x7ffe75c2cbf9 - alloc::alloc::handle_alloc_error::rt_error
+  13:     0x7ffe75c2cbf9 - alloc::alloc::handle_alloc_error::rt_error
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\alloc\src\alloc.rs:551
+  14:     0x7ffe75c2cbf9 - alloc::alloc::handle_alloc_error
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\alloc\src\alloc.rs:551
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\alloc\src\alloc.rs:557
+  14:     0x7ffe75c2cbf9 - alloc::alloc::handle_alloc_error
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\alloc\src\alloc.rs:557
+  15:     0x7ffe757b0096 - <rustc_data_structures[a0aabe1ba95bce04]::vec_cache::SlotIndex>::initialize_bucket::<rustc_middle[327ca6dd13956ce7]::query::erase::ErasedData<[u8; 16usize]>>
+  15:     0x7ffe74e60b86 - <rustc_data_structures[a0aabe1ba95bce04]::vec_cache::SlotIndex>::initialize_bucket::<rustc_middle[327ca6dd13956ce7]::query::erase::ErasedData<[u8; 24usize]>>
+  16:     0x7ffe724dc563 - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  16:     0x7ffe724bef0d - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  17:     0x7ffe725c41af - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  17:     0x7ffe725d7e0c - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  18:     0x7ffe71c96d6e - <rustc_mir_transform[d77dd1f79cbd05a5]::post_analysis_normalize::PostAnalysisNormalize as rustc_mir_transform[d77dd1f79cbd05a5]::pass_manager::MirPass>::run_pass
+  18:     0x7ffe71e3e510 - rustc_borrowck[2700d9f3b578093d]::mir_borrowck
+  19:     0x7ffe725c3ecb - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  19:     0x7ffe71bc1207 - rustc_mir_transform[d77dd1f79cbd05a5]::run_analysis_to_runtime_passes
+  20:     0x7ffe724c97ed - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  21:     0x7ffe725c3f4f - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  20:     0x7ffe71bc45a6 - rustc_mir_transform[d77dd1f79cbd05a5]::mir_drops_elaborated_and_const_checked
+  21:     0x7ffe725d7c5b - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  22:     0x7ffe71bc4182 - rustc_mir_transform[d77dd1f79cbd05a5]::mir_drops_elaborated_and_const_checked
+  22:     0x7ffe724c97ed - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  23:     0x7ffe725d7c5b - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  24:     0x7ffe724c97ed - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  23:     0x7ffe725d7cdf - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  25:     0x7ffe725d7cdf - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  24:     0x7ffe716f913c - rustc_interface[7971ec2362d01f78]::passes::analysis
+  26:     0x7ffe71baa98a - rustc_mir_transform[d77dd1f79cbd05a5]::mir_for_ctfe
+  27:     0x7ffe725c3fe0 - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  25:     0x7ffe711b415a - llvm::TargetTransformInfoImplBase::canHaveNonUndefGlobalInitializerInAddressSpace
+  28:     0x7ffe724fbe42 - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  26:     0x7ffe7109a0a1 - <<rustc_ty_utils[526278a885831dab]::opaque_types::OpaqueTypeCollector>::collect_taits_declared_in_body::TaitInBodyFinder as rustc_hir[1ea8a90067a68ca8]::intravisit::Visitor>::visit_nested_item
+  29:     0x7ffe725c4081 - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  27:     0x7ffe711b41c0 - llvm::TargetTransformInfoImplBase::canHaveNonUndefGlobalInitializerInAddressSpace
+  30:     0x7ffe7216cca4 - <alloc[61df5e49bb59a840]::raw_vec::RawVec<rustc_const_eval[eee501695b2f8e1a]::interpret::stack::Frame>>::grow_one
+  28:     0x7ffe6e94e63a - std[fc79cc53f84b73ec]::sys::backtrace::__rust_begin_short_backtrace::<std[fc79cc53f84b73ec]::thread::lifecycle::spawn_unchecked<ctrlc[85c6d45e5360c17e]::set_handler_inner<rustc_driver_impl[3c242465527f1190]::install_ctrlc_handler::{closure#0}>::{closure#0}, ()>::{closure#1}::{closure#0}::{closure#0}, ()>
+  29:     0x7ffe6e94a591 - RINvNtNtCslFVcyoAu48q_3std3sys9backtrace28___rust_begin_short_backtraceNCNCINvNtCsaqrPHTSpvJs_15rustc_interface4util26run_in_thread_with_globalsNCINvB1e_31run_in_thread_pool_with_globalsNCINvNtB1g_9interface12run_compileruNCNvCs5a844wrxEGq_17rustc_driver_i
+  30:     0x7ffe6e953507 - std[fc79cc53f84b73ec]::sys::backtrace::__rust_begin_short_backtrace::<std[fc79cc53f84b73ec]::thread::lifecycle::spawn_unchecked<ctrlc[85c6d45e5360c17e]::set_handler_inner<rustc_driver_impl[3c242465527f1190]::install_ctrlc_handler::{closure#0}>::{closure#0}, ()>::{closure#1}::{closure#0}::{closure#0}, ()>
+  31:     0x7ffe721c32d9 - rustc_const_eval[eee501695b2f8e1a]::const_eval::eval_queries::eval_to_allocation_raw_provider
+  31:     0x7ffe7169c55a - std::sys::thread::windows::impl$0::new::thread_start
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\thread\windows.rs:58
+  32:     0x7ffe725d0fe7 - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  32:     0x7fff7907ccb7 - BaseThreadInitThunk
+  33:     0x7ffe72523c9a - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  34:     0x7ffe725d106d - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  33:     0x7fff7a96ad6c - RtlUserThreadStart
+  35:     0x7ffe721c5661 - rustc_const_eval[eee501695b2f8e1a]::const_eval::eval_queries::eval_to_const_value_raw_provider
+  36:     0x7ffe725d36f7 - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  37:     0x7ffe72523c71 - RINvMs6_NtCsfS3O9ZKjYUs_9hashbrown3rawINtB6_8RawTableTTNtNtNtCs4kJVeIPopPT_12rustc_middle2ty8instance8InstanceNtNtBX_4mono14CollectionModeETINtNtNtBX_5query5erase10ErasedDataAhj20_ENtNtNtBX_9dep_graph5graph12DepNodeIndexEEE14reserve_rehashNCNvMs1_NtCsdNe2z
+  38:     0x7ffe725d377d - rustc_query_impl[e1e7bd42ece5b6be]::dep_kind_vtables::make_dep_kind_vtables
+  39:     0x7ffe719fea66 - rustc_hir_analysis[da20ca703f5112e0]::check_crate
+  40:     0x7ffe716f8c5c - rustc_interface[7971ec2362d01f78]::passes::analysis
+  41:     0x7ffe711b415a - llvm::TargetTransformInfoImplBase::canHaveNonUndefGlobalInitializerInAddressSpace
+  42:     0x7ffe7109a0a1 - <<rustc_ty_utils[526278a885831dab]::opaque_types::OpaqueTypeCollector>::collect_taits_declared_in_body::TaitInBodyFinder as rustc_hir[1ea8a90067a68ca8]::intravisit::Visitor>::visit_nested_item
+  43:     0x7ffe711b41c0 - llvm::TargetTransformInfoImplBase::canHaveNonUndefGlobalInitializerInAddressSpace
+  44:     0x7ffe6e94e63a - std[fc79cc53f84b73ec]::sys::backtrace::__rust_begin_short_backtrace::<std[fc79cc53f84b73ec]::thread::lifecycle::spawn_unchecked<ctrlc[85c6d45e5360c17e]::set_handler_inner<rustc_driver_impl[3c242465527f1190]::install_ctrlc_handler::{closure#0}>::{closure#0}, ()>::{closure#1}::{closure#0}::{closure#0}, ()>
+  45:     0x7ffe6e94a591 - RINvNtNtCslFVcyoAu48q_3std3sys9backtrace28___rust_begin_short_backtraceNCNCINvNtCsaqrPHTSpvJs_15rustc_interface4util26run_in_thread_with_globalsNCINvB1e_31run_in_thread_pool_with_globalsNCINvNtB1g_9interface12run_compileruNCNvCs5a844wrxEGq_17rustc_driver_i
+  46:     0x7ffe6e953507 - std[fc79cc53f84b73ec]::sys::backtrace::__rust_begin_short_backtrace::<std[fc79cc53f84b73ec]::thread::lifecycle::spawn_unchecked<ctrlc[85c6d45e5360c17e]::set_handler_inner<rustc_driver_impl[3c242465527f1190]::install_ctrlc_handler::{closure#0}>::{closure#0}, ()>::{closure#1}::{closure#0}::{closure#0}, ()>
+  47:     0x7ffe7169c55a - std::sys::thread::windows::impl$0::new::thread_start
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library\std\src\sys\thread\windows.rs:58
+  48:     0x7fff7907ccb7 - BaseThreadInitThunk
+  49:     0x7fff7a96ad6c - RtlUserThreadStart
+error: could not compile `icu_properties_data` (build script) due to 1 previous error
+
+Caused by:
+  process didn't exit successfully: `C:\Users\ckedw\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin\rustc.exe --crate-name build_script_build --edition=2024 C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\icu_properties_data-2.3.0\build.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --diagnostic-width=130 --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --warn=unexpected_cfgs --check-cfg cfg(icu4x_custom_data) --check-cfg cfg(docsrs,test) --check-cfg "cfg(feature, values())" -C metadata=c015aaddca9acc52 -C extra-filename=-e95e0cf14d44e3a8 --out-dir C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\target\debug\build\icu_properties_data-e95e0cf14d44e3a8 -L dependency=C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\target\debug\deps --cap-lints allow` (exit code: 0xc0000409, STATUS_STACK_BUFFER_OVERRUN)
+error: could not compile `libc` (build script)
+
+Caused by:
+  process didn't exit successfully: `C:\Users\ckedw\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin\rustc.exe --crate-name build_script_build --edition=2021 C:\Users\ckedw\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\libc-0.2.189\build.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --diagnostic-width=130 --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --allow=unused_qualifications --warn=clippy::unnecessary_semicolon --allow=clippy::unnecessary_cast --warn=clippy::ptr_as_ptr --allow=clippy::non_minimal_cfg --allow=clippy::missing_safety_doc --warn=clippy::map_unwrap_or --warn=clippy::manual_assert --allow=clippy::identity_op --warn=clippy::explicit_iter_loop --cfg "feature=\"default\"" --cfg "feature=\"std\"" --check-cfg cfg(docsrs,test) --check-cfg "cfg(feature, values(\"align\", \"const-extern-fn\", \"default\", \"extra_traits\", \"rustc-dep-of-std\", \"rustc-std-workspace-core\", \"std\", \"use_std\"))" -C metadata=5aebee33d8ec024d -C extra-filename=-bb2af66a9eb466e9 --out-dir C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\target\debug\build\libc-bb2af66a9eb466e9 -L dependency=C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\target\debug\deps --cap-lints allow` (exit code: 0xc0000409, STATUS_STACK_BUFFER_OVERRUN)
+failed to build Android app: `Failed to run `cargo build`: command ["cargo", "build", "--package", "webify", "--manifest-path", "C:\\Users\\ckedw\\OneDrive\\Desktop\\app\\Webify\\src-tauri\\Cargo.toml", "--target", "aarch64-linux-android", "--features", "tauri/custom-protocol tauri/custom-protocol", "--lib"] exited with code 101
+       Error failed to build Android app: `Failed to run `cargo build`: command ["cargo", "build", "--package", "webify", "--manifest-path", "C:\\Users\\ckedw\\OneDrive\\Desktop\\app\\Webify\\src-tauri\\Cargo.toml", "--target", "aarch64-linux-android", "--features", "tauri/custom-protocol tauri/custom-protocol", "--lib"] exited with code 101

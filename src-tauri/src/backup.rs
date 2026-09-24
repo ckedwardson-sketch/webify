@@ -458,7 +458,6 @@ pub fn describe_backup_location(app: AppHandle, location: Option<String>) -> Res
 mod android_backup {
     use super::{snapshot_into, temp_dir_for, timestamp_slug, BackupInfo, BackupResult};
     use std::fs;
-    use std::str::FromStr;
     use tauri::AppHandle;
     use tauri_plugin_android_fs::{AndroidFsExt, Entry, FileUri};
 
@@ -469,7 +468,7 @@ mod android_backup {
             Some(uri) => {
                 api.take_persistable_uri_permission(&uri)
                     .map_err(|e| e.to_string())?;
-                Ok(Some(uri.to_string()))
+                Ok(Some(uri.to_string().map_err(|e| e.to_string())?))
             }
             None => Ok(None),
         }
@@ -510,7 +509,7 @@ mod android_backup {
         prune_android_backups(app, &dir_uri, keep)?;
 
         Ok(BackupResult {
-            path: file_uri.to_string(),
+            path: file_uri.to_string().map_err(|e| e.to_string())?,
             size_bytes: staged.size_bytes,
         })
     }
@@ -534,7 +533,7 @@ mod android_backup {
                     .parse()
                     .unwrap_or(0);
                 out.push(BackupInfo {
-                    path: uri.to_string(),
+                    path: uri.to_string().map_err(|e| e.to_string())?,
                     name,
                     size_bytes: len,
                     modified_at: format!("{}", secs * 1000),
