@@ -1,4 +1,4 @@
-import { BubbleMenu } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import type { Editor } from "@tiptap/core";
 import { CommandButton } from "./toolbar/EditorToolbar";
 import { MARK_COMMAND_KEYS } from "./commands/registry";

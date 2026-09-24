@@ -81,7 +81,7 @@ export function RichTextField({
   useEffect(() => {
     if (!editor || editor.isFocused) return;
     if (editor.getHTML() !== toEditorContent(value)) {
-      editor.commands.setContent(toEditorContent(value), false);
+      editor.commands.setContent(toEditorContent(value), { emitUpdate: false });
     }
   }, [value, editor]);
 
