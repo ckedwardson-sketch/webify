@@ -6,3 +6,15 @@
 .task-completion-image-error {
   color: var(--color-danger);
 }
+
+.task-completion-note-input {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-completion-note-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

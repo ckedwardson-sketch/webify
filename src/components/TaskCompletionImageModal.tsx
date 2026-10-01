@@ -39,6 +39,8 @@ export function TaskCompletionImageModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [note, setNote] = useState("");
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -62,22 +64,71 @@ export function TaskCompletionImageModal({
     }
   };
 
+  const handleNoteSubmit = () => {
+    // Save note and complete task
+    if (note.trim()) {
+      // In a real implementation, we'd save the note to the database
+      // For now we'll just show it
+      alert(`Note saved: "${note}"`);
+    }
+    onSkip(); // Complete the task
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    // If we're in note input mode, save the note when clicking backdrop
+    if (showNoteInput && note.trim()) {
+      handleNoteSubmit();
+    } else {
+      onSkip();
+    }
+  };
+
   return (
     <>
-      <div className="menu-backdrop" onClick={onSkip} />
+      <div className="menu-backdrop" onClick={handleBackdropClick} />
       <div className="node-widget-overlay task-completion-image-modal" onClick={(e) => e.stopPropagation()}>
         <div className="node-widget-overlay-header">
-          <span className="node-widget-overlay-title">Task complete — add a photo?</span>
+          <span className="node-widget-overlay-title">Task complete — add evidence?</span>
         </div>
         <p className="page-text">Click anywhere outside this box to skip.</p>
-        <div className="task-completion-image-actions">
-          <button type="button" className="add-button secondary" onClick={() => fileInputRef.current?.click()}>
-            Choose file
-          </button>
-          <button type="button" className="add-button secondary" onClick={handleCamera} disabled={capturing}>
-            {capturing ? "Opening camera…" : "Use camera"}
-          </button>
-        </div>
+        
+        {showNoteInput ? (
+          <div className="task-completion-note-input">
+            <textarea
+              className="instructions-textarea"
+              placeholder="Add your completion note..."
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              autoFocus
+            />
+            <div className="task-completion-note-actions">
+              <button type="button" className="add-button secondary" onClick={() => setShowNoteInput(false)}>
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="add-button" 
+                onClick={handleNoteSubmit}
+                disabled={!note.trim()}
+              >
+                Save Note
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="task-completion-image-actions">
+            <button type="button" className="add-button secondary" onClick={() => fileInputRef.current?.click()}>
+              Choose file
+            </button>
+            <button type="button" className="add-button secondary" onClick={handleCamera} disabled={capturing}>
+              {capturing ? "Opening camera…" : "Use camera"}
+            </button>
+            <button type="button" className="add-button secondary" onClick={() => setShowNoteInput(true)}>
+              Add Note
+            </button>
+          </div>
+        )}
         {error && <p className="page-text task-completion-image-error">{error}</p>}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
       </div>

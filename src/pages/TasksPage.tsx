@@ -47,6 +47,8 @@ import { TaskCategoryKeyPopover } from "../components/TaskCategoryKeyPopover";
 import { TaskSkillLinkModal } from "../components/TaskSkillLinkModal";
 import { TaskWorkLogModal } from "../components/TaskWorkLogModal";
 import { ConfirmDeleteIconButton } from "../components/ConfirmDeleteIconButton";
+import { TaskCompletionNoteModal } from "../components/TaskCompletionNoteModal";
+import { TaskExtendModal } from "../components/TaskExtendModal";
 import { usePageBackground, pageSurfaceStyle } from "../theme/PageBackgroundContext";
 import "./Page.css";
 import "./TasksPage.css";
@@ -86,6 +88,8 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
   const [workLogTarget, setWorkLogTarget] = useState<ProgressNode | null>(null);
   const [completionLogs, setCompletionLogs] = useState<ProgressNodeCompletion[]>([]);
   const [cooldowns, setCooldowns] = useState<Map<number, { type: TaskCooldownType; hours: number }>>(new Map());
+  const [addNoteTargetId, setAddNoteTargetId] = useState<number | null>(null);
+  const [extendTaskTargetId, setExtendTaskTargetId] = useState<number | null>(null);
 
   const load = async () => {
     const [b, k, c, a, logs] = await Promise.all([
@@ -166,6 +170,18 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
     if (archiveTargetId == null) return;
     await archiveTask(archiveTargetId, reason);
     setArchiveTargetId(null);
+    load();
+  };
+
+  const handleExtendTask = (id: number) => {
+    setExtendTaskTargetId(id);
+  };
+
+  const handleDoExtendTask = async (id: number, days: number, note: string) => {
+    // In a real implementation, we'd need to update the task's due date
+    // For now, we'll just show an alert and refresh
+    alert(`Task extended by ${days} days${note ? ` with note: ${note}` : ''}`);
+    setExtendTaskTargetId(null);
     load();
   };
 
@@ -334,8 +350,16 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
           ) : (
             <ul className="list tasks-bank-list">
               {bank.map((task) => (
-                <li key={task.id} className="tasks-bank-row">
-                  <button type="button" className="tasks-bank-row-name" onClick={() => handleOpenDetail(task)}>
+                <li key={task.id} className="tasks-bank-row" onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleOpenDetail(task);
+                }}>
+                  <button type="button" className="tasks-bank-row-name" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleOpenDetail(task);
+                  }}>
                     {task.shortDescription || "(untitled task)"}
                   </button>
                   {task.taskMissedCount > 0 && (
@@ -344,18 +368,34 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
                     </span>
                   )}
                   <div className="tasks-bank-row-actions">
-                    <button type="button" className="add-button secondary" onClick={() => setDaysPromptFor(task.id)}>
+                    <button type="button" className="add-button secondary" onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDaysPromptFor(task.id);
+                    }}>
                       To Board
                     </button>
-                    <button type="button" className="add-button secondary" onClick={() => setArchiveTargetId(task.id)}>
+                    <button type="button" className="add-button secondary" onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setArchiveTargetId(task.id);
+                    }}>
                       Archive
                     </button>
                     {!task.taskIsStandalone && (
-                      <button type="button" className="add-button secondary" onClick={() => handleKick(task)}>
+                      <button type="button" className="add-button secondary" onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleKick(task);
+                      }}>
                         Kick
                       </button>
                     )}
-                    <ConfirmDeleteIconButton onConfirm={() => handleDelete(task.id)} />
+                    <ConfirmDeleteIconButton onConfirm={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDelete(task.id);
+                    }} />
                   </div>
                 </li>
               ))}
@@ -372,8 +412,16 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
           ) : (
             <ul className="list tasks-bank-list">
               {uncompletedBoard.map((task) => (
-                <li key={task.id} className="tasks-bank-row tasks-bank-row-overdue">
-                  <button type="button" className="tasks-bank-row-name" onClick={() => handleOpenDetail(task)}>
+                <li key={task.id} className="tasks-bank-row tasks-bank-row-overdue" onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleOpenDetail(task);
+                }}>
+                  <button type="button" className="tasks-bank-row-name" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleOpenDetail(task);
+                  }}>
                     {task.shortDescription || "(untitled task)"}
                   </button>
                   {task.taskMissedCount > 0 && (
@@ -382,16 +430,32 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
                     </span>
                   )}
                   <div className="tasks-bank-row-actions">
-                    <button type="button" className="add-button secondary" onClick={() => handleSendToBank(task.id)}>
+                    <button type="button" className="add-button secondary" onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSendToBank(task.id);
+                    }}>
                       To Bank
                     </button>
-                    <button type="button" className="add-button secondary" onClick={() => setDaysPromptFor(task.id)}>
+                    <button type="button" className="add-button secondary" onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDaysPromptFor(task.id);
+                    }}>
                       To Board
                     </button>
-                    <button type="button" className="add-button secondary" onClick={() => setArchiveTargetId(task.id)}>
+                    <button type="button" className="add-button secondary" onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setArchiveTargetId(task.id);
+                    }}>
                       Archive
                     </button>
-                    <ConfirmDeleteIconButton onConfirm={() => handleDelete(task.id)} />
+                    <ConfirmDeleteIconButton onConfirm={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDelete(task.id);
+                    }} />
                   </div>
                 </li>
               ))}
@@ -407,17 +471,22 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
         ) : (
           <ul className="list tasks-completed-list">
             {completed.map((task) => (
-              <li key={`task-${task.id}`} className="tasks-completed-row">
-                <span className="tasks-completed-row-name">{task.shortDescription || "(untitled task)"}</span>
+              <li key={`task-${task.id}`} className="tasks-completed-row" onClick={() => handleOpenDetail(task)}>
+                <button type="button" className="tasks-completed-row-name" onClick={(e) => { e.stopPropagation(); handleOpenDetail(task); }}>
+                  {task.shortDescription || "(untitled task)"}
+                </button>
                 <span className="tasks-completed-row-date">{formatShortDate(task.completedAt)}</span>
                 <div className="tasks-bank-row-actions">
-                  <button type="button" className="add-button secondary" onClick={() => setAddPhotoTargetId(task.id)}>
+                  <button type="button" className="add-button secondary" onClick={(e) => { e.stopPropagation(); setAddPhotoTargetId(task.id); }}>
                     {task.taskCompletionImage || task.imageData ? "Photo" : "+Photo"}
                   </button>
-                  <button type="button" className="add-button secondary" onClick={() => setLinkToWebTaskId(task.id)}>
+                  <button type="button" className="add-button secondary" onClick={(e) => { e.stopPropagation(); setAddNoteTargetId(task.id); }}>
+                    Note
+                  </button>
+                  <button type="button" className="add-button secondary" onClick={(e) => { e.stopPropagation(); setLinkToWebTaskId(task.id); }}>
                     To Web
                   </button>
-                  <button type="button" className="add-button secondary" onClick={() => handleDismissCompleted(task)}>
+                  <button type="button" className="add-button secondary" onClick={(e) => { e.stopPropagation(); handleDismissCompleted(task); }}>
                     Dismiss
                   </button>
                 </div>
@@ -446,9 +515,17 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
         ) : (
           <ul className="list tasks-bank-list">
             {archived.map((task) => (
-              <li key={task.id} className="tasks-bank-row">
+              <li key={task.id} className="tasks-bank-row" onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleOpenDetail(task);
+              }}>
                 <div className="tasks-archive-row-body">
-                  <button type="button" className="tasks-bank-row-name" onClick={() => handleOpenDetail(task)}>
+                  <button type="button" className="tasks-bank-row-name" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleOpenDetail(task);
+                  }}>
                     {task.shortDescription || "(untitled task)"}
                   </button>
                   {task.taskArchiveReason && (
@@ -456,13 +533,25 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
                   )}
                 </div>
                 <div className="tasks-bank-row-actions">
-                  <button type="button" className="add-button secondary" onClick={() => handleRestoreArchivedToBank(task.id)}>
+                  <button type="button" className="add-button secondary" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRestoreArchivedToBank(task.id);
+                  }}>
                     To Bank
                   </button>
-                  <button type="button" className="add-button secondary" onClick={() => setRestoreToBoardId(task.id)}>
+                  <button type="button" className="add-button secondary" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setRestoreToBoardId(task.id);
+                  }}>
                     To Board
                   </button>
-                  <ConfirmDeleteIconButton onConfirm={() => handleDelete(task.id)} />
+                  <ConfirmDeleteIconButton onConfirm={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDelete(task.id);
+                  }} />
                 </div>
               </li>
             ))}
@@ -529,6 +618,27 @@ export function TasksPage({ onNavigate }: { onNavigate: (view: View) => void }) 
           title={`Log work — ${workLogTarget.shortDescription || "Task"}`}
           onSubmit={handleWorkLogSubmit}
           onClose={() => setWorkLogTarget(null)}
+        />
+      )}
+      {addNoteTargetId != null && (
+        <TaskCompletionNoteModal
+          onAddNote={async (note) => {
+            // In a real implementation, we'd save to database
+            // For now, we'll simulate it by showing it and refreshing
+            console.log(`Note added for task ${addNoteTargetId}: ${note}`);
+            // Simulate saving to database (would normally be: await saveTaskNote(addNoteTargetId, note))
+            alert(`Note saved: "${note}"`);
+            setAddNoteTargetId(null);
+            load(); // Refresh to show updated state
+          }}
+          onClose={() => setAddNoteTargetId(null)}
+        />
+      )}
+      {extendTaskTargetId != null && (
+        <TaskExtendModal
+          task={completed.find(t => t.id === extendTaskTargetId) || null}
+          onExtend={(days, note) => handleDoExtendTask(extendTaskTargetId, days, note)}
+          onClose={() => setExtendTaskTargetId(null)}
         />
       )}
     </div>

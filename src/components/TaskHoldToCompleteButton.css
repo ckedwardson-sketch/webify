@@ -12,11 +12,13 @@
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
-  transition: transform 0.1s ease;
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+  background: var(--color-bg-elevated);
 }
 
 .task-hold-complete-button.holding {
   transform: scale(0.98);
+  box-shadow: 0 0 15px 5px var(--color-accent);
 }
 
 .task-hold-complete-button.disabled {
@@ -35,10 +37,11 @@
   inset: 0;
   width: 0;
   background: color-mix(in srgb, var(--color-accent) 70%, white 0%);
-  opacity: 0.6;
+  opacity: 0.8;
   transition: width 0.05s linear;
   pointer-events: none;
-  box-shadow: 0 0 10px 1px var(--color-accent);
+  box-shadow: 0 0 10px 3px var(--color-accent);
+  border-radius: var(--radius-md);
 }
 
 .task-hold-complete-label {
@@ -46,4 +49,5 @@
   z-index: 1;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   color: #fff;
+  font-weight: 500;
 }

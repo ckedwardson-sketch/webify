@@ -40,6 +40,7 @@ export function TaskBoardCard({
   cooldown,
   onLinkSkill,
   onUnlinkSkill,
+  onExtendTask,
 }: {
   task: ProgressNode;
   onHoldComplete: () => void;
@@ -59,6 +60,7 @@ export function TaskBoardCard({
   cooldown?: TaskCooldownStatus;
   onLinkSkill: () => void;
   onUnlinkSkill: () => void;
+  onExtendTask: () => void;
 }) {
   const { theme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -134,6 +136,16 @@ export function TaskBoardCard({
                   }}
                 >
                   Archive
+                </button>
+                <button
+                  type="button"
+                  className="dropdown-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onExtendTask();
+                  }}
+                >
+                  Extend Task
                 </button>
                 {task.linkedSkillTaskId == null ? (
                   <button
