@@ -1,5 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 import { notesBlocksToHtml, LegacyNoteBlockRow } from "./notesMigration";
+import { runFoodBudgetMigrations } from "./foodBudget";
 
 const DB_URL = "sqlite:webify.db";
 
@@ -15,7 +16,7 @@ let dbInitPromise: Promise<Database> | null = null;
 
 // ---- Migration bookkeeping ----------------------------------------
 
-async function isMigrationApplied(db: Database, name: string): Promise<boolean> {
+export async function isMigrationApplied(db: Database, name: string): Promise<boolean> {
   const rows = await db.select<{ name: string }[]>(
     "SELECT name FROM schema_migrations WHERE name = $1",
     [name]
@@ -23,7 +24,7 @@ async function isMigrationApplied(db: Database, name: string): Promise<boolean> 
   return rows.length > 0;
 }
 
-async function markMigrationApplied(db: Database, name: string): Promise<void> {
+export async function markMigrationApplied(db: Database, name: string): Promise<void> {
   await db.execute("INSERT OR IGNORE INTO schema_migrations (name) VALUES ($1)", [name]);
 }
 
@@ -46,7 +47,7 @@ async function tableExists(db: Database, table: string): Promise<boolean> {
 // CREATE TABLE already included it, or a genuinely old database that
 // needs it added for the first time. It checks the real schema, not
 // just the migration log, before deciding whether to run.
-async function ensureColumn(
+export async function ensureColumn(
   db: Database,
   name: string,
   table: string,
@@ -81,6 +82,9 @@ async function runMigrations(db: Database): Promise<void> {
       applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Run food budget migrations first
+  await runFoodBudgetMigrations(db);
 
   // Columns from the old, pre-migration-system era. ensureColumn
   // checks real column presence first, so this is safe whether an

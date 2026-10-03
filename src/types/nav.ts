@@ -58,4 +58,9 @@ export type View =
   | { type: "checklist-settings"; tab?: "lockscreen" | "page" }
   | { type: "quick-apps-home" }
   | { type: "quick-apps-raft-dog-fullscreen" }
-  | { type: "quick-apps-sleep-study" };
+  | { type: "quick-apps-sleep-study" }
+  | { type: "food-budget-home" }
+  | { type: "food-budget-ingredient-detail"; ingredientId: number }
+  | { type: "food-budget-recipe-view"; recipeId: number }
+  | { type: "food-budget-monthly-planner"; year?: number; month?: number }
+  | { type: "food-budget-settings" };

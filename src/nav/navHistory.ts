@@ -48,6 +48,8 @@ const STATIC_LABELS: Partial<Record<View["type"], string>> = {
   "quick-apps-home": "Quick Apps",
   "quick-apps-raft-dog-fullscreen": "Raft With Dog",
   "quick-apps-sleep-study": "Sleep Study",
+  "food-budget-home": "Food Budget",
+  "food-budget-settings": "Settings",
 };
 
 // Identity for path compaction/dedup purposes — deliberately ignores
@@ -110,6 +112,7 @@ export function sidebarSectionForView(view: View): string | null {
   if (view.type.startsWith("skill")) return "Skills";
   if (view.type.startsWith("checklist")) return "Checklist";
   if (view.type.startsWith("quick-apps")) return "Quick Apps";
+  if (view.type === "food-budget-home" || view.type === "food-budget-ingredient-detail" || view.type === "food-budget-recipe-view" || view.type === "food-budget-monthly-planner" || view.type === "food-budget-settings") return "Food Budget";
   if (view.type === "placeholder") return view.label;
   return null;
 }

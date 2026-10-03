@@ -21,6 +21,7 @@ export const sidebarItems: SidebarItem[] = [
   { label: "Responsibilities", isPlaceholder: false, iconKey: "nav-responsibilities" },
   { label: "Tasks", isPlaceholder: false, iconKey: "nav-tasks" },
   { label: "Checklist", isPlaceholder: false, iconKey: "nav-checklist" },
+  { label: "Food Budget", isPlaceholder: false, iconKey: "nav-food-budget" },
   { label: "Inventory", isPlaceholder: true, iconKey: "nav-inventory" },
   { label: "Notes", isPlaceholder: false, iconKey: "nav-notes" },
   { label: "Settings", isPlaceholder: false, iconKey: "nav-settings" },

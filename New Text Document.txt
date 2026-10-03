@@ -1,0 +1,336 @@
+Food Budget Section
+Feature plan (v4) for Webify. Tauri, TypeScript, React, Python, SQLite
+
+Purpose
+The Food Budget section helps you budget food monthly and decide what to buy. Every ingredient is judged by one measure: calories per dollar. You set a minimum, the DTC (dollar-to-calorie threshold). Ingredients that meet it are food. Ingredients that fall short are expenses. Recipes and a monthly planner build on top of this to show what your meals cost and where the ingredients come from.
+Core concepts
+• DTC: one global setting in calories per dollar, where higher is better. A dated history of values is kept so past classifications stay explainable. A single number is used for the first build. It may later vary by category if a whole genre of product sits just below the line.
+• Calories per dollar for an ingredient comes from its last purchase: calories in the purchased amount divided by price.
+• Near DTC: within 25% below the threshold. The main collection shows the ingredients you have added that are ADTC or near.
+• Auto-reclassification: logging a purchase or changing the DTC moves ingredients between ADTC and Expense automatically and creates a notification.
+Category Meaning
+ADTC (Above DTC) Meets or beats the threshold, so it counts as food. Shown in the main collection.
+Expense Below the threshold. Same detail view as other ingredients, but kept in a hidden dropdown because it should be used rarely.
+Homegrown Not auto-classified. Has a manually assigned calories-per-dollar value and nothing else for now. Own dropdown.
+Low-cost flavorings Seasonings and similar items that are very cheap per serving with negligible calories. Ignored in classification, the source bar, and recipe cost.
+
+Ingredient forms (dry vs. cooked)
+Each ingredient is stored in the form you measure it in, and the form is part of the name, for example "Rice, dry" and "Rice, cooked". Calories per gram, price per gram, and recipe amounts all use that same form, so 200 g of dry rice is always scored with dry-rice nutrition. If an imported recipe says "cooked rice" and only the dry version exists, the AI flags it and offers to create "Rice, cooked" instead of silently matching.
+Global settings
+• DTC value, with history.
+• Annual inflation rate, one global rate.
+• Notification mode and its timing values (below).
+Notification modes
+Mode Behavior
+Urgent Notifies only when a reclassification actually happens.
+Warning Also notifies X days before a projected reclassification.
+Double warn Also notifies Y weeks before and X days before.
+The day and week values are editable global settings. A red unread count appears on a bell icon in the top right.
+Inflation and projection
+For this base version, the DTC and every ingredient price follow the same inflation function. On the chart, each ingredient's projected cost is its last purchase price grown by inflation, and the DTC line is grown by the same function, so the two lines track each other. Because they share one function, inflation alone never pushes an ingredient across the DTC. Reclassification comes from real events: a new purchase at a different price, or you changing the DTC. The warning modes are still built now, since they will matter once ingredient costs get their own smarter forecasting model. That model is deliberately left for later, and this base is what it will build on.
+5. Screens
+Food Budget home
+• Top: the "likely to use" collection. It holds only ingredients you added yourself, and nothing auto-populates it.
+• Dropdowns below: Homegrown, Low-cost flavorings, and a hidden-away Expense.
+• Notification bell with unread count, top right.
+Ingredient detail (destination of every hot link)
+
+Cost-per-calorie chart against the DTC line, using last purchase plus the shared inflation function.
+Last purchased item, with a one-tap repurchase button and a log-new-purchase button.
+Saved deals, display only. They never affect cost calculations.
+Health index: nutrition facts from a reputable source (USDA FoodData Central) plus a one- or two-sentence general description of whether the food is healthy. The description does not need to quote numbers.
+Saved deal types (extensible)
+Type Fields
+In-store with coupon Store name, aisle number, product name, product image, coupon details
+In-store Store name, aisle number, product name
+Online Link to product, screenshot of the link, area for text-based coupons
+New deal types can be added later when a new kind of deal appears.
+Recipe view
+• Source bar showing the percentage of ingredients by count from ADTC, Homegrown, and Expense, for example 80% ADTC and 20% Homegrown. Flavorings are excluded.
+• Ingredients shown as hot links with their amounts.
+• Cost per serving using last purchase price. Homegrown ingredients use their assigned calories-per-dollar value.
+• A "back-apply hot links" button on imported recipes.
+Monthly planner
+• Input: meals per day, then the count of each recipe, for example 3 servings a day with 8 pork and cabbage, 8 curry rice, and 6 light mac and cheese.
+• Bar 1: meal mix by percentage.
+• Bar 2: ingredient sources (ADTC, Expense, Homegrown), weighted by planned servings.
+• Written cost breakdown: total estimated cost, cost per meal, cost per day, most expensive recipe, and which expense ingredients drive the cost. This is a rough estimate, not an exact tracker.
+Navigation
+Clicking a hot link opens the ingredient detail view. The app already saves page history, so the link simply pushes onto it and the back function returns you to the recipe.
+6. Hot links
+• Syntax: @Brown Rice ..250g or @White Flour ..2 cups.
+• Typing @ opens autofill from the ingredient index. After the name, .. starts the amount, in grams or common units such as cups and tablespoons.
+• Stored as structured data: ingredient id, grams, and the original unit text. Grams are canonical. The original text is kept so the recipe still displays "2 cups".
+• AI estimates density once per ingredient and caches it. Your edits are locked in and never overwritten.
+• You mostly work in grams, so gram input is the primary path.
+7. Recipe import pipeline
+
+Parse each ingredient line into name, amount, and unit.
+
+AI matches each to an existing ingredient and gives a confidence score. Low-confidence matches get a confirm-or-fix prompt.
+
+If there is no match, create a new ingredient and ask you to scrap it, add it to Low-cost flavorings, or enter its DTC inputs (price and amount).
+
+Convert amounts to grams and compute cost as grams times last-purchase price per gram.
+
+Save the structured recipe. The back-apply button rewrites the original recipe text with hot links.
+Recipes you write from scratch use the structured hot-link form from the start. Plain-text ingredients are still allowed.
+
+Data model
+You already use SQLite, so these are migrations on the existing database.
+Table Contents
+settings (+ DTC history) DTC value, inflation rate, notification mode, warning days, warning weeks
+ingredient Name (includes form), category, is_flavoring, density_g_per_cup with a user-edited flag, nutrition JSON, health blurb, homegrown calories per dollar, in_collection
+purchase ingredient_id, date, price, amount in grams, store (manually entered)
+deal ingredient_id, type, type-specific JSON, image paths
+recipe, recipe_ingredient original text, servings; ingredient_id, grams, original unit text
+meal_plan, meal_plan_entry month, meals per day; recipe_id, count
+notification type, ingredient_id, message, read flag, created date, and which warning stage has fired so nothing repeats
+
+Architecture
+• Python backend: classification engine, shared inflation and projection math, notification scheduler, AI matching and density estimation, nutrition lookup.
+• React/TypeScript frontend: screens, hot-link editor, charts.
+• Tauri: desktop shell, with Python as a sidecar process.
+• Because the app is local, the notification check runs on app launch and on a daily timer.
+
+Build phases
+Phase Scope
+1 Migrations, settings, ingredient CRUD, purchase entry, classification engine
+2 Home page, ingredient detail with chart, notification bell and modes
+3 Saved deals and health index
+4 Structured recipe editor, hot-link autofill, cost and source bar
+5 Recipe import with AI matching, density estimation, back-apply
+6 Monthly planner
+7 Later: smarter per-ingredient price forecasting, per-category DTC
+
+Assumptions to confirm
+• In every mode you are also notified when a reclassification actually happens, not only in advance.
+• In double warn mode the order is: weeks-before notice, days-before notice, then the event itself.
+• A homegrown ingredient's cost per gram is its calories per gram divided by its assigned calories per dollar.
+• "Near DTC" counts anything within 25% below the threshold, plus anything abov
+
+View More
+
+Thank you for sharing the detailed feature plan for the Food Budget Section! This is a comprehensive and well-thought-out addition to the Webify application.
+
+Looking at this feature plan, I can see it would integrate nicely with your existing project structure. The Food Budget Section would complement your existing features like:
+
+Goals/Projects/Progress Webs - This could be part of a larger food production goal or project
+Recipes - The recipe import pipeline and cost calculation would work well with your existing recipe system
+Checklist - Could be used for grocery shopping lists or meal prep planning
+Notes/Resources - Could store additional notes about food budgeting strategies
+The feature plan covers:
+
+Core concepts like DTC (dollar-to-calorie threshold)
+Ingredient forms and classification
+Global settings with notification modes
+Detailed screens for ingredient management, recipe view, and monthly planning
+Data model with migrations
+Architecture with Python backend for calculations
+Build phases from basic CRUD to advanced features
+Would you like me to help with implementing any part of this feature? For example:
+
+Creating database migrations based on the data model
+Planning the frontend components for the screens described
+Implementing parts of the Python backend logic
+Integrating this with your existing navigation system
+Or would you prefer to discuss how this fits into your overall roadmap or development approach?
+
+This plan should have everything needed, execute the plan step by step, make steps for yourself then folow them
+
+Tasks
+Analyze Food Budget Feature Requirements
+Notes: Review the complete feature plan and identify all components needed
+Create Database Migrations
+Notes: Implement the database schema changes for settings, ingredients, purchases, deals, recipes, meal plans, and notifications
+Implement Python Backend Components
+Notes: Create classification engine, inflation calculations, notification scheduler, and AI matching components
+Build Frontend Components
+Notes: Create React/TypeScript components for all screens: home, ingredient detail, recipe view, monthly planner
+Integrate with Existing Navigation
+Notes: Add Food Budget section to existing navigation system
+Implement Hot Link System
+Notes: Create the @ingredient syntax parser and autocomplete functionality
+Test and Validate Implementation
+Notes: Ensure all components work together and handle edge cases properly
+Let me start by analyzing the requirements in detail and then begin implementation. First, let me check what database schema changes are needed based on the data model:
+
+Read db/
+
+Let me check the main database.ts file to understand how migrations are handled:
+
+Read database.ts
+
+Let me now create a new file for the food budget database schema and migrations. I'll start by implementing the database migrations for the Food Budget feature:
+
+Wrote to foodBudget.ts
+
+Now I need to update the main database.ts file to include the food budget migrations:
+
+Edited database.ts
+
+Now I need to update the runMigrations function to include the food budget migrations:
+
+Edited
+
+Let me get the exact content of the function:
+
+Ran grep -n "async function runMigrations" C:\Users\ckedw\OneDrive\Desktop\app\Webif...
+
+Ran findstr /n "async function runMigrations" C:\Users\ckedw\OneDrive\Desktop\app\We...
+
+Let me view the specific section of the file around line 78:
+
+Read database.ts
+
+Let me get more lines to see the full function:
+
+Read database.ts
+
+Let me now add the food budget migrations call at the beginning of the runMigrations function:
+
+Edited database.ts
+
+Tasks
+Analyze Food Budget Feature Requirements
+Notes: Review the complete feature plan and identify all components needed
+Create Database Migrations
+Notes: Implement the database schema changes for settings, ingredients, purchases, deals, recipes, meal plans, and notifications
+Implement Python Backend Components
+Notes: Create classification engine, inflation calculations, notification scheduler, and AI matching components
+Build Frontend Components
+Notes: Create React/TypeScript components for all screens: home, ingredient detail, recipe view, monthly planner
+Integrate with Existing Navigation
+Notes: Add Food Budget section to existing navigation system
+Implement Hot Link System
+Notes: Create the @ingredient syntax parser and autocomplete functionality
+Test and Validate Implementation
+Notes: Ensure all components work together and handle edge cases properly
+Now I'll create the first set of database utility functions for the food budget feature. Let me create a new file for food budget utilities:
+
+Wrote to foodBudgetUtils.ts
+
+Tasks
+Analyze Food Budget Feature Requirements
+Notes: Review the complete feature plan and identify all components needed
+Create Database Migrations
+Notes: Implement the database schema changes for settings, ingredients, purchases, deals, recipes, meal plans, and notifications
+Implement Python Backend Components
+Notes: Create classification engine, inflation calculations, notification scheduler, and AI matching components
+Build Frontend Components
+Notes: Create React/TypeScript components for all screens: home, ingredient detail, recipe view, monthly planner
+Integrate with Existing Navigation
+Notes: Add Food Budget section to existing navigation system
+Implement Hot Link System
+Notes: Create the @ingredient syntax parser and autocomplete functionality
+Test and Validate Implementation
+Notes: Ensure all components work together and handle edge cases properly
+Now I'll work on implementing the Python backend components for the food budget feature. Let me first create the Python directory structure:
+
+Now I'll work on implementing the Python backend components for the food budget feature. Let me first create the Python directory structure:
+
+Ran mkdir -p C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\python
+
+Ran mkdir -p C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\python\food_budget
+
+Now let me create the main Python module for the food budget system:
+
+Wrote to __init__.py
+
+Now let me create the classification engine:
+
+Wrote to classification_engine.py
+
+Now let me create the inflation and projection module:
+
+Wrote to inflation_engine.py
+
+Now let me create the notification scheduler:
+
+Wrote to notification_scheduler.py
+
+Now let me create the AI matching and density estimation module:
+
+Wrote to ai_engine.py
+
+Tasks
+Analyze Food Budget Feature Requirements
+Notes: Review the complete feature plan and identify all components needed
+Create Database Migrations
+Notes: Implement the database schema changes for settings, ingredients, purchases, deals, recipes, meal plans, and notifications
+Implement Python Backend Components
+Notes: Create classification engine, inflation calculations, notification scheduler, and AI matching components
+Build Frontend Components
+Notes: Create React/TypeScript components for all screens: home, ingredient detail, recipe view, monthly planner
+Integrate with Existing Navigation
+Notes: Add Food Budget section to existing navigation system
+Implement Hot Link System
+Notes: Create the @ingredient syntax parser and autocomplete functionality
+Test and Validate Implementation
+Notes: Ensure all components work together and handle edge cases properly
+Now let me create the main Python entry point that will be called by Tauri:
+
+Now let me create the main Python entry point that will be called by Tauri:
+
+Wrote to food_budget_main.py
+
+Now let me update the Tauri configuration to include the Python backend:
+
+Now let me update the Tauri configuration to include the Python backend:
+
+Read tauri.conf.json
+
+Let me also create a requirements.txt file for the Python dependencies:
+
+Let me also create a requirements.txt file for the Python dependencies:
+
+Wrote to requirements.txt
+
+Wrote to README.md
+
+Food Budget Python Backend
+This directory contains the Python backend components for the Food Budget feature in Webify.
+
+Modules
+classification_engine.py
+Handles ingredient classification based on DTC thresholds and determines if ingredients are ADTC (Above DTC), Expense, or Homegrown.
+
+inflation_engine.py
+Manages inflation calculations and future projections for ingredients and DTC values.
+
+notification_scheduler.py
+Handles scheduling and sending notifications for reclassification events.
+
+ai_engine.py
+Provides AI-powered ingredient matching, density estimation, and nutrition lookup.
+
+food_budget_main.py
+Main entry point that handles commands from Tauri.
+
+Usage
+The Python backend is invoked by Tauri through command-line arguments. Each command corresponds to a function in the various engines.
+
+Example usage:
+
+python food_budget_main.py classify_ingredient 123
+Integration
+This Python backend integrates with the Tauri application through the @tauri-apps/plugin-process or similar mechanisms to execute Python scripts and receive structured output.
+
+C:\Users\ckedw\OneDrive\Desktop\app\Webify\src-tauri\python\README.md
+
+View
+Tasks
+Analyze Food Budget Feature Requirements
+Notes: Review the complete feature plan and identify all components needed
+Create Database Migrations
+Notes: Implement the database schema changes for settings, ingredients, purchases, deals, recipes, meal plans, and notifications
+Implement Python Backend Components
+Notes: Create classification engine, inflation calculations, notification scheduler, and AI matching components
+Build Frontend Components
+Notes: Create React/TypeScript components for all screens: home, ingredient detail, recipe view, monthly planner
+Integrate with Existing Navigation
+Notes: Add Food Budget section to existing navigation system
+Implement Hot Link System
+Notes: Create the @ingredient syntax parser and autocomplete functionality
+Test and Validate Implementation
+Notes: Ensure all components work together and handle edge cases properly

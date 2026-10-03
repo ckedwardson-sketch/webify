@@ -54,6 +54,11 @@ import { ChecklistSettingsPage } from "./pages/ChecklistSettingsPage";
 import { QuickAppsHomePage } from "./pages/QuickAppsHomePage";
 import { RaftWithDogFullscreenPage } from "./pages/RaftWithDogFullscreenPage";
 import { SleepStudyPage } from "./pages/SleepStudyPage";
+import { FoodBudgetHomePage } from "./pages/FoodBudgetHomePage";
+import { FoodBudgetIngredientDetailPage } from "./pages/FoodBudgetIngredientDetailPage";
+import { FoodBudgetRecipeViewPage } from "./pages/FoodBudgetRecipeViewPage";
+import { FoodBudgetMonthlyPlannerPage } from "./pages/FoodBudgetMonthlyPlannerPage";
+import { FoodBudgetSettingsPage } from "./pages/FoodBudgetSettingsPage";
 import { IconProvider } from "./icons/IconContext";
 import { TextElementProvider } from "./icons/TextElementContext";
 import { HeaderStyleProvider } from "./icons/HeaderStyleContext";
@@ -577,6 +582,16 @@ export default function App() {
         return <RaftWithDogFullscreenPage onNavigate={navigate} />;
       case "quick-apps-sleep-study":
         return <SleepStudyPage onNavigate={navigate} />;
+      case "food-budget-home":
+        return <FoodBudgetHomePage view={v} />;
+      case "food-budget-ingredient-detail":
+        return <FoodBudgetIngredientDetailPage view={v} />;
+      case "food-budget-recipe-view":
+        return <FoodBudgetRecipeViewPage view={v} />;
+      case "food-budget-monthly-planner":
+        return <FoodBudgetMonthlyPlannerPage view={v} />;
+      case "food-budget-settings":
+        return <FoodBudgetSettingsPage view={v} />;
     }
   };
 

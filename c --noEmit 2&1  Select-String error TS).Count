@@ -1,0 +1,48 @@
+[1mdiff --git a/src/db/database.ts b/src/db/database.ts[m
+[1mindex 855be9d..669d3ab 100644[m
+[1m--- a/src/db/database.ts[m
+[1m+++ b/src/db/database.ts[m
+[36m@@ -1,5 +1,6 @@[m
+ import Database from "@tauri-apps/plugin-sql";[m
+ import { notesBlocksToHtml, LegacyNoteBlockRow } from "./notesMigration";[m
+[32m+[m[32mimport { runFoodBudgetMigrations } from "./foodBudget";[m
+ [m
+ const DB_URL = "sqlite:webify.db";[m
+ [m
+[36m@@ -15,7 +16,7 @@[m [mlet dbInitPromise: Promise<Database> | null = null;[m
+ [m
+ // ---- Migration bookkeeping ----------------------------------------[m
+ [m
+[31m-async function isMigrationApplied(db: Database, name: string): Promise<boolean> {[m
+[32m+[m[32mexport async function isMigrationApplied(db: Database, name: string): Promise<boolean> {[m
+   const rows = await db.select<{ name: string }[]>([m
+     "SELECT name FROM schema_migrations WHERE name = $1",[m
+     [name][m
+[36m@@ -23,7 +24,7 @@[m [masync function isMigrationApplied(db: Database, name: string): Promise<boolean>[m
+   return rows.length > 0;[m
+ }[m
+ [m
+[31m-async function markMigrationApplied(db: Database, name: string): Promise<void> {[m
+[32m+[m[32mexport async function markMigrationApplied(db: Database, name: string): Promise<void> {[m
+   await db.execute("INSERT OR IGNORE INTO schema_migrations (name) VALUES ($1)", [name]);[m
+ }[m
+ [m
+[36m@@ -46,7 +47,7 @@[m [masync function tableExists(db: Database, table: string): Promise<boolean> {[m
+ // CREATE TABLE already included it, or a genuinely old database that[m
+ // needs it added for the first time. It checks the real schema, not[m
+ // just the migration log, before deciding whether to run.[m
+[31m-async function ensureColumn([m
+[32m+[m[32mexport async function ensureColumn([m
+   db: Database,[m
+   name: string,[m
+   table: string,[m
+[36m@@ -82,6 +83,9 @@[m [masync function runMigrations(db: Database): Promise<void> {[m
+     )[m
+   `);[m
+ [m
+[32m+[m[32m  // Run food budget migrations first[m
+[32m+[m[32m  await runFoodBudgetMigrations(db);[m
+[32m+[m
+   // Columns from the old, pre-migration-system era. ensureColumn[m
+   // checks real column presence first, so this is safe whether an[m
+   // existing database already has them or not.[m
