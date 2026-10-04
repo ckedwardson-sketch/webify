@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getCurrentDtcValue, updateDtcValue } from '../db/foodBudgetUtils';
+import { getCurrentDtcValue, updateDtcValue, getFoodBudgetSettings, saveFoodBudgetSettings, getDtcHistory } from '../db/foodBudgetUtils';
 import './Page.css';
 import './FoodBudgetSettingsPage.css';
 
@@ -13,6 +13,7 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dtcHistory, setDtcHistory] = useState<Array<{id: number, dtc_value: number, effective_date: string}>>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -23,8 +24,16 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
         const currentDtcValue = await getCurrentDtcValue();
         setDtcValue(currentDtcValue);
         
-        // For other settings, we'll use defaults or fetch from DB if needed
-        // Since we don't have other settings implemented yet, using defaults
+        // Load all settings
+        const settings = await getFoodBudgetSettings();
+        setInflationRate(settings.inflation_rate);
+        setNotificationMode(settings.notification_mode);
+        setWarningDays(settings.warning_days);
+        setWarningWeeks(settings.warning_weeks);
+        
+        // Load DTC history
+        const history = await getDtcHistory();
+        setDtcHistory(history);
         
         setLoading(false);
       } catch (err) {
@@ -42,7 +51,16 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
       setSaving(true);
       setSaveSuccess(false);
       
-      // Save DTC value to database
+      // Save all settings to database
+      await saveFoodBudgetSettings({
+        dtc_value: dtcValue,
+        inflation_rate: inflationRate,
+        notification_mode: notificationMode,
+        warning_days: warningDays,
+        warning_weeks: warningWeeks
+      });
+      
+      // Save DTC value to database (keep existing behavior)
       await updateDtcValue(dtcValue);
       
       setSaveSuccess(true);
@@ -151,6 +169,32 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
             </div>
           </>
         )}
+      </div>
+
+      <div className="settings-section">
+        <h2>DTC History</h2>
+        <div className="dtc-history">
+          {dtcHistory.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>DTC Value</th>
+                  <th>Effective Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dtcHistory.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>{entry.dtc_value.toFixed(2)}</td>
+                    <td>{new Date(entry.effective_date).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No history available</p>
+          )}
+        </div>
       </div>
 
       <div className="settings-actions">

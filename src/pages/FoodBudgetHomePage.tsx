@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { getNearDtcIngredients, getLikelyToUseIngredients, getCurrentDtcValue } from '../db/foodBudgetUtils';
+import { getNearDtcIngredients, getLikelyToUseIngredients, getCurrentDtcValue, getHomegrownIngredients, getLowCostFlavorings, getExpenseIngredients } from '../db/foodBudgetUtils';
+import { View } from '../types/nav';
+import { useNavigate } from 'react-router-dom';
 import './Page.css';
 import './FoodBudgetHomePage.css';
 
 export const FoodBudgetHomePage: React.FC<{ view: { type: 'food-budget-home' } }> = (_) => {
   const [nearDtcIngredients, setNearDtcIngredients] = useState<any[]>([]);
   const [likelyToUseIngredients, setLikelyToUseIngredients] = useState<any[]>([]);
+  const [homegrownIngredients, setHomegrownIngredients] = useState<any[]>([]);
+  const [lowCostFlavorings, setLowCostFlavorings] = useState<any[]>([]);
+  const [expenseIngredients, setExpenseIngredients] = useState<any[]>([]);
   const [dtcValue, setDtcValue] = useState<number>(100.0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showExpenseDropdown, setShowExpenseDropdown] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -19,13 +26,20 @@ export const FoodBudgetHomePage: React.FC<{ view: { type: 'food-budget-home' } }
         const currentDtc = await getCurrentDtcValue();
         setDtcValue(currentDtc);
         
-        // Fetch near DTC ingredients
-        const nearDtc = await getNearDtcIngredients();
-        setNearDtcIngredients(nearDtc);
+        // Fetch ingredients
+        const [nearDtc, likelyToUse, homegrown, lowCostFlavorings, expense] = await Promise.all([
+          getNearDtcIngredients(),
+          getLikelyToUseIngredients(),
+          getHomegrownIngredients(),
+          getLowCostFlavorings(),
+          getExpenseIngredients()
+        ]);
         
-        // Fetch likely to use ingredients
-        const likelyToUse = await getLikelyToUseIngredients();
+        setNearDtcIngredients(nearDtc);
         setLikelyToUseIngredients(likelyToUse);
+        setHomegrownIngredients(homegrown);
+        setLowCostFlavorings(lowCostFlavorings);
+        setExpenseIngredients(expense);
         
         setLoading(false);
       } catch (err) {
@@ -38,9 +52,12 @@ export const FoodBudgetHomePage: React.FC<{ view: { type: 'food-budget-home' } }
     fetchData();
   }, []);
 
-  const handleNavigate = (page: string) => {
-    // Navigation logic would go here
-    console.log(`Navigating to ${page}`);
+  const handleNavigate = (view: View) => {
+    navigate(view);
+  };
+
+  const handleIngredientClick = (ingredientId: number) => {
+    handleNavigate({ type: 'food-budget-ingredient-detail', ingredientId });
   };
 
   if (loading) {
@@ -83,13 +100,13 @@ export const FoodBudgetHomePage: React.FC<{ view: { type: 'food-budget-home' } }
       </div>
 
       <div className="food-budget-section">
-        <h2>Ingredients Near DTC Threshold</h2>
+        <h2>Likely To Use Ingredients</h2>
         <div className="ingredients-grid">
-          {nearDtcIngredients.map((ingredient) => (
+          {likelyToUseIngredients.map((ingredient) => (
             <div 
               key={ingredient.id} 
               className={`ingredient-card ${ingredient.classification.toLowerCase()}`}
-              onClick={() => handleNavigate(`ingredient/${ingredient.id}`)}
+              onClick={() => handleIngredientClick(ingredient.id)}
             >
               <h3>{ingredient.name}</h3>
               <p className="category">{ingredient.category}</p>
@@ -105,13 +122,13 @@ export const FoodBudgetHomePage: React.FC<{ view: { type: 'food-budget-home' } }
       </div>
 
       <div className="food-budget-section">
-        <h2>Likely To Use Ingredients</h2>
+        <h2>Homegrown Ingredients</h2>
         <div className="ingredients-grid">
-          {likelyToUseIngredients.map((ingredient) => (
+          {homegrownIngredients.map((ingredient) => (
             <div 
               key={ingredient.id} 
               className={`ingredient-card ${ingredient.classification.toLowerCase()}`}
-              onClick={() => handleNavigate(`ingredient/${ingredient.id}`)}
+              onClick={() => handleIngredientClick(ingredient.id)}
             >
               <h3>{ingredient.name}</h3>
               <p className="category">{ingredient.category}</p>
@@ -126,18 +143,66 @@ export const FoodBudgetHomePage: React.FC<{ view: { type: 'food-budget-home' } }
         </div>
       </div>
 
+      <div className="food-budget-section">
+        <h2>Low-cost Flavorings</h2>
+        <div className="ingredients-grid">
+          {lowCostFlavorings.map((ingredient) => (
+            <div 
+              key={ingredient.id} 
+              className={`ingredient-card ${ingredient.classification.toLowerCase()}`}
+              onClick={() => handleIngredientClick(ingredient.id)}
+            >
+              <h3>{ingredient.name}</h3>
+              <p className="category">{ingredient.category}</p>
+              {ingredient.calories_per_dollar !== undefined && (
+                <p className="calories-per-dollar">Calories/Dollar: {ingredient.calories_per_dollar.toFixed(2)}</p>
+              )}
+              <span className={`classification-badge ${ingredient.classification.toLowerCase()}`}>
+                {ingredient.classification}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="food-budget-section">
+        <h2 onClick={() => setShowExpenseDropdown(!showExpenseDropdown)}>
+          Expense Ingredients {showExpenseDropdown ? '▲' : '▼'}
+        </h2>
+        {showExpenseDropdown && (
+          <div className="ingredients-grid">
+            {expenseIngredients.map((ingredient) => (
+              <div 
+                key={ingredient.id} 
+                className={`ingredient-card ${ingredient.classification.toLowerCase()}`}
+                onClick={() => handleIngredientClick(ingredient.id)}
+              >
+                <h3>{ingredient.name}</h3>
+                <p className="category">{ingredient.category}</p>
+                {ingredient.calories_per_dollar !== undefined && (
+                  <p className="calories-per-dollar">Calories/Dollar: {ingredient.calories_per_dollar.toFixed(2)}</p>
+                )}
+                <span className={`classification-badge ${ingredient.classification.toLowerCase()}`}>
+                  {ingredient.classification}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="food-budget-actions">
-        <button onClick={() => handleNavigate('ingredients')}>
-          Manage Ingredients
+        <button onClick={() => handleNavigate({ type: 'food-budget-home' })}>
+          Refresh
         </button>
-        <button onClick={() => handleNavigate('recipes')}>
-          View Recipes
+        <button onClick={() => handleNavigate({ type: 'food-budget-settings' })}>
+          Settings
         </button>
-        <button onClick={() => handleNavigate('planner')}>
+        <button onClick={() => handleNavigate({ type: 'food-budget-monthly-planner' })}>
           Monthly Planner
         </button>
-        <button onClick={() => handleNavigate('settings')}>
-          Settings
+        <button onClick={() => handleNavigate({ type: 'food-budget-recipe-view', recipeId: 1 })}>
+          Recipes
         </button>
       </div>
     </div>

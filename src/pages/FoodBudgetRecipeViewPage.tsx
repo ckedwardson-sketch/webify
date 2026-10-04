@@ -1,39 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import './Page.css';
 import './FoodBudgetRecipeViewPage.css';
+import { fetchRecipe } from '../db/recipes';
+import { getRecipeIngredients } from '../db/foodBudget';
+import { fetchIngredientById } from '../db/foodBudgetUtils';
 
-export const FoodBudgetRecipeViewPage: React.FC<{ view: { type: 'food-budget-recipe-view'; recipeId: number } }> = (_) => {
+export const FoodBudgetRecipeViewPage: React.FC<{ view: { type: 'food-budget-recipe-view'; recipeId: number } }> = ({ view }) => {
   const [recipe, setRecipe] = useState<any>(null);
+  const [ingredients, setIngredients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate loading data
     const fetchData = async () => {
       try {
         setLoading(true);
-        // In a real implementation, this would call the backend API
-        // const response = await fetch(`/api/food-budget/recipes/${view.recipeId}`);
-        // const data = await response.json();
-        // setRecipe(data);
         
-        // Mock data for now
-        setTimeout(() => {
-          setRecipe({
-            id: 1,
-            name: 'Chicken and Rice Bowl',
-            ingredients: [
-              { id: 1, name: 'Chicken Breast', amount: '200g', category: 'Meat' },
-              { id: 2, name: 'White Rice', amount: '1 cup', category: 'Grains' },
-              { id: 3, name: 'Broccoli', amount: '1 cup', category: 'Vegetables' },
-            ],
-            instructions: '1. Cook rice according to package directions.\n2. Grill chicken until fully cooked.\n3. Steam broccoli.\n4. Assemble ingredients in bowl.',
-            estimated_cost: 8.50,
-            estimated_calories: 450,
-            classification: 'ADTC'
-          });
+        // Fetch the recipe details
+        const fetchedRecipe = await fetchRecipe(view.recipeId);
+        if (!fetchedRecipe) {
+          setError('Recipe not found');
           setLoading(false);
-        }, 500);
+          return;
+        }
+        
+        // Fetch recipe ingredients
+        const recipeIngredients = await getRecipeIngredients(view.recipeId);
+        
+        // Get ingredient details for each ingredient
+        const ingredientDetails = await Promise.all(
+          recipeIngredients.map(async (ri) => {
+            if (ri.ingredient_id) {
+              const ingredient = await fetchIngredientById(ri.ingredient_id);
+              return {
+                id: ri.ingredient_id,
+                name: ingredient?.name || 'Unknown Ingredient',
+                amount: ri.original_unit_text,
+                grams: ri.grams
+              };
+            } else {
+              // Handle case where ingredient_id is null (might be a plain text ingredient)
+              return {
+                id: null,
+                name: 'Unknown Ingredient',
+                amount: ri.original_unit_text,
+                grams: ri.grams
+              };
+            }
+          })
+        );
+        
+        setRecipe(fetchedRecipe);
+        setIngredients(ingredientDetails);
+        setLoading(false);
       } catch (err) {
         setError('Failed to load recipe data');
         setLoading(false);
@@ -41,7 +60,7 @@ export const FoodBudgetRecipeViewPage: React.FC<{ view: { type: 'food-budget-rec
     };
 
     fetchData();
-  }, []);
+  }, [view.recipeId]);
 
   if (loading) {
     return (
@@ -78,16 +97,16 @@ export const FoodBudgetRecipeViewPage: React.FC<{ view: { type: 'food-budget-rec
         <div className="recipe-stats">
           <div className="stat-card">
             <h3>Estimated Cost</h3>
-            <p>${recipe.estimated_cost.toFixed(2)}</p>
+            <p>$0.00</p>
           </div>
           <div className="stat-card">
             <h3>Calories</h3>
-            <p>{recipe.estimated_calories}</p>
+            <p>0</p>
           </div>
           <div className="stat-card">
             <h3>Classification</h3>
-            <span className={`classification-badge ${recipe.classification.toLowerCase()}`}>
-              {recipe.classification}
+            <span className={`classification-badge ${recipe.isHomegrown ? 'homegrown' : 'adtc'}`}>
+              {recipe.isHomegrown ? 'Homegrown' : 'ADTC'}
             </span>
           </div>
         </div>
@@ -96,11 +115,10 @@ export const FoodBudgetRecipeViewPage: React.FC<{ view: { type: 'food-budget-rec
       <div className="recipe-section">
         <h2>Ingredients</h2>
         <div className="ingredients-list">
-          {recipe.ingredients.map((ingredient: any) => (
-            <div key={ingredient.id} className="ingredient-item">
+          {ingredients.map((ingredient) => (
+            <div key={ingredient.id || ingredient.name} className="ingredient-item">
               <span className="ingredient-name">{ingredient.name}</span>
               <span className="ingredient-amount">{ingredient.amount}</span>
-              <span className="ingredient-category">{ingredient.category}</span>
             </div>
           ))}
         </div>

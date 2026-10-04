@@ -88,3 +88,157 @@
 .error {
   color: var(--error-color);
 }
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.close-button:hover {
+  background-color: var(--hover-bg);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.notifications-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.mark-all-read-btn {
+  padding: 8px 16px;
+  background: var(--secondary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.mark-all-read-btn:hover {
+  background: var(--secondary-hover-color);
+}
+
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item {
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+
+.notification-item.unread {
+  border-left: 4px solid var(--primary-color);
+}
+
+.notification-content {
+  margin-bottom: 10px;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.notification-type {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.notification-type.warning {
+  background: var(--warning-color);
+  color: white;
+}
+
+.warning-stage {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: var(--info-color);
+  color: white;
+}
+
+.notification-date {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.notification-message {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.mark-as-read-btn {
+  padding: 6px 12px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.mark-as-read-btn:hover {
+  background: var(--primary-hover-color);
+}

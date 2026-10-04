@@ -86,6 +86,8 @@ import { OverlayTargetHighlighter } from "./overlay/OverlayTargetHighlighter";
 import { ColorModeSurfaceHighlighter } from "./overlay/ColorModeSurfaceHighlighter";
 import { PageBackgroundProvider } from "./theme/PageBackgroundContext";
 import { FieldStyleRegistryProvider } from "./rearrange/FieldStyleRegistryContext";
+import { NotificationBell } from "./components/NotificationBell";
+import { scheduleDailyCheck } from "./db/scheduler";
 import "./App.css";
 
 export default function App() {
@@ -362,6 +364,8 @@ export default function App() {
       listenForIncomingSync().catch((err) =>
         console.warn("Failed to register sync listener:", err)
       );
+      // Schedule the daily notifications check
+      scheduleDailyCheck();
       // Apply stored ui_preferences overrides once, at startup — after
       // the matchMedia-derived sidebarOpen default and the plain
       // useState(null) dualPaneMode default have already been computed
@@ -871,6 +875,7 @@ function AppShell({
         {dualPaneMode !== "notes" && (
           <div className="dual-pane-web-toggle-row">
             <NavHistoryBar path={path} onJump={onJump} />
+            <NotificationBell onOpenNotifications={() => {}} />
             <button
               className="dual-pane-web-toggle"
               type="button"

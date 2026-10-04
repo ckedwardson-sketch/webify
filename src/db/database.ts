@@ -83,12 +83,12 @@ async function runMigrations(db: Database): Promise<void> {
     )
   `);
 
-  // Run food budget migrations first
-  await runFoodBudgetMigrations(db);
-
   // Columns from the old, pre-migration-system era. ensureColumn
   // checks real column presence first, so this is safe whether an
   // existing database already has them or not.
+
+  // Run food budget migrations last
+  await runFoodBudgetMigrations(db);
   await ensureColumn(db, "add_recipes_sort_order", "recipes", "sort_order", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(db, "add_recipes_image_data", "recipes", "image_data", "TEXT");
   await ensureColumn(db, "add_recipes_is_frozen", "recipes", "is_frozen", "INTEGER NOT NULL DEFAULT 0");

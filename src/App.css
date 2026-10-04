@@ -208,3 +208,40 @@ body {
   background-attachment: fixed, fixed;
   color: var(--color-text);
 }
+
+/* Notification Bell Styles */
+.notification-bell {
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin-left: 10px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.notification-bell:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.bell-icon {
+  font-size: 1.2em;
+  vertical-align: middle;
+}
+
+.unread-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: #ff4444;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 0.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}

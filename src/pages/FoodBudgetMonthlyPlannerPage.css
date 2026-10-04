@@ -140,3 +140,213 @@
 .error {
   color: var(--error-color);
 }
+
+.input-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.meals-per-day-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.meals-per-day-input label {
+  font-weight: bold;
+}
+
+.save-success {
+  color: var(--success-color);
+  font-weight: bold;
+}
+
+.planner-section {
+  margin-bottom: 30px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+}
+
+.servings-summary {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--secondary-bg);
+  border-radius: 6px;
+}
+
+.warning {
+  color: var(--warning-color);
+  font-weight: bold;
+}
+
+.recipe-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+}
+
+.recipe-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: var(--secondary-bg);
+  border-radius: 6px;
+}
+
+.recipe-entry label {
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.charts-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.chart-container {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+}
+
+.bar-chart {
+  margin-top: 20px;
+}
+
+.bar-item {
+  margin-bottom: 15px;
+}
+
+.bar-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.bar {
+  height: 20px;
+  background: var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 5px;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.bar-percentage {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.bar-servings {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.source-bar-chart {
+  margin-top: 20px;
+}
+
+.source-bar-item {
+  margin-bottom: 15px;
+}
+
+.source-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.source-bar {
+  height: 20px;
+  background: var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 5px;
+}
+
+.source-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.source-bar-fill.adtc {
+  background: #4CAF50;
+}
+
+.source-bar-fill.homegrown {
+  background: #FF9800;
+}
+
+.source-bar-fill.expense {
+  background: #F44336;
+}
+
+.source-bar-fill.unclassified {
+  background: #9E9E9E;
+}
+
+.source-percentage {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.cost-breakdown-section {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+  margin-bottom: 30px;
+}
+
+.incomplete-cost-warning {
+  margin-top: 15px;
+  padding: 15px;
+  background: var(--warning-bg);
+  border-radius: 6px;
+  border-left: 4px solid var(--warning-color);
+}
+
+.incomplete-cost-warning ul {
+  margin: 10px 0 0 20px;
+  padding: 0;
+}
+
+.cost-details p {
+  margin: 10px 0;
+}
+
+@media (max-width: 768px) {
+  .input-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .meals-per-day-input {
+    justify-content: center;
+  }
+  
+  .charts-section {
+    grid-template-columns: 1fr;
+  }
+}
