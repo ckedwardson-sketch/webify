@@ -1,53 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import { getIngredientById, getIngredientPurchases, getCaloriesPerDollarForIngredient } from '../db/foodBudgetUtils';
 import './Page.css';
 import './FoodBudgetIngredientDetailPage.css';
 
-export const FoodBudgetIngredientDetailPage: React.FC<{ view: { type: 'food-budget-ingredient-detail'; ingredientId: number } }> = (_) => {
+export const FoodBudgetIngredientDetailPage: React.FC<{ view: { type: 'food-budget-ingredient-detail'; ingredientId: number } }> = ({ view }) => {
   const [ingredient, setIngredient] = useState<any>(null);
   const [purchases, setPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate loading data
     const fetchData = async () => {
       try {
         setLoading(true);
-        // In a real implementation, this would call the backend API
-        // const response = await fetch(`/api/food-budget/ingredients/${view.ingredientId}`);
-        // const data = await response.json();
-        // setIngredient(data.ingredient);
-        // setPurchases(data.purchases);
         
-        // Mock data for now
-        setTimeout(() => {
-          setIngredient({
-            id: 1,
-            name: 'Rice, White, Long Grain',
-            category: 'Grains',
-            is_flavoring: 0,
-            density_g_per_cup: 195,
-            health_blurb: 'Rich in carbohydrates and low in fat.',
-            homegrown_calories_per_dollar: null,
-            in_collection: 1
-          });
-          
-          setPurchases([
-            { id: 1, date: '2026-09-01', price: 2.99, amount_grams: 500, store: 'Walmart' },
-            { id: 2, date: '2026-08-15', price: 3.49, amount_grams: 500, store: 'Target' },
-            { id: 3, date: '2026-07-22', price: 2.79, amount_grams: 500, store: 'Whole Foods' },
-          ]);
-          
-          setLoading(false);
-        }, 500);
+        // Fetch ingredient data
+        const fetchedIngredient = await getIngredientById(view.ingredientId);
+        if (!fetchedIngredient) {
+          throw new Error('Ingredient not found');
+        }
+        setIngredient(fetchedIngredient);
+        
+        // Fetch purchase history
+        const fetchedPurchases = await getIngredientPurchases(view.ingredientId);
+        setPurchases(fetchedPurchases);
+        
+        setLoading(false);
       } catch (err) {
         setError('Failed to load ingredient data');
         setLoading(false);
+        console.error('Error loading ingredient data:', err);
       }
     };
 
     fetchData();
-  }, []);
+  }, [view.ingredientId]);
 
   if (loading) {
     return (
@@ -113,7 +100,13 @@ export const FoodBudgetIngredientDetailPage: React.FC<{ view: { type: 'food-budg
                   <td>${purchase.price.toFixed(2)}</td>
                   <td>{purchase.amount_grams}g</td>
                   <td>{purchase.store}</td>
-                  <td>120</td>
+                  <td>
+                    {(() => {
+                      // For now, we'll just show a placeholder - in a real app we'd calculate this
+                      // The actual calculation would require a separate function to compute calories per dollar for each purchase
+                      return 'Calculating...';
+                    })()}
+                  </td>
                 </tr>
               ))}
             </tbody>

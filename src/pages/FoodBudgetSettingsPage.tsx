@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getCurrentDtcValue, updateDtcValue } from '../db/foodBudgetUtils';
 import './Page.css';
 import './FoodBudgetSettingsPage.css';
 
@@ -14,31 +15,22 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate loading data
     const fetchData = async () => {
       try {
         setLoading(true);
-        // In a real implementation, this would call the backend API
-        // const response = await fetch('/api/food-budget/settings');
-        // const data = await response.json();
-        // setDtcValue(data.dtcValue);
-        // setInflationRate(data.inflationRate);
-        // setNotificationMode(data.notificationMode);
-        // setWarningDays(data.warningDays);
-        // setWarningWeeks(data.warningWeeks);
         
-        // Mock data for now
-        setTimeout(() => {
-          setDtcValue(100.0);
-          setInflationRate(0.02);
-          setNotificationMode('urgent');
-          setWarningDays(0);
-          setWarningWeeks(0);
-          setLoading(false);
-        }, 500);
+        // Load current settings from database
+        const currentDtcValue = await getCurrentDtcValue();
+        setDtcValue(currentDtcValue);
+        
+        // For other settings, we'll use defaults or fetch from DB if needed
+        // Since we don't have other settings implemented yet, using defaults
+        
+        setLoading(false);
       } catch (err) {
         setError('Failed to load settings data');
         setLoading(false);
+        console.error('Error loading settings:', err);
       }
     };
 
@@ -50,21 +42,8 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
       setSaving(true);
       setSaveSuccess(false);
       
-      // In a real implementation, this would call the backend API
-      // const response = await fetch('/api/food-budget/settings', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     dtcValue,
-      //     inflationRate,
-      //     notificationMode,
-      //     warningDays,
-      //     warningWeeks
-      //   })
-      // });
-      
-      // Mock save for now
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Save DTC value to database
+      await updateDtcValue(dtcValue);
       
       setSaveSuccess(true);
       setSaving(false);
@@ -74,6 +53,7 @@ export const FoodBudgetSettingsPage: React.FC<{ view: { type: 'food-budget-setti
     } catch (err) {
       setError('Failed to save settings');
       setSaving(false);
+      console.error('Error saving settings:', err);
     }
   };
 

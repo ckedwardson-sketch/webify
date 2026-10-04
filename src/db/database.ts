@@ -1993,6 +1993,7 @@ async function initDb(): Promise<Database> {
       created_at TEXT,
       updated_at TEXT,
       display_id TEXT,
+      servings INTEGER,
       is_future_slot INTEGER NOT NULL DEFAULT 0,
       future_slot_origin INTEGER NOT NULL DEFAULT 0,
       inspiration TEXT,

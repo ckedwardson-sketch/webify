@@ -1,4 +1,0 @@
-# Python dependencies for Webify Food Budget System
-# (Currently minimal as most functionality is in the core Python libraries)
-
-# Standard library only - no external dependencies needed for basic functionality

@@ -57,6 +57,7 @@ async function runFoodBudgetMigrations(db: Database): Promise<void> {
         health_blurb TEXT,
         homegrown_calories_per_dollar REAL,
         in_collection INTEGER NOT NULL DEFAULT 1,
+        density_user_edited INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -72,6 +73,21 @@ async function runFoodBudgetMigrations(db: Database): Promise<void> {
     `);
     
     await markMigrationApplied(db, "create_ingredients_table");
+  }
+
+  // Recipe ingredients table
+  if (!(await isMigrationApplied(db, "create_recipe_ingredients_table"))) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS recipe_ingredients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+        ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE SET NULL,
+        grams REAL,
+        original_unit_text TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await markMigrationApplied(db, "create_recipe_ingredients_table");
   }
 
   // Purchases table
@@ -108,16 +124,12 @@ async function runFoodBudgetMigrations(db: Database): Promise<void> {
   // Recipes table with food budget additions
   if (!(await isMigrationApplied(db, "add_food_budget_columns_to_recipes"))) {
     await ensureColumn(db, "add_food_budget_recipe_columns", "recipes", "cost_per_serving", "REAL");
+    await ensureColumn(db, "add_food_budget_recipe_columns", "recipes", "servings", "INTEGER NOT NULL DEFAULT 1");
     await ensureColumn(db, "add_food_budget_recipe_columns", "recipes", "source_breakdown", "TEXT");
     await markMigrationApplied(db, "add_food_budget_columns_to_recipes");
   }
 
-  // Recipe ingredients table with food budget additions
-  if (!(await isMigrationApplied(db, "add_food_budget_columns_to_recipe_ingredients"))) {
-    await ensureColumn(db, "add_recipe_ingredient_dtc_flags", "recipe_ingredients", "is_homegrown", "INTEGER NOT NULL DEFAULT 0");
-    await ensureColumn(db, "add_recipe_ingredient_dtc_flags", "recipe_ingredients", "is_expense", "INTEGER NOT NULL DEFAULT 0");
-    await markMigrationApplied(db, "add_food_budget_columns_to_recipe_ingredients");
-  }
+
 
   // Meal plans table
   if (!(await isMigrationApplied(db, "create_meal_plans_table"))) {
@@ -183,6 +195,12 @@ async function runFoodBudgetMigrations(db: Database): Promise<void> {
       await db.execute(`
         INSERT INTO food_budget_settings (dtc_value, inflation_rate, notification_mode, warning_days, warning_weeks)
         VALUES (100.0, 0.02, 'urgent', 0, 0)
+      `);
+      
+      // Also seed dtc_history with the initial DTC value
+      await db.execute(`
+        INSERT INTO dtc_history (dtc_value, effective_date)
+        VALUES (100.0, CURRENT_TIMESTAMP)
       `);
     }
     
